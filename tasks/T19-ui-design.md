@@ -1,6 +1,6 @@
 # T19: Theme, layout, chart style
 
-Status: done (pull request #23); `t19-ui-design-b` swaps Scenarios and Readout on desktop (in review). Palette from docs/design.md, --dark #0e1116, #panel placed beside scenarios, chart animation opt-in. "Done when" line 2 (contrast on the built site) does not pass: see "After the merge"
+Status: done (pull request #23); `t19-ui-design-b` (pull request #94, in review) puts Scenarios beside the map with the Solar panel straight under it, the Readout straight under the map, and Sun and Earth side by side in a wide Readout. Palette from docs/design.md, --dark #0e1116, #panel placed beside scenarios, chart animation opt-in. "Done when" line 2 (contrast on the built site) does not pass: see "After the merge"
 
 | | |
 |---|---|
