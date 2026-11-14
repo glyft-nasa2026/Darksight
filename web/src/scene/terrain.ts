@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, Color, Float32BufferAttribute, SphereGeometry, Vector3 } from 'three';
 import { projectToGrid, type Dem, type DemMeta } from '../core/dem';
 import { MOON_RADIUS_KM, type Site } from '../core/types';
-import { gridSite, sitePosition, sphereSite } from './coordinates';
+import { gridSite, moonCentre, sitePosition, sphereSite } from './coordinates';
 import { mapGlobeUv } from './globe';
 
 export type GridBounds = { col0: number; col1: number; row0: number; row1: number };
@@ -165,7 +165,29 @@ export function terrainGeometry(
   if (hole) fillIndex(geometry, hole);
   geometry.computeBoundingSphere();
   geometry.userData.heightRange = Number.isFinite(min) ? [min, max] : [0, 1];
+  geometry.userData.stretch = stretch;
   return geometry;
+}
+
+/**
+ * Moves a whole-grid terrainGeometry or a northGeometry to another stretch, each point along its
+ * own radius, without rebuilding it: a fraction of the cost. Normals and colours stay as built.
+ * Not for a detail patch, whose edge points are stitched to the coarse mesh's straight edges.
+ */
+export function restretchTerrain(geometry: BufferGeometry, stretch: number): void {
+  const from = geometry.userData.stretch as number;
+  if (from === stretch) return;
+  const position = geometry.getAttribute('position'), heights = geometry.getAttribute('height');
+  const centre = moonCentre(), point = new Vector3();
+  for (let i = 0; i < position.count; i++) {
+    const h = heights.getX(i) / 1000;
+    point.fromBufferAttribute(position, i).sub(centre)
+      .multiplyScalar((MOON_RADIUS_KM + h * stretch) / (MOON_RADIUS_KM + h * from)).add(centre);
+    position.setXYZ(i, point.x, point.y, point.z);
+  }
+  position.needsUpdate = true;
+  geometry.userData.stretch = stretch;
+  geometry.computeBoundingSphere(); geometry.computeBoundingBox();
 }
 
 /**
@@ -178,11 +200,13 @@ export const NORTH_RELIEF = 2;
  * The cap north of the whole-Moon grid's reach, as a mesh on a square polar grid like the
  * south-pole terrain, so nothing pinches together at the pole. `mirrored` is the north height
  * map with latitudes negated (parseNorth): the mesh is built as if at the south pole, then
- * reflected through the equator. Slopes are lit `relief` times steeper.
+ * reflected through the equator. Heights are raised `stretch` times, like the south-pole
+ * terrain's. Slopes are lit `relief` times steeper whatever the stretch, so the cap's shading
+ * still matches the unstretched globe round it.
  */
-export function northGeometry(mirrored: Dem, low: Color, high: Color, relief = NORTH_RELIEF): BufferGeometry {
-  const geometry = terrainGeometry(mirrored, low, high, 1);
-  if (relief !== 1) {
+export function northGeometry(mirrored: Dem, low: Color, high: Color, relief = NORTH_RELIEF, stretch = 1): BufferGeometry {
+  const geometry = terrainGeometry(mirrored, low, high, stretch);
+  if (relief !== stretch) {
     const steep = terrainGeometry(mirrored, low, high, relief);
     geometry.setAttribute('normal', steep.getAttribute('normal'));
   }

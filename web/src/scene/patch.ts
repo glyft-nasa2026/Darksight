@@ -28,6 +28,23 @@ export const PATCH_RELIEF = 6;
 const FADE = 0.15;
 
 /**
+ * What stretchPatch and patchLiftAt read, kept on the geometry's `userData.patch`: the window,
+ * the points on the sphere, and how far each point is raised at stretch 1, in km.
+ */
+type PatchLift = {
+  win: PatchWindow; cpd: number; rows: number; cols: number;
+  flat: Float32Array; lift: Float32Array; maxLift: number;
+};
+
+/** 1 inside the patch, easing to 0 at its edge over the outer FADE of its width (smoothstep). */
+function edgeWeight(r: number, c: number, rows: number, cols: number): number {
+  const edge = Math.min(Math.min(r, rows - 1 - r) / (rows - 1), Math.min(c, cols - 1 - c) / (cols - 1));
+  if (edge >= FADE) return 1;
+  const t = edge / FADE;
+  return t * t * (3 - 2 * t);
+}
+
+/**
  * The window round a site, kept between the `south` and `north` latitudes (where the polar
  * meshes take over). Null when nothing is left.
  */
@@ -66,11 +83,14 @@ export function cellSite(index: TileIndex, row: number, col: number): Site {
 
 /**
  * The patch as a mesh lying on the sphere, centred on the origin like the globe (the caller
- * moves it to the Moon's centre). Its ground is not raised: against the Moon's radius the relief
- * would not show, and ground below the sphere would be hidden by the globe. The heights give
- * each point its colour, on the ramp from `low` to `high` over `range` metres, and its normal,
- * with slopes `relief` times steeper. Toward the edge the normals fade into `coarse`, the
- * globe's own normal for the place (x, y, z written to its last argument), so no edge shows.
+ * moves it to the Moon's centre). The heights give each point its colour, on the ramp from `low`
+ * to `high` over `range` metres, and its normal, with slopes `relief` times steeper. Toward the
+ * edge the normals fade into `coarse`, the globe's own normal for the place (x, y, z written to
+ * its last argument), so no edge shows.
+ *
+ * The ground starts flat on the sphere; stretchPatch raises it. Each point's lift is its height
+ * above the lowest in the window, so no ground dips under the globe and gets hidden by it, faded
+ * to nothing toward the edge like the normals, so the patch meets the globe there.
  */
 export function patchGeometry(
   win: PatchWindow, index: TileIndex, height: (row: number, col: number) => number,
@@ -80,11 +100,14 @@ export function patchGeometry(
   const rows = win.row1 - win.row0 + 1, cols = Math.floor((win.col1 - win.col0) / win.stride) + 1;
   const count = rows * cols;
   const flat = new Float32Array(count * 3), raised = new Float32Array(count * 3), colors = new Float32Array(count * 3);
+  const heights = new Float32Array(count);
   const color = new Color(), span = Math.max(1, range[1] - range[0]);
+  let lowest = Infinity;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const row = win.row0 + r, col = win.col0 + c * win.stride, i = (r * cols + c) * 3;
       const site = cellSite(index, row, col), h = height(row, col);
+      heights[r * cols + c] = h; lowest = Math.min(lowest, h);
       const lat = site.lat * RAD, lon = site.lon * RAD;
       // Render frame: +X = 90 E, +Y = south, -Z = longitude 0.
       const x = Math.cos(lat) * Math.sin(lon), y = -Math.sin(lat), z = -Math.cos(lat) * Math.cos(lon);
@@ -113,14 +136,22 @@ export function patchGeometry(
   geometry.computeVertexNormals();
   geometry.setAttribute('position', new Float32BufferAttribute(flat, 3));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  const lift = new Float32Array(count);
+  let maxLift = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      lift[i] = (heights[i] - lowest) / 1000 * edgeWeight(r, c, rows, cols);
+      maxLift = Math.max(maxLift, lift[i]);
+    }
+  }
+  geometry.userData.patch = { win, cpd: index.cells_per_deg, rows, cols, flat, lift, maxLift } satisfies PatchLift;
   if (coarse) {
     const normal = geometry.getAttribute('normal'), far = [0, 0, 0];
     for (let r = 0; r < rows; r++) {
-      const edgeR = Math.min(r, rows - 1 - r) / (rows - 1);
       for (let c = 0; c < cols; c++) {
-        const edge = Math.min(edgeR, Math.min(c, cols - 1 - c) / (cols - 1));
-        if (edge >= FADE) continue;
-        const t = edge / FADE, w = t * t * (3 - 2 * t), i = r * cols + c;
+        const w = edgeWeight(r, c, rows, cols), i = r * cols + c;
+        if (w === 1) continue;
         const site = cellSite(index, win.row0 + r, win.col0 + c * win.stride);
         coarse(site.lat, site.lon, far);
         const x = far[0] + (normal.getX(i) - far[0]) * w, y = far[1] + (normal.getY(i) - far[1]) * w;
@@ -131,6 +162,42 @@ export function patchGeometry(
   }
   geometry.computeBoundingSphere(); geometry.computeBoundingBox();
   return geometry;
+}
+
+/**
+ * Raises a patchGeometry's ground by its lift times `stretch`, along each point's own radius, from
+ * where it lay flat (so calling it again with another stretch does not add up). Returns the
+ * highest ground above the sphere, in km.
+ */
+export function stretchPatch(geometry: BufferGeometry, stretch: number): number {
+  const { flat, lift, maxLift } = geometry.userData.patch as PatchLift;
+  const position = geometry.getAttribute('position'), out = position.array as Float32Array;
+  for (let i = 0; i < lift.length; i++) {
+    const k = 1 + lift[i] * stretch / MOON_RADIUS_KM;
+    out[i * 3] = flat[i * 3] * k; out[i * 3 + 1] = flat[i * 3 + 1] * k; out[i * 3 + 2] = flat[i * 3 + 2] * k;
+  }
+  position.needsUpdate = true;
+  geometry.computeBoundingSphere(); geometry.computeBoundingBox();
+  return maxLift * stretch;
+}
+
+/**
+ * How far a patchGeometry raises the ground at (lat, lon) at stretch 1, in km: bilinear between
+ * its points, longitude wrapped, and 0 outside the patch. So a pin or the camera's target sits on
+ * the drawn ground: multiply by the stretch, as stretchPatch does.
+ */
+export function patchLiftAt(geometry: BufferGeometry, lat: number, lon: number): number {
+  const patch = geometry.userData.patch as PatchLift | undefined;
+  if (!patch) return 0;
+  const { win, cpd, rows, cols, lift } = patch, width = 360 * cpd;
+  // Fractional row and column of the patch's points, whose cells are centred half a cell in.
+  const r = (90 - lat) * cpd - 0.5 - win.row0;
+  const c = ((((lon + 180) * cpd - 0.5 - win.col0) % width) + width) % width / win.stride;
+  if (!(r >= 0 && r <= rows - 1 && c >= 0 && c <= cols - 1)) return 0;
+  const r0 = Math.min(rows - 2, Math.floor(r)), c0 = Math.min(cols - 2, Math.floor(c));
+  const fr = r - r0, fc = c - c0, i = r0 * cols + c0;
+  return (lift[i] * (1 - fc) + lift[i + 1] * fc) * (1 - fr)
+    + (lift[i + cols] * (1 - fc) + lift[i + cols + 1] * fc) * fr;
 }
 
 /** Fetches tiles.json from data/ next to the page. Rejects if it is missing or malformed. */

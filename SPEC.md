@@ -145,3 +145,4 @@ Fill in the clock times once the submission deadline is known.
 | Figma seat when using Figma: Full or Dev on Professional or Education | Whoever takes the design task | costs time (a fallback is in `docs/mcp-and-skills.md`) |
 | Demo format and length, read from the submission form | Whoever takes T17 | blocks T17 |
 | Load-time budgets in T27 (numbers in 3 s, height map in 20 s, no freeze over 0.5 s, on "Fast 4G"): proposed, not yet agreed | Team, informed by T27's measurements | costs time |
+| 3D view zoomed right out: a drag orbits the selected site, so only the half of the Moon round it is in view (since issue #77, pull request #84). Or, past the distance where the whole Moon fits, a drag turns the whole Moon like a globe, as pull request #18 had, and close in it orbits the site | P1 and the team, after trying pull request #84 | cosmetic |

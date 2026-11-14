@@ -363,23 +363,81 @@ with sync_playwright() as p:
     page.evaluate("async () => (await import('/src/state.ts')).setLiveSite({lat:0.674,lon:23.473})")
     page.wait_for_timeout(200)
     passed('outside DEM', {'caption': 'Whole-Moon map in 2D, Moon globe in 3D', 'global_click': picked})
-    # In the globe view a drag turns the Moon about its centre, so it stays in the middle of the view.
+    # Issue #77: off the height map the 3D view works as on it. A drag orbits the selected site,
+    # which stays in the middle; a right-drag pans; "Centre selected site" comes back to the site,
+    # not to the whole Moon; the stretch raises the ground round it. globe.json, north.json and
+    # tiles/ are not in `assets`, so the app's own files are served: the patch round the site and
+    # the north cap are drawn from them.
+    apollo11 = {'lat': 0.674, 'lon': 23.473}
+    def degrees_apart(a, b):
+        la, lb, dl = math.radians(a['lat']), math.radians(b['lat']), math.radians(a['lon'] - b['lon'])
+        return math.degrees(math.acos(min(1, math.sin(la)*math.sin(lb) + math.cos(la)*math.cos(lb)*math.cos(dl))))
+    def canvas_shot(path):
+        canvas.screenshot(path=path)
+        return Image.open(path).convert('RGB').tobytes()
+    def near_middle(home):
+        """How far, in degrees, from `home` a click 30 px right of the middle of the 3D view lands.
+        Off the middle so it hits the ground, not the selected site's pin. `home` is reselected after."""
+        b = canvas.bounding_box()
+        page.mouse.click(b['x'] + b['width']/2 + 30, b['y'] + b['height']/2)
+        got = page.evaluate("async () => (await import('/src/state.ts')).getState().live.site")
+        page.evaluate(f"async () => (await import('/src/state.ts')).setLiveSite({json.dumps(home)})")
+        page.wait_for_timeout(800)
+        return round(degrees_apart(got, home), 3)
     page.get_by_role('button', name='3D orbit', exact=True).click()
-    page.wait_for_timeout(250)
+    stretch = page.get_by_label('Vertical stretch', exact=True)
+    assert stretch.is_enabled(), 'the stretch works off the height map too'
+    stretch.fill('1')
+    page.wait_for_timeout(2000)   # the patch round the site: its tiles, then its mesh
     assert 'Moon globe' in page.locator('.scene-caption').inner_text()
+    help_3d = page.locator('.scene-help').inner_text()
+    assert 'drag to orbit' in help_3d and 'right-drag to pan' in help_3d and 'turn the Moon' not in help_3d, help_3d
+    # The old globe view stood 3.5 Moon radii out, where 30 px is about 7 degrees.
+    centred = canvas_shot('/tmp/t12-off-map-centred.png')
+    start_deg = near_middle(apollo11)
+    assert start_deg < 1, start_deg
     box = canvas.bounding_box()
-    page.mouse.move(box['x']+box['width']/2, box['y']+box['height']/2+60)
-    page.mouse.down(); page.mouse.move(box['x']+box['width']/2+150, box['y']+box['height']/2+60, steps=10); page.mouse.up()
+    mid_x, mid_y = box['x']+box['width']/2, box['y']+box['height']/2
+    page.mouse.move(mid_x+150, mid_y+80); page.mouse.down(); page.mouse.move(mid_x+350, mid_y+40, steps=10); page.mouse.up()
     page.wait_for_timeout(300)
-    canvas.screenshot(path='/tmp/t12-globe-turned.png')
-    turned_fraction, turned = drawn_fraction('/tmp/t12-globe-turned.png')
-    w2, h2 = turned.size
-    bg2 = turned.getpixel((1, 1))
-    centre_drawn = all(max(abs(a - b) for a, b in zip(turned.getpixel((w2//2+dx, h2//2+dy)), bg2)) > 6 for dx in (-20, 0, 20) for dy in (-20, 0, 20))
-    # The whole globe fills about a fifth of the canvas; swung off-centre it would fill far less.
-    assert centre_drawn and turned_fraction > 0.15, turned_fraction
-    assert 'turn the Moon' in page.locator('.scene-help').inner_text()
-    passed('globe drag', {'drawn_fraction_after_drag': round(turned_fraction, 3)})
+    orbited = channels_changed(centred, canvas_shot('/tmp/t12-off-map-orbited.png'))
+    assert orbited > 1000, orbited
+    orbit_deg = near_middle(apollo11)
+    assert orbit_deg < 1, orbit_deg
+    passed('orbit off the height map', {'help': help_3d, 'click_30px_from_middle_deg_from_site': start_deg, 'after_orbit_drag': orbit_deg, 'changed_color_channels_after_orbit': orbited})
+    before_pan = canvas_shot('/tmp/t12-off-map-before-pan.png')
+    page.mouse.move(mid_x-100, mid_y+50); page.mouse.down(button='right')
+    page.mouse.move(mid_x+150, mid_y+50, steps=10); page.mouse.up(button='right')
+    page.wait_for_timeout(300)
+    panned_3d = channels_changed(before_pan, canvas_shot('/tmp/t12-off-map-panned.png'))
+    assert panned_3d > 1000, panned_3d
+    assert page.evaluate("async () => (await import('/src/state.ts')).getState().live.site") == apollo11
+    for _ in range(10):
+        page.mouse.wheel(0, 400)
+        page.wait_for_timeout(20)
+    page.locator('.scene-reset').click()
+    page.wait_for_timeout(500)
+    recentred = channels_changed(centred, canvas_shot('/tmp/t12-off-map-recentred.png'))
+    assert recentred < len(centred) * 0.01, recentred
+    passed('centre selected site off the height map', {'changed_color_channels_after_right_drag_pan': panned_3d, 'after_zoom_out_and_centre_vs_first_view': recentred})
+    stretch.fill('5')
+    page.wait_for_timeout(500)
+    raised = channels_changed(centred, canvas_shot('/tmp/t12-off-map-5x.png'))
+    assert raised > 1000, raised
+    raised_deg = near_middle(apollo11)
+    assert raised_deg < 1, raised_deg
+    # North of 80 N the ground is the north cap's mesh: the camera carries its angle there.
+    page.evaluate("async () => (await import('/src/state.ts')).setLiveSite({lat:85,lon:30})")
+    page.wait_for_timeout(800)
+    north_5x = canvas_shot('/tmp/t12-north-cap-5x.png')
+    north_deg = near_middle({'lat': 85, 'lon': 30})
+    stretch.fill('1')
+    page.wait_for_timeout(500)
+    north_raised = channels_changed(north_5x, canvas_shot('/tmp/t12-north-cap-1x.png'))
+    assert north_deg < 1 and north_raised > 1000, (north_deg, north_raised)
+    page.evaluate(f"async () => (await import('/src/state.ts')).setLiveSite({json.dumps(apollo11)})")
+    page.wait_for_timeout(500)
+    passed('stretch off the height map', {'changed_color_channels_1x_to_5x_at_apollo_11': raised, 'click_30px_from_middle_at_5x_deg': raised_deg, 'north_cap_85N_click_deg': north_deg, 'north_cap_changed_color_channels_5x_to_1x': north_raised})
     page.get_by_role('button', name='2D map', exact=True).click()
     page.get_by_role('button', name='3D orbit', exact=True).click()
     page.get_by_role('button', name='2D map', exact=True).click()
