@@ -1,7 +1,6 @@
 # T34: Mission simulation, launch to touchdown
 
-Status: proposed, not started. Needs the team's agreement first: `SPEC.md` section 2 lists
-"Landing trajectories" as Out (step 1). Not before M2, and not after the M3 freeze
+Status: in progress (P5, branch `t34-mission`). Step 1, the team's agreement, is not recorded yet: the pull request stays a draft until it is. Not before M2, and not after the M3 freeze
 
 | | |
 |---|---|
