@@ -1,17 +1,17 @@
-# T33: Mission report, print and download
+# T35: Mission report, print and download
 
-Status: proposed, not started. Waits for T32 and the same team agreement (T32, step 1). Not
+Status: proposed, not started. Waits for T34 and the same team agreement (T34, step 1). Not
 before M2, and not after the M3 freeze
 
 | | |
 |---|---|
 | Tier | if time |
-| Waits for | T32 |
-| Branch | `t33-report` |
+| Waits for | T34 |
+| Branch | `t35-report` |
 
 ## Goal
 
-"Generate full launch schedule" (brief, page 7) opens a report of the mission T32 planned: the
+"Generate full launch schedule" (brief, page 7) opens a report of the mission T34 planned: the
 whole progress from launch to touchdown, then the first days on the surface. It can be printed
 or saved as a PDF (brief, page 8: "Page for show report and print") and downloaded as data
 files. No server: the browser builds the report from the same mission plan the `#mission` card
@@ -25,7 +25,7 @@ In this order, on screen and on paper:
    north- and east-positive, longitude -180 to 180), touchdown UTC, launch pad and launch UTC,
    mission length, when the report was made (UTC), the data it used (DE440 and LOLA, or "mock
    data"), and the share link that reopens this mission.
-2. **Flight schedule**, one row per phase (T32's model table): number, phase, start and end UTC,
+2. **Flight schedule**, one row per phase (T34's model table): number, phase, start and end UTC,
    T+ (mission elapsed time), duration, Δv, burn time, propellant used, mass after, and where
    (the pad, the parking orbit, the lunar orbit's altitude, latitude and longitude for the
    descent start and touchdown).
@@ -37,10 +37,10 @@ In this order, on screen and on paper:
    disc; Earth altitude, azimuth and visible or hidden; time to sunset and to Earthset; the
    30-day summary (lit %, longest light, longest dark, Earth contact %, longest gap). The same
    `core/` functions the readout and compare table use.
-6. **Warnings** from T32 (darkness, Earth hidden, propellant, outside the table).
-7. **Model and limits:** T32's list (patched conics, circular lunar orbit, the descent guidance
+6. **Warnings** from T34 (darkness, Earth hidden, propellant, outside the table).
+7. **Model and limits:** T34's list (patched conics, circular lunar orbit, the descent guidance
    used, launch window not solved, launch vehicle propellant not modelled, no atmosphere on the
-   Moon so no refraction), and the sources (DE440, LOLA, the NASA reports T32 cites).
+   Moon so no refraction), and the sources (DE440, LOLA, the NASA reports T34 cites).
 
 ## Formats
 
@@ -82,17 +82,17 @@ Downloads are made in the browser from a `Blob`; nothing is sent anywhere.
   Pure functions, no DOM.
 - `web/src/ui/report/` (new): `index.ts` exporting `mount(el)` (or opened from the `#mission`
   card), `report.css` with the `@media print` rules for the report
-- `web/src/ui/mission/index.ts`: the "Generate full launch schedule" button (T32's module;
-  coordinate if T32 is still open)
+- `web/src/ui/mission/index.ts`: the "Generate full launch schedule" button (T34's module;
+  coordinate if T34 is still open)
 - `web/src/ui/theme.css`: the `@media print` values only
 - `web/index.html` and `web/src/site.ts` if the report gets its own slot; `docs/data-contract.md`
   (the `core/report.ts` row, the JSON schema, the slot if any)
 - `docs/design/mockup.html`, `docs/design/report.png`, `docs/design.md`
-- `docs/ai-use/T33.md`, `docs/sources/T33.md`, this file's `Status:` line
+- `docs/ai-use/T35.md`, `docs/sources/T35.md`, this file's `Status:` line
 
 ## Steps
 
-1. Check that T32 has merged and the team's agreement is recorded (T32, step 1).
+1. Check that T34 has merged and the team's agreement is recorded (T34, step 1).
 2. Design: the `report` frame and picture.
 3. `core/report.ts` with tests.
 4. The report view, the button in the `#mission` card, and the two downloads.
@@ -116,5 +116,5 @@ Downloads are made in the browser from a `Blob`; nothing is sent anywhere.
 ## Prompt to paste into Claude Code
 
 ```text
-Read CLAUDE.md, docs/data-contract.md, docs/design.md, tasks/T32-mission.md and tasks/T33-report.md. Do only T33, on branch t33-report. If T32 hasn't merged or the team's agreement isn't recorded, stop and tell me. Use "Files in scope" as the starting scope; follow CLAUDE.md's coordination rules for any additional files or dependencies. When you think you're finished, run every line of "Done when" and show me the output for each.
+Read CLAUDE.md, docs/data-contract.md, docs/design.md, tasks/T34-mission.md and tasks/T35-report.md. Do only T35, on branch t35-report. If T34 hasn't merged or the team's agreement isn't recorded, stop and tell me. Use "Files in scope" as the starting scope; follow CLAUDE.md's coordination rules for any additional files or dependencies. When you think you're finished, run every line of "Done when" and show me the output for each.
 ```

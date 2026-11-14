@@ -1,4 +1,4 @@
-# T32: Mission simulation, launch to touchdown
+# T34: Mission simulation, launch to touchdown
 
 Status: proposed, not started. Needs the team's agreement first: `SPEC.md` section 2 lists
 "Landing trajectories" as Out (step 1). Not before M2, and not after the M3 freeze
@@ -7,7 +7,7 @@ Status: proposed, not started. Needs the team's agreement first: `SPEC.md` secti
 |---|---|
 | Tier | if time |
 | Waits for | M2, and the team's agreement (step 1). Uses T08, T15, T19, T22 (all merged) |
-| Branch | `t32-mission` |
+| Branch | `t34-mission` |
 
 ## Goal
 
@@ -22,7 +22,7 @@ The brief already draws it (`tasks/Quarterly Company News.pdf`):
   one "animation for all the process", a target-vicinity inset, an altitude readout, and five
   flight-sequence cards: Launch, Translunar injection, Lunar orbit insertion (100 km orbit),
   Powered descent (15 km to the surface), Touchdown. Buttons "Begin now" and "Generate full
-  launch schedule" (that one is T33).
+  launch schedule" (that one is T35).
 - **Page 6, "03 Launch Site":** seven launch pads in a list beside a globe, "Confirm launch pad".
 - **Pages 4 and 5, "Mission telemetry":** translunar injection Δv and burn time, lunar orbit
   insertion Δv, powered descent Δv and duration, continuous daylight period, fuel, Earth
@@ -97,7 +97,7 @@ gets a start, an end, a Δv and a position over time.
   time only; its propellant is not modelled. The lander's four inputs (mass after TLI, dry mass,
   engine Isp, maximum thrust) are editable in the card, with defaults from one cited public
   source (a CLPS lander's published figures, or the Apollo LM descent stage from the Apollo 11
-  Mission Report). Record the choice in `docs/sources/T32.md`.
+  Mission Report). Record the choice in `docs/sources/T34.md`.
 - **Powered descent guidance:** the implementer's choice, from a cited source. The simplest is a
   gravity turn (thrust against the velocity) with the throttle found by shooting so the speed
   reaches zero at the ground; the reference profile (braking, approach, landing) is in Bennett
@@ -161,7 +161,7 @@ what `missionAt` returns.
   `docs/design.md`
 - After step 1: `SPEC.md` (section 2, a new feature row), `docs/decisions.md` (one line),
   `history.md` (the cut line's old wording), `tasks/README.md` (status on the board)
-- `docs/ai-use/T32.md`, `docs/sources/T32.md`, this file's `Status:` line
+- `docs/ai-use/T34.md`, `docs/sources/T34.md`, this file's `Status:` line
 
 three.js and Plotly are already dependencies: no new package. If the Moon in the animation
 reuses `web/src/scene/globe.ts`, import it; coordinate with the scene's owner before changing
@@ -170,7 +170,7 @@ scene files.
 ## Steps
 
 1. **Agree the scope change.** Post in the chat: landing trajectories move from Out to If time,
-   as this task and T33. When agreed, write the line in `docs/decisions.md`, move the item in
+   as this task and T35. When agreed, write the line in `docs/decisions.md`, move the item in
    `SPEC.md` section 2, add feature rows (mission simulation, mission report), and record the old
    wording in `history.md`. If the team says no, set this file's `Status:` to "declined" and
    stop.
@@ -222,10 +222,10 @@ scene files.
 - *Apollo 11 Mission Report*, MSC-00171, 1969: https://ntrs.nasa.gov/citations/19700008096
   (mission timeline, burns and their Δv, LM masses).
 
-Read and cite the pages used in `docs/sources/T32.md`; the ticket names them only as a start.
+Read and cite the pages used in `docs/sources/T34.md`; the ticket names them only as a start.
 
 ## Prompt to paste into Claude Code
 
 ```text
-Read CLAUDE.md, docs/data-contract.md, docs/design.md, docs/mcp-and-skills.md section 3 and tasks/T32-mission.md. Do only that task, on branch t32-mission. Start with step 1: if the team's agreement isn't recorded yet, stop and tell me. Use "Files in scope" as the starting scope; follow CLAUDE.md's coordination rules for any additional files or dependencies. When you think you're finished, run every line of "Done when" and show me the output for each.
+Read CLAUDE.md, docs/data-contract.md, docs/design.md, docs/mcp-and-skills.md section 3 and tasks/T34-mission.md. Do only that task, on branch t34-mission. Start with step 1: if the team's agreement isn't recorded yet, stop and tell me. Use "Files in scope" as the starting scope; follow CLAUDE.md's coordination rules for any additional files or dependencies. When you think you're finished, run every line of "Done when" and show me the output for each.
 ```
