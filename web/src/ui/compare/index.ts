@@ -6,7 +6,7 @@ import type { Data, Layout } from 'plotly.js-dist-min';
 import type { Body, Sample } from '../../core/types';
 import { countdownText } from '../../core/windows';
 import {
-  flipFor, getState, neverLitFor, samplesFor, subscribe, summaryFor, type AppState, type Scenario,
+  flipFor, getState, neverLitFor, samplesFor, skylineFor, subscribe, summaryFor, type AppState, type Scenario,
 } from '../../state';
 import { plotLayout, themeColor } from '../plotTheme';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
@@ -120,6 +120,10 @@ function drawTable(cols: Column[]): HTMLTableElement {
       make('span', 'cmp-where', where),
       make('span', 'cmp-when muted', `${utcText(c.sc.tMs)} UTC`),
     );
+    // The readout's words, on every column they apply to: with no terrain skyline (north of
+    // 85° S, or the height map not in yet) the column's numbers are for a smooth Moon, and a
+    // crater floor reads as lit.
+    if (!skylineFor(c.sc).terrain) th.append(make('span', 'cmp-ground muted', 'Smooth Moon, no terrain'));
     hr.append(th);
   }
   head.append(hr);
