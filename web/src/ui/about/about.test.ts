@@ -179,7 +179,13 @@ describe('Collecting docs/ai-use (every file on disk)', () => {
 
   it('carries a table on after a blank line (T19) and reads other columns (task-coordination)', () => {
     const t19 = files.find((f) => f.path.endsWith('/T19.md'))!;
-    expect(parseAiUse(t19.path, t19.md).entries).toHaveLength(10);
+    // T19's table is split by a blank line and a note, and gains a row with each pass, so the
+    // dated rows are counted from the file rather than fixed.
+    const lines = t19.md.split(/\r?\n/);
+    const dated = (l: string): boolean => /^\|\s*\d{4}-\d{2}-\d{2}\s*\|/.test(l);
+    const blank = lines.findIndex((l, i) => i > lines.findIndex(dated) && l.trim() === '');
+    expect(lines.slice(blank).some(dated)).toBe(true);
+    expect(parseAiUse(t19.path, t19.md).entries).toHaveLength(lines.filter(dated).length);
     const tc = files.find((f) => f.path.endsWith('/task-coordination.md'))!;
     const e = parseAiUse(tc.path, tc.md).entries;
     expect(e).toHaveLength(1);
