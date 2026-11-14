@@ -12,12 +12,15 @@ import {
 } from '../state';
 import { themeColor } from '../ui/plotTheme';
 import { mount as mountMap, unmount as unmountMap } from '../map';
-import { gridSite, moonCentre, moonDirection, sitePosition, siteUp, sphereSite } from './coordinates';
+import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import {
-  detailBounds, edgeHeight, globeGeometry, northGeometry, recolorTerrain, setTerrainHole, terrainGeometry, type GridBounds,
+  detailBounds, edgeHeight, globeGeometry, NORTH_RELIEF, northGeometry, recolorTerrain, restretchTerrain, setTerrainHole,
+  terrainGeometry, type GridBounds,
 } from './terrain';
 import { colorTexture, GLOBE_RELIEF, globeNormalNear, loadNorth, normalTexture, sharedGlobe, type GlobeHeights } from './globe';
-import { loadTileIndex, loadWindow, patchGeometry, patchWindow, type TileIndex } from './patch';
+import {
+  loadTileIndex, loadWindow, patchGeometry, patchLiftAt, patchWindow, stretchPatch, type TileIndex,
+} from './patch';
 import './scene.css';
 
 const mounts = new WeakMap<HTMLElement, () => void>();
@@ -26,6 +29,11 @@ const RAD = Math.PI / 180;
 const EARTH_RADIUS_KM = 6371;
 /** The Earth sprite is drawn this far from the site, scaled to its true apparent size. */
 const EARTH_DRAWN_KM = 20_000;
+/**
+ * The starting view of a site off the south-pole height map takes in about this much ground each
+ * way, in km: most of the level-of-detail patch round it (patch.ts, about 180 km each way).
+ */
+const SITE_SPAN_KM = 150;
 
 type PinData = { site: Site; scenarioId?: string; label: string; base: Vector3; up: Vector3; scale: number };
 
@@ -118,19 +126,22 @@ export function mount(el: HTMLElement): void {
 
   let frame = 0, disposed = false, lost = false, framed = false;
   let mode: AppState['mode'] = getState().mode;
-  let polar = false, stretch = 1, drawnStretch = 1, pinPx = 1, orbitGlobe = false;
+  let polar = false, stretch = 1, drawnStretch = 1, pinPx = 1;
   let dem: Dem | null = null, coarse: Mesh | null = null, detail: Mesh | null = null;
   let bounds: GridBounds | undefined;
   let siteKey = '', coarseKey = '', detailKey = '', pinKey = '', themeKey = '', globeKey = '';
   /** The whole-Moon heights the globe is painted from. Null until they load, or if they are missing. */
   let globeHeights: GlobeHeights | null = null;
-  /** The north cap: its heights (latitudes negated, see parseNorth) and its mesh. */
-  let north: Dem | null = null, northMesh: Mesh | null = null, northKey = '', northRelief = 0;
+  /** The north cap: its heights (latitudes negated, see parseNorth), its mesh and the stretch it was built at. */
+  let north: Dem | null = null, northMesh: Mesh | null = null, northKey = '', northStretch = 0;
   /** Level of detail: finer heights in tiles, and the patch of globe drawn from those round the selected site. */
-  let tileIndex: TileIndex | null = null, patchMesh: Mesh | null = null, patchKey = '';
-  let pinSites: AppState['sites'] | null = null, pinDem: Dem | null = null;
-  /** Highest drawn terrain above the sphere, in km, so the near plane never cuts a peak. */
-  let relief = 0;
+  let tileIndex: TileIndex | null = null, patchMesh: Mesh | null = null, patchKey = '', patchStretch = 0;
+  let pinSites: AppState['sites'] | null = null, pinDem: Dem | null = null, pinPatch: Mesh | null = null;
+  /**
+   * Highest drawn ground above the sphere, in km, of the south-pole terrain, the north cap and the
+   * patch, so the near plane never cuts a peak.
+   */
+  let relief = 0, northRelief = 0, patchRelief = 0;
   /** The selected site on the drawn surface. */
   const target = new Vector3();
   /** Everything the terrain meshes draw, so the Sun's shadow box can be fitted to it. */
@@ -139,7 +150,7 @@ export function mount(el: HTMLElement): void {
   const world = new Scene();
   // Only the orbit view is 3D. The 2D map is web/src/map/ (T31): the 3D scene draws nothing in 2D mode.
   const orbitCamera = new PerspectiveCamera(45, 1, 0.02, 60_000);
-  let orbitControls = makeOrbitControls(false, new Vector3(0, 1, 0));
+  let orbitControls = makeOrbitControls(new Vector3(0, 1, 0));
   const sun = new DirectionalLight(); sun.intensity = 3; sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.00001; sun.shadow.normalBias = 0.002;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 4000;
@@ -162,31 +173,19 @@ export function mount(el: HTMLElement): void {
   let pointerDown: { x: number; y: number; id: number } | null = null, maxDrag = 0;
 
   /**
-   * OrbitControls takes its orbit axis from camera.up once, when it is created, so each view
-   * gets new controls. Terrain view: orbit around the site, never below its horizon. Globe view:
-   * turn the whole Moon around its centre, with north up.
+   * Orbit around the selected site, never below its horizon, with its vertical as the axis; the
+   * whole Moon comes into view by zooming out. OrbitControls takes that axis from camera.up once,
+   * when it is created, so a site with another vertical gets new controls.
    */
-  function makeOrbitControls(globeView: boolean, up: Vector3): OrbitControls {
+  function makeOrbitControls(up: Vector3): OrbitControls {
     orbitCamera.up.copy(up);
     const controls = new OrbitControls(orbitCamera, canvas);
-    controls.addEventListener('change', onOrbitChange);
-    controls.enablePan = !globeView;
-    controls.minDistance = globeView ? MOON_RADIUS_KM * 1.02 : 0.2;
-    controls.maxDistance = MOON_RADIUS_KM * (globeView ? 8 : 6);
-    controls.maxPolarAngle = globeView ? Math.PI : Math.PI * 0.49;
+    controls.addEventListener('change', invalidate);
+    controls.minDistance = 0.2;
+    controls.maxDistance = MOON_RADIUS_KM * 6;
+    controls.maxPolarAngle = Math.PI * 0.49;
     controls.enabled = mode === '3d';
-    orbitGlobe = globeView;
     return controls;
-  }
-  function onOrbitChange(): void {
-    if (orbitGlobe) {
-      // Turn the Moon about as fast as the ground under the cursor moves, at any height. The
-      // controls turn 2π per canvas height; the ground moves 2 h tan(fov/2) / R per canvas height.
-      const height = orbitCamera.position.distanceTo(globe.position) - MOON_RADIUS_KM;
-      const speed = height * Math.tan(orbitCamera.fov * RAD / 2) / (Math.PI * MOON_RADIUS_KM);
-      orbitControls.rotateSpeed = Math.min(1, Math.max(0.002, speed));
-    }
-    invalidate();
   }
 
   /** Pins keep the same size on screen at every zoom, sitting on the surface. */
@@ -206,7 +205,7 @@ export function mount(el: HTMLElement): void {
     // The camera moves from metres above a crater to beyond the whole Moon: keep the depth
     // range tight around what can be seen, or near surfaces fight and far ones vanish.
     const fromCentre = orbitCamera.position.distanceTo(globe.position);
-    orbitCamera.near = Math.min(1000, Math.max(0.005, (fromCentre - MOON_RADIUS_KM - Math.max(relief, northRelief)) / 2));
+    orbitCamera.near = Math.min(1000, Math.max(0.005, (fromCentre - MOON_RADIUS_KM - Math.max(relief, northRelief, patchRelief)) / 2));
     orbitCamera.far = fromCentre + MOON_RADIUS_KM + EARTH_DRAWN_KM * 1.1;
     orbitCamera.updateProjectionMatrix();
     sizePins();
@@ -250,28 +249,35 @@ export function mount(el: HTMLElement): void {
   function centre(): void {
     const up = siteUp(selected().site);
     orbitControls.dispose();
+    orbitControls = makeOrbitControls(up);
+    orbitControls.target.copy(target);
     if (polar && dem) {
       const span = Math.max(8, Math.min(80, dem.meta.size * dem.meta.pixel_m / 8000));
-      orbitControls = makeOrbitControls(false, up);
-      orbitControls.target.copy(target);
       orbitCamera.position.copy(target).add(new Vector3(span * 0.6, span * 0.9, span * 1.1));
     } else {
-      orbitControls = makeOrbitControls(true, new Vector3(0, -1, 0));
-      orbitControls.target.copy(globe.position);
-      orbitCamera.position.copy(globe.position).addScaledVector(up, MOON_RADIUS_KM * 3.5);
+      // The polar view's angle in the site's own frame: at the pole, (0.6, 0.9, 1.1) above is 0.6
+      // east, 0.9 up and 1.1 against siteNorth. So here too the camera looks north across the site.
+      const northward = siteNorth(up), east = northward.clone().cross(up);
+      orbitCamera.position.copy(target).addScaledVector(east, SITE_SPAN_KM * 0.6)
+        .addScaledVector(up, SITE_SPAN_KM * 0.9).addScaledVector(northward, -SITE_SPAN_KM * 1.1);
     }
-    orbitCamera.lookAt(orbitControls.target); orbitControls.update(); onOrbitChange();
+    orbitCamera.lookAt(orbitControls.target); orbitControls.update(); invalidate();
     centreMap(); resize();
   }
   /** Brings the selected site back to the middle of the orbit view, keeping zoom and viewing angle. The map follows by itself. */
   function follow(): void {
-    if (orbitGlobe) {
-      const distance = orbitCamera.position.distanceTo(globe.position);
-      orbitCamera.position.copy(globe.position).addScaledVector(siteUp(selected().site), distance);
-    } else {
-      orbitCamera.position.add(target.clone().sub(orbitControls.target));
-      orbitControls.target.copy(target);
+    const offset = orbitCamera.position.clone().sub(orbitControls.target);
+    // Off the height map the next site may be far round the Moon: the orbit's axis turns to its
+    // vertical, and the camera keeps its place in the site's own frame. On the height map, sites
+    // are at most 10 degrees apart and the axis stays as centre() set it.
+    const up = siteUp(selected().site);
+    if (!polar && up.distanceToSquared(orbitCamera.up) > 1e-12) {
+      offset.copy(carryOffset(offset, orbitCamera.up, up));
+      orbitControls.dispose();
+      orbitControls = makeOrbitControls(up);
     }
+    orbitControls.target.copy(target);
+    orbitCamera.position.copy(target).add(offset);
     orbitControls.update(); invalidate();
   }
   function clearTerrain(): void {
@@ -322,11 +328,13 @@ export function mount(el: HTMLElement): void {
   }
   function clearPatch(): void {
     if (patchMesh) { world.remove(patchMesh); patchMesh.geometry.dispose(); patchMesh = null; }
+    patchRelief = 0;
   }
   /**
    * Level of detail (issue #66): in the 3D globe view, the ground round the selected site is
-   * drawn from finer heights. Only the tiles under it are fetched, when the site is picked; the
-   * last patch stays until the new one is ready. The polar meshes cover their own ground.
+   * drawn from finer heights, raised with the vertical stretch. Only the tiles under it are
+   * fetched, when the site is picked; the last patch stays until the new one is ready. The polar
+   * meshes cover their own ground.
    */
   function updatePatch(): void {
     const heights = globeHeights, index = tileIndex, site = selected().site;
@@ -347,8 +355,14 @@ export function mount(el: HTMLElement): void {
         (lat, lon, out) => globeNormalNear(heights, lat, lon, GLOBE_RELIEF, out));
       clearPatch();
       patchMesh = new Mesh(geometry, terrainMaterial); patchMesh.position.copy(globe.position);
-      world.add(patchMesh); invalidate();
+      // update() raises it to the stretch, and puts the site, its pins and the camera on it.
+      patchStretch = 0; world.add(patchMesh); update(getState());
     }).catch(() => { if (patchKey === key) patchKey = ''; });
+  }
+  /** Raises the patch to the current stretch, if it isn't there already. */
+  function stretchPatchMesh(): void {
+    if (!patchMesh || patchStretch === stretch) return;
+    patchRelief = stretchPatch(patchMesh.geometry, stretch); patchStretch = stretch;
   }
   /**
    * Paints the globe with the whole Moon's heights (issue #66), on the terrain's colour ramp and
@@ -379,15 +393,34 @@ export function mount(el: HTMLElement): void {
   }
   /**
    * The cap north of 80 N is a mesh on a square polar grid, like the south-pole terrain: the
-   * globe's latitude-longitude texture pinches together at a pole. Drawn only on a painted globe.
+   * globe's latitude-longitude texture pinches together at a pole. Drawn only on a painted globe,
+   * and raised with the stretch like the south-pole terrain.
    */
   function buildNorth(): void {
-    if (!north || !globeHeights || northMesh) return;
-    const geometry = northGeometry(north, new Color(themeColor('--terrain-lo')), new Color(themeColor('--terrain-hi')));
-    northMesh = new Mesh(geometry, terrainMaterial); world.add(northMesh);
-    northRelief = Math.max(0, (geometry.userData.heightRange as number[])[1]) / 1000;
-    const old = globe.geometry; globe.geometry = globeGeometry(dem?.meta, north.meta); old.dispose();
-    northKey = ''; pinKey = '';
+    if (!north || !globeHeights) return;
+    if (northMesh) {
+      // Its shading doesn't change with the stretch, so its points move instead of a rebuild.
+      if (northStretch === stretch) return;
+      restretchTerrain(northMesh.geometry, stretch);
+    } else {
+      northMesh = new Mesh(northGeometry(north, new Color(themeColor('--terrain-lo')),
+        new Color(themeColor('--terrain-hi')), NORTH_RELIEF, stretch), terrainMaterial);
+      world.add(northMesh);
+      const old = globe.geometry; globe.geometry = globeGeometry(dem?.meta, north.meta); old.dispose();
+      northKey = '';
+    }
+    northStretch = stretch;
+    northRelief = Math.max(0, (northMesh.geometry.userData.heightRange as number[])[1]) * stretch / 1000;
+    pinKey = '';
+  }
+  /**
+   * A site's height on the ground as drawn, in metres before the stretch: the south-pole terrain,
+   * the north cap or the level-of-detail patch, and the bare sphere anywhere else.
+   */
+  function drawnHeight(site: Site): number {
+    if (dem?.covers(site.lat, site.lon)) return dem.heightAt(site.lat, site.lon);
+    if (northMesh && north?.covers(-site.lat, site.lon)) return north.heightAt(-site.lat, site.lon);
+    return patchMesh ? patchLiftAt(patchMesh.geometry, site.lat, site.lon) * 1000 : 0;
   }
   function clearPins(): void {
     for (const obj of [...pins.children]) { ((obj as Mesh).material as Material).dispose(); pins.remove(obj); }
@@ -397,15 +430,13 @@ export function mount(el: HTMLElement): void {
     const key = [themeKey, stretch, s.selectedId,
       ...scenarios.map((sc) => `${sc.id} ${sc.color} ${sc.label} ${sc.site.lat} ${sc.site.lon}`)].join('|');
     // Scrubbing time changes none of this, so the pins aren't rebuilt at every step of a drag.
-    if (key === pinKey && pinSites === s.sites && pinDem === dem) return;
-    pinKey = key; pinSites = s.sites; pinDem = dem;
+    if (key === pinKey && pinSites === s.sites && pinDem === dem && pinPatch === patchMesh) return;
+    pinKey = key; pinSites = s.sites; pinDem = dem; pinPatch = patchMesh;
     clearPins();
     const addPin = (site: Site, color: string, label: string, id?: string): void => {
-      const height = dem?.covers(site.lat, site.lon) ? dem.heightAt(site.lat, site.lon)
-        : northMesh && north?.covers(-site.lat, site.lon) ? north.heightAt(-site.lat, site.lon) : 0;
       const pin = new Mesh(pinGeometry, new MeshBasicMaterial({ color: themeColor(color) }));
       const data: PinData = {
-        site, scenarioId: id, label, base: sitePosition(site, height, stretch), up: siteUp(site),
+        site, scenarioId: id, label, base: sitePosition(site, drawnHeight(site), stretch), up: siteUp(site),
         scale: id !== undefined && id === s.selectedId ? 1.6 : 1,
       };
       pin.userData = data; pins.add(pin);
@@ -420,12 +451,17 @@ export function mount(el: HTMLElement): void {
     const changedDem = dem !== s.dem, changedView = polar !== nextPolar, changedSite = siteKey !== key;
     const changedMode = mode !== s.mode, changedStretch = drawnStretch !== stretch;
     dem = s.dem; polar = nextPolar; mode = s.mode; siteKey = key; drawnStretch = stretch;
-    target.copy(sitePosition(sc.site, polar && dem ? dem.heightAt(sc.site.lat, sc.site.lon) : 0, stretch));
     updateTerrain(changedDem);
+    buildNorth();
     paintGlobe();
     updatePatch();
-    // Stretch is drawn only in 3D; the flat map shows heights as colours.
-    slider.disabled = !polar || mode === '2d';
+    stretchPatchMesh();
+    // On the ground as drawn, so the camera orbits the site itself and follows it when a patch arrives.
+    const lastTarget = target.clone();
+    target.copy(sitePosition(sc.site, drawnHeight(sc.site), stretch));
+    const changedTarget = !target.equals(lastTarget);
+    // Stretch is drawn only in 3D, wherever the site is; the flat map shows heights as colours.
+    slider.disabled = !dem || mode === '2d';
     // scene.css gives the canvas display: block, which the hidden attribute would not override.
     canvas.style.display = mode === '2d' ? 'none' : '';
     for (const button of buttons) {
@@ -434,7 +470,7 @@ export function mount(el: HTMLElement): void {
     }
     orbitControls.enabled = mode === '3d';
     if (!framed || changedDem || changedView) { framed = true; centre(); }
-    else if (changedSite || changedMode || changedStretch) follow();
+    else if (changedSite || changedMode || changedStretch || changedTarget) follow();
     updatePins(s);
     sun.target.position.copy(target);
     // vectorsAt answers a time it has no row for (outside 1900-2100, or in a decade that failed
@@ -467,8 +503,7 @@ export function mount(el: HTMLElement): void {
       stretch > 1 && dem ? 'Heights exaggerated; shadows are illustrative' : 'Lighting is illustrative; use the readout for visibility',
     ].filter(Boolean).join(' · ');
     help.textContent = mode === '2d' ? 'Click to pick a site · drag to pan · scroll to zoom'
-      : orbitGlobe ? 'Click to pick a site · drag to turn the Moon · scroll to zoom'
-        : 'Click to pick a site · drag to orbit · right-drag to pan · scroll to zoom';
+      : 'Click to pick a site · drag to orbit · right-drag to pan · scroll to zoom';
     invalidate();
   }
   function updateTheme(): void {
@@ -526,7 +561,7 @@ export function mount(el: HTMLElement): void {
   // Not needed for any number, so it loads beside the rest and the plain sphere shows meanwhile.
   Promise.all([sharedGlobe(), loadNorth().catch(() => null), loadTileIndex().catch(() => null)]).then(([loaded, cap, tiles]) => {
     if (disposed) return;
-    globeHeights = loaded; north = cap; tileIndex = tiles; buildNorth(); update(getState());
+    globeHeights = loaded; north = cap; tileIndex = tiles; update(getState());
   }).catch(() => { /* No whole-Moon heights (mock data set): the globe stays a plain sphere. */ });
   updateTheme(); resize();
   function dispose(): void {

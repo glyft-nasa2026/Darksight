@@ -1,6 +1,6 @@
 # T16: About bar, About panel and the Horizons badge
 
-Status: not started
+Status: in review (first delivery, branch t16-about; draft pull request). Second delivery at M3 on t16-about-b.
 
 | | |
 |---|---|
