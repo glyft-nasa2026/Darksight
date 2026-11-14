@@ -1,6 +1,6 @@
 # T12: 3D scene and map
 
-Status: done (pull requests #7 and #18; drag-to-pan and outside-table fixes in #52). Above 30 FPS on the laptop, confirmed by P1 on 14 Nov 2026
+Status: done (pull requests #7 and #18; drag-to-pan and outside-table fixes in #52). Issue #77 (3D orbit, centre and stretch north of 80 S): fixed in pull request #84 (`t12-scene-d`), tests and browser checks pass, waiting for review. Above 30 FPS on the laptop, confirmed by P1 on 14 Nov 2026
 
 | | |
 |---|---|
@@ -53,6 +53,7 @@ The folder's CSS file goes to T23 once this merges.
   - With no table row for the selected time, the scene goes dark and says "This time is outside the Sun and Earth table". Before, it was lit from the nearest row.
   - `browser-check.py` has 15 checks, not 13, and its drag check starts away from the selected pin.
 - 14 Nov 2026, issue #66 (`issue-66-moon-model`): the globe north of 80 S is no longer a plain sphere (step 7). It is coloured by height and lit through surface normals from a whole-Moon LOLA grid, `globe.bin` (contract section 2), with slopes drawn 6 times steeper. North of 80 N it is a mesh on a square polar grid, `north.bin`, like the south-pole terrain, so nothing pinches together at the pole. Round the selected site the globe is drawn from 950 m heights fetched as tiles (level of detail, `tiles/`); that patch lies on the sphere, its ground is not raised. The whole-Moon 2D map (T31) is drawn from the same `globe.bin`: height colours, with slopes facing the Sun brighter and slopes facing away darker; the polar 2D map is unchanged. Without the files the globe is the plain sphere as before.
+- 14 Nov 2026, issue #77 (pull request #84, `t12-scene-d`): the 3D view works the same everywhere. Off the south-pole height map a drag orbits the selected site (right-drag pans), "Centre selected site" goes back to a view of the site about 150 km across, and picking another site keeps the zoom and the viewing angle relative to north. The whole Moon is reached by zooming out; there is no "turn the Moon" drag any more (it came from pull request #18). The vertical stretch works wherever the site is: the patch round the site is raised by its heights above the lowest point in the patch, fading to nothing at the patch's edge so it meets the globe, and the north cap is raised like the south-pole terrain. The site, its pins and the camera's target sit on the raised ground. `browser-check.py` has 19 checks: "globe drag" became "orbit off the height map", "centre selected site off the height map" and "stretch off the height map" (the last one at 85 N too).
 
 ## Prompt to paste into Claude Code
 
@@ -61,6 +62,22 @@ Read CLAUDE.md, docs/data-contract.md and tasks/T12-scene.md. Do only that task,
 ```
 
 ## Issue #77 handoff (branch `t12-scene-d`, no code written yet)
+
+**Done** on 14 Nov 2026 in pull request #84; what is true now is under "After the merge". The
+plan below is kept as written. Where the code differs from it:
+
+- `follow()` carries the camera offset into the new site's own east, north and up
+  (`carryOffset` in coordinates.ts) instead of turning it with `setFromUnitVectors`, so the
+  view keeps its heading relative to north, not relative to the path between the two sites.
+- `patchLiftAt(geometry, lat, lon)`: the window and grid size are kept on the geometry, so the
+  caller passes neither.
+- `northGeometry(mirrored, low, high, relief, stretch)`: stretch comes after `relief`, so the
+  existing tests' fourth argument keeps its meaning. A stretch change moves the built cap's
+  points along their radii (`restretchTerrain` in terrain.ts) instead of rebuilding it; its
+  shading doesn't change. Moving the slider from 1 to 5 at 85 N took 0.45 s instead of 0.9 s in
+  headless Chromium on the Beelink.
+- `follow()` also runs whenever the selected site's drawn height changes, which covers a patch
+  arriving.
 
 Issue #77: in the 3D view, orbit around the selected site, "Centre selected site" and the
 vertical stretch do not work north of 80 S. Investigated on 14 Nov 2026; nothing implemented.

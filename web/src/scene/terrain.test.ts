@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Color, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { parseDem, projectToGrid, type DemMeta } from '../core/dem';
 import { MOON_RADIUS_KM } from '../core/types';
-import { gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
+import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import { detailBounds, edgeHeight, globeGeometry, setTerrainHole, terrainGeometry } from './terrain';
 
 const meta: DemMeta = {
@@ -108,6 +108,22 @@ describe('scene coordinates and picking', () => {
     // Walking north raises the latitude.
     const ahead = sphereSite(sitePosition(site).addScaledVector(north, 10));
     expect(ahead.lat).toBeGreaterThan(site.lat);
+  });
+
+  it('carries a camera offset to another site, as far east, north and up of it', () => {
+    const a = { lat: 0.674, lon: 23.473 }, b = { lat: 20.19, lon: 30.77 };
+    const upA = siteUp(a), northA = siteNorth(upA), eastA = northA.clone().cross(upA);
+    // East, as north × up, walks toward higher longitudes.
+    expect(sphereSite(sitePosition(a).addScaledVector(eastA, 10)).lon).toBeGreaterThan(a.lon);
+    const offset = eastA.clone().multiplyScalar(90).addScaledVector(upA, 135).addScaledVector(northA, -165);
+    const upB = siteUp(b), northB = siteNorth(upB), eastB = northB.clone().cross(upB);
+    const moved = carryOffset(offset, upA, upB);
+    expect(moved.length()).toBeCloseTo(offset.length(), 9);
+    expect(moved.dot(eastB)).toBeCloseTo(90, 9);
+    expect(moved.dot(upB)).toBeCloseTo(135, 9);
+    expect(moved.dot(northB)).toBeCloseTo(-165, 9);
+    expect(carryOffset(moved, upB, upA).distanceTo(offset)).toBeLessThan(1e-9);
+    expect(carryOffset(offset, upA, upA).distanceTo(offset)).toBeLessThan(1e-9);
   });
 
   it('leaves the globe open over the terrain cap with no gap at its edge', () => {
