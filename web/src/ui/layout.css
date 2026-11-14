@@ -4,10 +4,10 @@
    Arrangement from docs/design.md (T22), pictures docs/design/desktop.png and phone.png:
 
      about     about       top bar: logo, tabs, UTC date and time, pointer coordinates
-     scene     readout     the map or 3D Moon, with the data column beside it. The nudge
+     scene     scenarios   the map or 3D Moon, with the chosen sites beside it. The nudge
                            panel floats over the map (issue #58): nudge.css places it, not this file
-     scenarios panel       chosen sites under the map; the Solar panel card (T15) beside them,
-                           in the right-hand column under readout
+     readout   panel       the readout under the map (it swapped places with scenarios); the
+                           Solar panel card (T15) beside it, in the right-hand column under scenarios
      compare   compare     the comparison, full width
      timeline  timeline    timeline of the selected scenario, full width
      sky       sky         sky panorama of the selected scenario: 360 degrees wide, so full width
@@ -23,8 +23,8 @@
   grid-template-areas:
     'about     about'
     'status    status'
-    'scene     readout'
-    'scenarios panel'
+    'scene     scenarios'
+    'readout   panel'
     'compare   compare'
     'timeline  timeline'
     'sky       sky';
