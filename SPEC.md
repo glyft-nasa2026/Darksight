@@ -71,7 +71,7 @@ can be pinned.
 | F15 | Panel choice (if time) | Flat panel or upright panel that turns to face the Sun; shows relative power | |
 | F16 | Transition (if time) | The flat map and the 3D scene cross-fade, the 3D camera easing onto the site | |
 | F17 | Share link | Scenarios are stored in the page address, so a link reopens the same comparison | Reloading the page keeps the pinned scenarios |
-| F18 | Look and feel | One dark theme, one layout and one chart style across every module, from shared variables. Works from 1280 px desktop down to a phone | Text contrast 4.5 to 1; no colour code outside the theme files; nothing overlaps at 1280 px or 390 px |
+| F18 | Look and feel | One dark theme, one layout and one chart style across every module, from shared variables. Works from 1280 px desktop down to a phone | Text contrast 4.5 to 1; no colour code outside the theme files; no unintended UI overlap at 1280 px or 390 px, except for the intentionally floating Nudge panel. |
 | F19 | Example on first open | A link with no scenarios in it opens on a ready comparison: the crater rim (live) against the crater floor (pinned as A), at the current hour. A link with scenarios in it opens exactly those | The plain link shows two different columns in the compare table, Live and A; unpinning A and reloading leaves nothing pinned |
 
 ## 5. How it works
