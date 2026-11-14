@@ -117,7 +117,7 @@ Each item has its numbers and the files a fix would touch, so anyone can claim i
 task or pull request. This task changes no code. After a fix merges, the same measurement is
 run again and a second row is added to section 5.
 
-**1. Numbers on screen: 6.46 s against 3 s.** Not claimed yet.
+**1. Numbers on screen: 6.46 s against 3 s.** Follow-up: issue #95, not claimed yet.
 
 - The data is not the problem: `2020.bin` is in at 2.9 s. The page waits for the 1.60 MB site
   script, which starts downloading only when "Start exploring" is clicked and arrives at
@@ -128,7 +128,7 @@ run again and a second row is added to section 5.
 - Files: `web/src/main.ts` (`loadSite`), `web/src/site.ts`, `web/src/ui/intro/index.ts`,
   `web/vite.config.ts`.
 
-**2. Height map in: 29.20 s against 20 s.** Not claimed yet.
+**2. Height map in: 29.20 s against 20 s.** Follow-up: issue #96, not claimed yet.
 
 - `dem.bin` (12.85 MB) is sent without compression and shares the connection with `globe.bin`
   (8.30 MB) and `north.bin` (0.52 MB), which are for the picture only and also uncompressed.

@@ -1,6 +1,6 @@
 # T27: Load time on the real data
 
-Status: in progress (Leon, branch t27-load-time, pull request #83). Laptop numbers measured on commit 961b65c and written to docs/load-time.md: two budgets fail (numbers 6.46 s, height map 29.2 s), the freeze passes (486 ms). Next: the phone measurement, then follow-up tasks for the two fails
+Status: in progress (Leon, branch t27-load-time, pull request #83). Laptop numbers measured on commit 961b65c and written to docs/load-time.md: two budgets fail (numbers 6.46 s, height map 29.2 s), the freeze passes (486 ms). Follow-ups: issues #95 and #96. Next: the phone measurement
 
 | | |
 |---|---|
