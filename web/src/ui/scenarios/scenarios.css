@@ -171,3 +171,16 @@
   font-family: var(--font-num);
   font-size: var(--fs-sm);
 }
+
+/* T34: "Land here" on each card, pressed ("Landing site") on the mission's landing point. */
+.scn-land {
+  align-self: center;
+  flex: none;
+  font-size: var(--fs-sm);
+  padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
+}
+
+.scn-land[aria-pressed='true'] {
+  color: var(--accent);
+}

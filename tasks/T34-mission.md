@@ -1,6 +1,6 @@
 # T34: Mission simulation, launch to touchdown
 
-Status: in progress (P5, branch `t34-mission`). Step 1, the team's agreement, is not recorded yet: the pull request stays a draft until it is. Not before M2, and not after the M3 freeze
+Status: in progress (P5, branch `t34-mission`, draft pull request #100). Done: core/mission.ts and core/pads.ts with tests, state (landing point, pad, lander, address), Land here on the scenario cards, the design frame, the #mission card wired into the page. Not yet: a browser check of the card and animation, npm run build, contract sections 3 to 5, docs/ai-use/T34.md and docs/sources/T34.md, the Done when list. Step 1, the team's agreement, is not recorded yet
 
 | | |
 |---|---|

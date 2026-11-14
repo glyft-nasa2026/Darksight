@@ -6,6 +6,7 @@
 import { mount as mountScene } from './scene/index';
 import { mount as mountAbout } from './ui/about/index';
 import { mount as mountCompare } from './ui/compare/index';
+import { mount as mountMission } from './ui/mission/index';
 import { mount as mountNudge } from './ui/nudge/index';
 import { mount as mountPanel } from './ui/panel/index';
 import { mount as mountReadout } from './ui/readout/index';
@@ -24,4 +25,5 @@ export const slots: [id: string, mount: (el: HTMLElement) => void][] = [
   ['compare', mountCompare],
   ['timeline', mountTimeline],
   ['sky', mountSky],
+  ['mission', mountMission],
 ];
