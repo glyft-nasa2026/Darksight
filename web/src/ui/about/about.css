@@ -11,3 +11,140 @@
   width: calc(var(--space-5) * 1.25);
   height: calc(var(--space-5) * 1.25);
 }
+
+/* Badge and About button on the right, as in docs/design/about.png. */
+.about-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.about-badge[data-state='unavailable'] {
+  color: var(--warn);
+}
+
+/* --- The panel ------------------------------------------------------------------------------
+   A native <dialog> opened with showModal(): it sits above the sticky bar, the nudge panel and
+   the intro screen without a z-index, and gives Escape and a focus trap for free. Its padding is
+   0 so the body fills it and a click on the dialog element itself is a click on the backdrop. */
+.about-dialog {
+  padding: 0;
+  width: min(92vw, 78ch);
+  max-height: 88vh;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.about-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.about-dialog::backdrop {
+  background: var(--bg);
+  opacity: 0.8;
+}
+
+.about-body {
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+
+.about-head {
+  position: sticky;
+  top: calc(-1 * var(--space-4));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-5)) 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  background: var(--panel);
+  border-bottom: thin solid var(--border);
+}
+
+.about-head h2 {
+  margin: 0;
+}
+
+.about-section {
+  margin-top: var(--space-5);
+}
+
+.about-section h3 {
+  margin: 0 0 var(--space-2);
+}
+
+.about-section p,
+.about-section ul {
+  margin: 0 0 var(--space-2);
+}
+
+.about-section ul {
+  padding-left: var(--space-5);
+}
+
+.about-section li + li {
+  margin-top: var(--space-1);
+}
+
+.about-what {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.about-note .about-what {
+  font-weight: normal;
+}
+
+.about-details {
+  border-top: thin solid var(--border);
+  padding: var(--space-2) 0;
+}
+
+.about-details summary {
+  cursor: pointer;
+  font-family: var(--font-num);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.about-details[open] summary {
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+
+.about-ai li + li {
+  margin-top: var(--space-3);
+}
+
+/* Long addresses break instead of widening the panel. */
+.about-body a {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .about-right {
+    margin-left: 0;
+  }
+
+  .about-dialog {
+    width: calc(100vw - 2 * var(--space-3));
+    max-width: none;
+    max-height: calc(100vh - 2 * var(--space-3));
+  }
+
+  .about-body {
+    padding: var(--space-3) var(--space-3) var(--space-4);
+  }
+
+  .about-head {
+    top: calc(-1 * var(--space-3));
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) 0;
+    padding: var(--space-3);
+  }
+}
