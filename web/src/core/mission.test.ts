@@ -57,6 +57,7 @@ describe('At the Moon', () => {
   it('DOI from 100 km circular to 100 × 15 km: 19.5 m/s; the 100 km orbit takes 117.8 min', () => {
     near(descentOrbitDv(R_ORBIT, R_MOON + 15) * 1000, 19.5, 0.2);
     near((2 * halfPeriod(MU_MOON, R_ORBIT)) / 60, 117.8, 0.2);
+    near(okPlan().orbit.lunarOrbitPeriodS / 60, 117.8, 0.2);
   });
 
   it('half the 100 × 15 km descent orbit is within 1 % of Apollo 11\'s DOI to powered descent (56 min 51 s)', () => {

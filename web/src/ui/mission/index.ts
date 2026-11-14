@@ -142,7 +142,7 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
       const all = [[0, 0] as Pt, ...pts.map((x) => x.p), ...moonPath.map((x) => x.p)];
       const xs = all.map((p) => p[0]);
       const ys = all.map((p) => p[1]);
-      const pad = 0.08 * rEarthOrbit;
+      const pad = 0.16 * rEarthOrbit;   // room for the label above Earth
       map = fit(Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad);
     }
     const [ox, oy] = map([0, 0]);
@@ -159,7 +159,7 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
   } else if (scale === 'moon') {
     const rOrbit = R_MOON + plan.orbit.lunarOrbitAltKm;
     map = fit(-1.25 * rOrbit, 1.25 * rOrbit, -1.25 * rOrbit, 1.25 * rOrbit);
-    const period = 2 * Math.PI * Math.sqrt(rOrbit ** 3 / 4902.800118) * 1000;
+    const period = plan.orbit.lunarOrbitPeriodS * 1000;
     pts = [...track(plan, Math.max(loi, doi - period), doi, 180, (s) => s.moonPlane),
       ...track(plan, doi, pdi, 120, (s) => s.moonPlane),
       ...track(plan, pdi, td, 120, (s) => s.moonPlane)];
@@ -536,7 +536,9 @@ export function mount(el: HTMLElement): void {
     tableWrap.replaceChildren(table);
   };
 
-  const info = (box: HTMLElement, k: string, name: string, color: string | null, lat: number, lon: number, tMs: number): void => {
+  const info = (
+    box: HTMLElement, k: string, name: string, sub: string, color: string | null, lat: number, lon: number, tMs: number,
+  ): void => {
     const b = make('b');
     if (color) {
       const dot = make('span', 'ms-dot');
@@ -545,7 +547,8 @@ export function mount(el: HTMLElement): void {
       b.append(dot);
     }
     b.append(name);
-    box.replaceChildren(make('span', 'ms-k', k), b, make('span', 'ms-coord muted', coordText(lat, lon)),
+    box.replaceChildren(make('span', 'ms-k', k), b, ...(sub ? [make('span', 'ms-coord', sub)] : []),
+      make('span', 'ms-coord muted', coordText(lat, lon)),
       make('span', 'ms-coord', `${utcText(tMs)} UTC`));
   };
 
@@ -599,6 +602,8 @@ export function mount(el: HTMLElement): void {
     const m = missionFor();
     const sc = landingScenario();
     syncInputs();
+    const mock = /mock/i.test(s.eph?.meta.source ?? '');
+    note.textContent = `Planning model · not a flight-dynamics solution${mock ? ' · mock data' : ''}`;
 
     if (m.status === 'none' || !sc) {
       stop();
@@ -613,9 +618,9 @@ export function mount(el: HTMLElement): void {
       ?? `Scenario ${sc.label}`;
     const pad = padById(s.padId);
     const p = m.status === 'ready' && m.plan.ok ? m.plan : null;
-    info(launchInfo, '01 / Launch', `${pad.name} · ${pad.pad}`, null, pad.lat, pad.lon, p ? p.launchMs : Number.NaN);
+    info(launchInfo, '01 / Launch', pad.name, `${pad.pad} · ${pad.country}`, null, pad.lat, pad.lon, p ? p.launchMs : Number.NaN);
     if (!p) launchInfo.lastChild!.textContent = 'Launch time: once the plan is ready';
-    info(landInfo, 'Final landing site', siteName, sc.color, sc.site.lat, sc.site.lon, sc.tMs);
+    info(landInfo, 'Final landing site', siteName, sc.label === 'Landing site' ? '' : sc.label === 'Live' ? 'Live scenario' : `Scenario ${sc.label}`, sc.color, sc.site.lat, sc.site.lon, sc.tMs);
     title.textContent = `Mission simulation · ${siteName}`;
 
     if (!p) {

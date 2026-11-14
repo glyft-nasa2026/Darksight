@@ -432,7 +432,7 @@ export type MissionPlan =
     orbit: {
       parkingAltKm: number; parkingIncDeg: number;
       transferApogeeKm: number; vInfKmS: number; earthMoonKm: number; coastS: number;
-      lunarOrbitAltKm: number; lunarOrbitIncDeg: number;
+      lunarOrbitAltKm: number; lunarOrbitIncDeg: number; lunarOrbitPeriodS: number;
       descentStartAltKm: number; throttle: number; descentRangeKm: number;
       touchdownSpeedKmS: number;
     };
@@ -546,6 +546,7 @@ export function planMission(input: MissionInput): MissionPlan {
       coastS: times.coastS,
       lunarOrbitAltKm: LUNAR_ORBIT_ALT_KM,
       lunarOrbitIncDeg: 90,
+      lunarOrbitPeriodS: 2 * halfPeriod(MU_MOON, rOrbit),
       descentStartAltKm: dp.startAltKm,
       throttle: dp.throttle,
       descentRangeKm: d.rangeKm,
