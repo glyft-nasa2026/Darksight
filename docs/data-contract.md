@@ -447,7 +447,8 @@ first eight with placeholders; T15 added `#panel`. A task that adds a slot inclu
 `index.html` and this contract in its scope, and coordinates with active layout work.
 
 `#about` is a thin bar across the top: the product name, the Horizons badge and an About button
-that opens the About panel. `#panel` sits under `#readout`.
+that opens the About panel. On desktop `#scenarios` sits beside `#scene` with `#panel` under it,
+and `#readout` sits under `#scene`; on a phone `#panel` comes after `#readout`.
 
 `#nudge` (issue #58) is not in `index.html`. The scene creates it inside its map viewport (the
 `position: relative` box that holds the map canvas), before `main.ts` reaches it, so the nudge
