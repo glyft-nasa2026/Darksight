@@ -31,8 +31,9 @@ function mountSlots(slots: readonly Slot[]): void {
   }
 }
 
-// Main page first; after "Start exploring", the loading screen until the data is in and the
-// site is mounted (T22 hero.png, loading.png).
+// Main page first; after "Start exploring", the loading screen until the site is mounted and the
+// Sun and Earth table and the site list are in (at most 10 s for the data; T22 hero.png,
+// loading.png). The height map keeps loading behind the site.
 const intro = startIntro({
   loadSite: () => import('./site').then(({ slots }) => () => mountSlots(slots)),
 });

@@ -75,10 +75,14 @@ def wait_state(page, test, timeout_s=60):
                          'the page then holds a different copy of state.ts than /src/state.ts')
 
 
-def pass_intro(page):
-    """The main page (ui/intro) covers the site; the modules mount only after "Start exploring"."""
-    page.get_by_role('button', name='Start exploring').click()
-    page.wait_for_selector('.intro', state='detached', timeout=60000)
+def enter(page):
+    """Past the main page and the loading screen (web/src/ui/intro/), which cover the site.
+    Some links close the layer by themselves once the data files are in, others wait for
+    "Start exploring": click it if it shows, then wait until the layer is gone."""
+    page.wait_for_function("""() => {
+      document.querySelector('.intro .intro-start')?.click();
+      return !document.querySelector('.intro');
+    }""", timeout=120000)
 
 
 def passed(name, detail):
@@ -96,7 +100,7 @@ with sync_playwright() as p:
 
     if '--public' in sys.argv or '--t20' in sys.argv:
         page.goto(BASE + '/#live=-88.4,45,2026-01-01T00:00:00Z')
-        pass_intro(page)
+        enter(page)
         wait_state(page, 's.eph && s.dem && s.sites.length')
         actual = page.evaluate("""async () => {
           const s=(await import('/src/state.ts')).getState();
@@ -173,7 +177,7 @@ with sync_playwright() as p:
 
     page.route('**/data/*', route_data)
     page.goto(BASE + '/#live=-88.4,45,2026-01-01T00:00:00Z')
-    pass_intro(page)
+    enter(page)
     page.wait_for_selector('.map-canvas')
     wait_state(page, 's.dem')
     page.wait_for_timeout(700)
@@ -477,7 +481,7 @@ with sync_playwright() as p:
         return type.startsWith('webgl') ? null : original.call(this,type,...args);
       };""")
     fallback.goto(BASE)
-    pass_intro(fallback)
+    enter(fallback)
     fallback.wait_for_function("document.querySelector('.scene-help')?.textContent.includes('needs WebGL')")
     assert fallback.get_by_role('button', name='3D orbit', exact=True).is_disabled()
     # The flat map needs no WebGL: it still draws and still picks.
