@@ -100,8 +100,8 @@ with sync_playwright() as p:
 
     if '--public' in sys.argv or '--t20' in sys.argv:
         page.goto(BASE + '/#live=-88.4,45,2026-01-01T00:00:00Z')
-        wait_state(page, 's.eph && s.dem && s.sites.length')
         enter(page)
+        wait_state(page, 's.eph && s.dem && s.sites.length')
         actual = page.evaluate("""async () => {
           const s=(await import('/src/state.ts')).getState();
           const served=await fetch('/data/dem.json').then(r=>r.json());
@@ -177,9 +177,9 @@ with sync_playwright() as p:
 
     page.route('**/data/*', route_data)
     page.goto(BASE + '/#live=-88.4,45,2026-01-01T00:00:00Z')
+    enter(page)
     page.wait_for_selector('.map-canvas')
     wait_state(page, 's.dem')
-    enter(page)
     page.wait_for_timeout(700)
     canvas = page.locator('.scene-canvas')       # the 3D view
     map_canvas = page.locator('.map-canvas')     # the flat 2D map
@@ -539,8 +539,8 @@ with sync_playwright() as p:
         return type.startsWith('webgl') ? null : original.call(this,type,...args);
       };""")
     fallback.goto(BASE)
-    fallback.wait_for_function("document.querySelector('.scene-help')?.textContent.includes('needs WebGL')")
     enter(fallback)
+    fallback.wait_for_function("document.querySelector('.scene-help')?.textContent.includes('needs WebGL')")
     assert fallback.get_by_role('button', name='3D orbit', exact=True).is_disabled()
     # The flat map needs no WebGL: it still draws and still picks.
     fallback.wait_for_timeout(500)

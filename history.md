@@ -4,6 +4,22 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 14 Nov 2026: slot list moves to site.ts (#88)
+
+P1 agreed the change on 14 Nov 2026.
+
+### docs/data-contract.md: 5. Page slots
+
+- Was: "Each folder has `index.ts` exporting `mount(el)`, and its own CSS file. `main.ts` mounts
+  each one. T00 wired the first eight with placeholders; T15 added `#panel`. A task that adds a
+  slot includes `main.ts`, `index.html` and this contract in its scope, and coordinates with
+  active layout work."
+- Now `main.ts` mounts the modules from the list in `web/src/site.ts`, after "Start exploring",
+  and a task that adds a slot includes `site.ts` (not `main.ts`) in its scope.
+- Why: the modules load only after Start, so the first script is 24 KB instead of 5.3 MB, and the
+  main page draws in 0.2 s instead of 2.8 s. `tasks/T00-setup.md` is unchanged: it records what
+  T00 did.
+
 ## 14 Nov 2026: audit of the tickets merged since the first audit
 
 P1 asked for the newly merged tickets to be checked the same way as the first eleven. The fixes
