@@ -1,6 +1,6 @@
 # T18: Testing with a real person, bug list
 
-Status: not started
+Status: in progress: first delivery (M1) report in qa/m1.md, draft pull request open on t18-qa. Pending: the 60-second test with a person, the Firefox and real-phone passes, Quickmap checks of six sites (F12), the team decision D1 (F18), and posting the bugs in the team chat.
 
 | | |
 |---|---|
