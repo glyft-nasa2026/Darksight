@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   APOLLO_11_TIMES, EXAMPLE_LANDER, LUNAR_ORBIT_ALT_KM, MU_MOON, PARKING_ALT_KM, R_EARTH, R_MOON,
-  burnSeconds, captureDv, descentOrbitDv, dvFor, halfPeriod, hohmannCoastS, missionAt, planDescent,
+  burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, planDescent,
   planMission, propellantFor, SEQUENCE, simulateDescent, transferFor, type MissionInput, type OkPlan,
 } from './mission';
 import { padById } from './pads';
@@ -38,6 +38,14 @@ describe('Earth to Moon', () => {
     near(apollo.coastS, APOLLO_11_TIMES.coastS, 1e-6);
     expect(transferFor(R_PARK, MEAN_EARTH_MOON_KM, 6 * DAY_S)).toBeNull();
     expect(transferFor(R_PARK, MEAN_EARTH_MOON_KM, 0.5 * DAY_S)).toBeNull();
+  });
+});
+
+describe('Earth-Moon distance from the table', () => {
+  it('is the length of the Earth vector, or null where the table has no data', () => {
+    const at = (earthKm: [number, number, number]) => ({ vectorsAt: () => ({ sun: [1, 0, 0] as [number, number, number], earthKm }) });
+    near(earthMoonKmAt(at([300_000, 0, 400_000]), 0)!, 500_000, 1e-6);
+    expect(earthMoonKmAt(at([Number.NaN, Number.NaN, Number.NaN]), 0)).toBeNull();
   });
 });
 

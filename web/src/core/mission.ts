@@ -10,6 +10,7 @@
 //   - Times run backwards from touchdown, which is the landing scenario's time exactly.
 // The Moon has no atmosphere: no drag, no refraction. Nothing here touches the DOM or network.
 
+import type { Ephemeris } from './ephemeris';
 import type { Pad } from './pads';
 import type { Site } from './types';
 
@@ -151,6 +152,16 @@ export function transferFor(rPark: number, rMoon: number, coastS: number): Trans
     arriveNu: Math.acos(clamp1((p / rMoon - 1) / e)),
     coastS,
   };
+}
+
+/**
+ * The Earth-Moon distance (km) at tMs, from the Sun and Earth table, or null where the table has
+ * no data there (a decade not loaded yet).
+ */
+export function earthMoonKmAt(eph: Pick<Ephemeris, 'vectorsAt'>, tMs: number): number | null {
+  const [x, y, z] = eph.vectorsAt(tMs).earthKm;
+  const d = Math.hypot(x, y, z);
+  return Number.isFinite(d) && d > 0 ? d : null;
 }
 
 /** Lunar orbit insertion: from v-infinity (km/s) into a circular orbit of radius r (km). */
