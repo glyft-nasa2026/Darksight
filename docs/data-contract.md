@@ -442,9 +442,9 @@ flat skyline and zeros. Modules show "Loading" and must not crash.
 | `#panel` | `web/src/ui/panel/` | T15 |
 
 Each folder has `index.ts` exporting `mount(el)`, and its own CSS file. `main.ts` mounts each
-one. T00 wired the first eight with placeholders; T15 added `#panel`. A task that adds a slot
-includes `main.ts`, `index.html` and this contract in its scope, and coordinates with active
-layout work.
+one, from the list in `site.ts`, after "Start exploring" (`web/src/ui/intro/`). T00 wired the
+first eight with placeholders; T15 added `#panel`. A task that adds a slot includes `site.ts`,
+`index.html` and this contract in its scope, and coordinates with active layout work.
 
 `#about` is a thin bar across the top: the product name, the Horizons badge and an About button
 that opens the About panel. `#panel` sits under `#readout`.
