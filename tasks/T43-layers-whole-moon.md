@@ -1,6 +1,6 @@
 # T43: Map layers over the whole Moon
 
-Status: done, waiting for review (MarsRon, branch t43-layers-whole-moon, PR #172). Every "Done when" line passes on the branch merged with main on 15 Nov. North uses the LOLA north maps (AVGVISIB_65N_240M_201608, _EARTH, LPSR_65N_240M_201608).
+Status: done (MarsRon, pull request #172, merged 15 Nov 2026; the slope's distance names the two cells it spans, #199). Every "Done when" line passed on the branch merged with main on 15 Nov. North uses the LOLA north maps (AVGVISIB_65N_240M_201608, _EARTH, LPSR_65N_240M_201608).
 
 | | |
 |---|---|

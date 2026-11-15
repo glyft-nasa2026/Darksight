@@ -25,6 +25,15 @@ Yi Hung asked for all three after the audit in pull request #189 listed them.
   compares are two cells apart, so that is the distance it is measured over; the label named half
   of it.
 
+### tasks/T40-timeline-play.md, tasks/T42-date-search.md, tasks/T43-layers-whole-moon.md: `Status:`
+
+- Was: T40 "in progress (P5, branch `t40-timeline-play`, draft pull request #164)"; T42 "done, in
+  review (MarsRon, branch `t42-date-search`, pull request #167)"; T43 "done, waiting for review
+  (MarsRon, branch t43-layers-whole-moon, PR #172)".
+- Now each says done and merged on 15 Nov 2026: #164, #167 and #172. T40 adds what has been
+  checked since, because its "Done when" boxes were never ticked.
+- Why: each line was written before its pull request merged and not updated after.
+
 ## 15 Nov 2026: the terrain skyline over the whole Moon (T37, option C)
 
 ### docs/decisions.md: 14 Nov, "Real terrain for any point south of 85 S"
