@@ -461,6 +461,7 @@ export type AppState = {
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
   landing: { site: Site; tMs: number } | null;   // T34: a copy of a scenario's site and time
   padId: string; lander: Lander;                 // T34: core/pads.ts id, core/mission.ts Lander
+  battery: Battery;    // T40: core/battery.ts; in the address as bat=capacityWh,panelW,useW when changed
 };
 
 getState(): AppState
@@ -468,6 +469,7 @@ subscribe(fn: (s: AppState) => void): () => void
 setLiveSite(site: Site) · setLiveTime(tMs: number) · pin() · unpin(id) · select(id)
 setRange(r: Range) · shiftWindow(dir: -1 | 1) · setGhost(s: Scenario | null) · setMode(m)
 setLanding(sc: Scenario | null) · setPad(id) · setLander(l)            // T34
+setBattery(b: Battery)                                                 // T40
 selected(): Scenario                     // the live or pinned scenario named by selectedId
 
 // computed once and cached here, so modules don't repeat the work
@@ -568,6 +570,8 @@ flat skyline and zeros. Modules show "Loading" and must not crash.
 |---|---|---|
 | `#scene` | `web/src/scene/` | T12 |
 | `#scenarios` | `web/src/ui/scenarios/` | T08 |
+| `#playback` | `web/src/ui/playback/` | T40 (shares the place of `#scenarios`, see below) |
+| `#sidetabs` | `web/src/ui/sidetabs/` | T40 |
 | `#readout` | `web/src/ui/readout/` | T08 |
 | `#compare` | `web/src/ui/compare/` | T09 |
 | `#timeline` | `web/src/ui/timeline/` | T10 |
@@ -586,6 +590,8 @@ The main page (`web/src/ui/intro/`) is not a slot. Under its first screen it scr
 Meet the team, Privacy, Licence and a footer (issue #117). Their words and the team list are in
 `intro/landing.ts`; the team photos are `web/public/team/*.jpg`. Links there to a section are
 buttons that scroll, never `#id` links: the page address hash holds the state (section 4).
+
+`#scenarios` and `#playback` (T40) sit in one place, `#sidecard`, with `#sidetabs` over them: two tabs, Scenarios and Timeline, that show one card and hide the other. The playback keeps playing while Scenarios is shown. It moves the live time through `setLiveTime`, and pauses when anything else moves the live scenario.
 
 `#mission` (T34) is not on the site's page: it is the card of the page `web/mission.html`
 (`web/src/missionPage/`), which loads the same data files and mounts `ui/mission`. "Land here" on a

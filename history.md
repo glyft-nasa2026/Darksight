@@ -4,6 +4,23 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the timeline plays, and the solar panel card has a battery (T40)
+
+P5 asked for both.
+
+### SPEC.md: F8 Timeline
+
+- Was: "For the selected scenario: degrees above the skyline against time, one line for Sun, one for Earth, shaded below zero. Range buttons: 30 days, 90 days, 1 year; earlier and later buttons. Dragging sets the live time, and the chart stays still while the marker moves", ending at the drag.
+- Now a Timeline tab beside Scenarios also plays the live time forward, and says whether the Sun and
+  Earth are in view, whether the radio link is blocked, and the battery's charge.
+- Why: the challenge statement asks for animations over a lunar day; nothing played by itself.
+
+### SPEC.md: F15 Panel choice
+
+- Was: "Flat panel or upright panel that turns to face the Sun; shows relative power".
+- Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
+- Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
+
 ## 15 Nov 2026: date search (T42)
 
 ### tasks/T42-date-search.md
