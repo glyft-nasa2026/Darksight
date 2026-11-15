@@ -8,7 +8,7 @@ import { countdownText } from '../../core/windows';
 import {
   flipFor, getState, neverLitFor, samplesFor, subscribe, summaryFor, type AppState, type Scenario,
 } from '../../state';
-import { plotLayout, themeColor } from '../plotTheme';
+import { axisTitle, plotLayout, themeColor } from '../plotTheme';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
 
 const SPAN_DAYS = 30;
@@ -199,7 +199,7 @@ function stripLayout(rows: string[], width: number): Partial<Layout> {
     showlegend: false,
     xaxis: {
       ...base.xaxis, range: [0, SPAN_DAYS], dtick: 5, fixedrange: true,
-      title: { text: "Days since each scenario's own time" },
+      title: axisTitle("Days since each scenario's own time"),
     },
     yaxis: {
       ...base.yaxis, type: 'category', categoryorder: 'array', categoryarray: rows,

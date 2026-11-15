@@ -5,7 +5,7 @@ import './sky.css';
 import Plotly from 'plotly.js-dist-min';
 import type { Data, Layout } from 'plotly.js-dist-min';
 import { getState, samplesFor, selected, skylineFor, subscribe } from '../../state';
-import { plotLayout, themeColor } from '../plotTheme';
+import { axisTitle, chartLine, plotLayout, themeColor } from '../plotTheme';
 import { skyModel, sunMarkerPx, Y_BOTTOM, type SkyModel, type SunState } from './model';
 
 const SUN_WORDS: Record<SunState, string> = {
@@ -39,21 +39,21 @@ function traces(m: SkyModel, sunSizePx: number): Data[] {
       x: m.ground.x, y: m.ground.y,
       type: 'scatter', mode: 'lines',
       fill: 'toself', fillcolor: themeColor('--dark'),
-      line: { color: themeColor('--muted'), width: 1 },
+      line: { color: themeColor('--muted'), width: chartLine('thin') },
       hoverinfo: 'skip',
     },
     {
       name: 'Sun, 30 days',
       x: m.sunPath.x, y: m.sunPath.y,
       type: 'scatter', mode: 'lines',
-      line: { color: sun, width: 1 }, opacity: 0.6,
+      line: { color: sun, width: chartLine('thin') }, opacity: 0.6,
       hovertemplate: 'Sun path<br>az %{x:.1f}°, alt %{y:.2f}°<extra></extra>',
     },
     {
       name: 'Earth, 30 days',
       x: m.earthPath.x, y: m.earthPath.y,
       type: 'scatter', mode: 'lines',
-      line: { color: earth, width: 1 }, opacity: 0.6,
+      line: { color: earth, width: chartLine('thin') }, opacity: 0.6,
       hovertemplate: 'Earth path<br>az %{x:.1f}°, alt %{y:.2f}°<extra></extra>',
     },
   ];
@@ -67,7 +67,7 @@ function traces(m: SkyModel, sunSizePx: number): Data[] {
         type: 'scatter', mode: 'markers',
         marker: {
           color: earth, size: themeNumber('--space-3'),
-          symbol: n.earthUp ? 'circle' : 'circle-open', line: { color: earth, width: 2 },
+          symbol: n.earthUp ? 'circle' : 'circle-open', line: { color: earth, width: chartLine('thick') },
         },
         hovertemplate: `${n.earthUp ? 'Earth up' : 'Earth hidden'}<br>az ${fmt(n.earth.az)}°, ` +
           `alt ${fmt(n.earth.alt)}°<br>skyline there ${fmt(n.skylineAtEarth)}°<extra></extra>`,
@@ -78,7 +78,7 @@ function traces(m: SkyModel, sunSizePx: number): Data[] {
         type: 'scatter', mode: 'markers',
         marker: {
           color: sun, size: sunSizePx,
-          symbol: n.sunState === 'hidden' ? 'circle-open' : 'circle', line: { color: sun, width: 2 },
+          symbol: n.sunState === 'hidden' ? 'circle-open' : 'circle', line: { color: sun, width: chartLine('thick') },
         },
         hovertemplate: `${SUN_WORDS[n.sunState]} (${Math.round(n.sunFrac * 100)} % of the disc)` +
           `<br>az ${fmt(n.sun.az)}°, alt ${fmt(n.sun.alt)}°<br>skyline there ` +
@@ -104,7 +104,7 @@ function layout(m: SkyModel): Partial<Layout> {
     yaxis: {
       ...base.yaxis,
       range: [Y_BOTTOM, m.yTop],
-      title: { text: 'Elevation (°)' },
+      title: axisTitle('Elevation (°)'),
       fixedrange: true,
     },
     showlegend: false,

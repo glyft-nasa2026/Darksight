@@ -183,7 +183,7 @@ a {
   font-variant-numeric: tabular-nums;
   color: var(--text);
   background: var(--bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--muted); /* 3 to 1 or better on --bg and the cards; --border was 1.46 */
   border-radius: var(--radius);
   padding: var(--space-2) var(--space-3);
 }
