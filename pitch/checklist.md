@@ -6,9 +6,10 @@ dated 13 Nov 2026, read on 15 Nov 2026. The form itself is behind the team login
 Team → Project → Edit), so anything the guide doesn't say, such as a character counter, gets
 checked on the form when the text is pasted in.
 
-**Deadline:** press "Submit for Judging" before **Sunday 15 Nov 2026, 23:59 Kuala Lumpur time
-(UTC+8)**. Only the last saved submission is judged, and it can be edited and resubmitted until
-then. Check local judging times with the Kuala Lumpur Local Lead.
+**Deadline:** press "Submit for Judging" before **Sunday 15 Nov 2026, 22:00 Kuala Lumpur time
+(UTC+8)** (Yi Hung, 15 Nov; don't work to the guide's 23:59). Only the last saved submission is
+judged, and it can be edited and resubmitted until then. Check local judging times with the Kuala
+Lumpur Local Lead.
 
 **The demo limit decides the plan:** a video of **30 seconds or less**, or **at most 7 slides**
 including the title and intro slides. Over the limit means not eligible for global judging. We
