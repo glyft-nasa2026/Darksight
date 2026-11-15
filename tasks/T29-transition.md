@@ -1,6 +1,6 @@
 # T29: Map and scene cross-fade
 
-Status: not started
+Status: in progress (Leon, branch `t29-transition`, draft pull request). Next: the fade in `scene/index.ts`, the map's view for the camera in `map/index.ts`, a page test for "Done when"
 
 | | |
 |---|---|
