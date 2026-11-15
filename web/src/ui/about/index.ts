@@ -8,6 +8,7 @@ import {
   byTask, parseAiUse, parseSources, repoPath, toolsNamed, REPO_URL,
   type AiEntry, type Cell, type DocFile, type SourceEntry,
 } from './collect';
+import { EXPLAIN, EXPLAIN_INTRO, type ExplainPoint } from './explain';
 import { badgeSentence, badgeText, formatDeg, readValidation, type HorizonsCheck } from './validation';
 
 // --- The panel's text, in one place: update it here at the freeze ----------------------------
@@ -19,6 +20,8 @@ const WHAT_IT_SHOWS = [
     'time, and pin up to three scenarios to compare. Every number comes from the same calculation ' +
     'in the browser, from a table of Sun and Earth positions and a height map of the south pole.',
 ];
+
+// "Why the Moon is different" (T39) is in explain.ts, where a test keeps it short.
 
 const NO_REFRACTION =
   'The Moon has no atmosphere, so nothing bends the light: the Sun and Earth are exactly where ' +
@@ -158,6 +161,9 @@ function buildDialog(): Panel {
   body.append(
     head,
     section('What it shows', ...WHAT_IT_SHOWS.map((t) => h('p', undefined, t))),
+    section('Why the Moon is different', h('p', undefined, EXPLAIN_INTRO), h('ul', 'about-explain',
+      ...EXPLAIN.map((p) => h('li', undefined, h('strong', undefined, p.lead), ` ${p.text} `,
+        jumpButton(dialog, p))))),
     section('Checked against JPL Horizons', checkP, dataP),
     section('Known limits', h('ul', undefined, ...KNOWN_LIMITS.map((t) => h('li', undefined, t)))),
     section('Why there is no refraction', h('p', undefined, NO_REFRACTION)),
@@ -211,6 +217,33 @@ function buildDialog(): Panel {
         : 'Loading';
     },
   };
+}
+
+/**
+ * A link-like button that closes the panel and brings a part of the page into view: the first of
+ * `targets` that is on screen (the map layers are hidden in 3D, so the map itself stands in).
+ * The panel's own close handler puts focus back on the About button first; this then scrolls and
+ * moves focus to the point's own control there, or else the first one, if there is one.
+ */
+function jumpButton(dialog: HTMLDialogElement, p: ExplainPoint): HTMLButtonElement {
+  const b = h('button', 'about-jump', p.jump);
+  b.type = 'button';
+  b.addEventListener('click', () => {
+    const target = p.targets
+      .map((t) => document.querySelector<HTMLElement>(t))
+      .find((el): el is HTMLElement => !!el && el.getClientRects().length > 0);
+    if (target) {
+      dialog.addEventListener('close', () => {
+        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        target.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+        const control = (p.focus ? target.querySelector<HTMLElement>(p.focus) : null) ??
+          target.querySelector<HTMLElement>('button, input, select, a[href]');
+        control?.focus({ preventScroll: true });
+      }, { once: true });
+    }
+    dialog.close();
+  });
+  return b;
 }
 
 function section(title: string, ...kids: Node[]): HTMLElement {
