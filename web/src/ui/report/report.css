@@ -1,0 +1,75 @@
+/* The mission report (T35). Only ui/theme.css names; on paper theme.css gives them light values. */
+#report { display: grid; gap: var(--space-5); min-width: 0; }
+
+.rp-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.rp-head h1 { font-size: var(--fs-lg); flex: 1 1 100%; }
+.rp-status.rp-ok { color: var(--ok); border-color: var(--ok); }
+.rp-status.rp-warn { color: var(--warn); border-color: var(--warn); }
+.rp-status.rp-bad { color: var(--bad); border-color: var(--bad); }
+
+.rp-section { display: grid; gap: var(--space-3); min-width: 0; }
+.rp-section h2 { font-size: var(--fs-md); font-weight: 600; border-bottom: thin solid var(--border); padding-bottom: var(--space-1); }
+.rp-section h3 { margin-top: var(--space-2); }
+
+.rp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--space-2) var(--space-5); margin: 0; }
+.rp-fact { display: grid; gap: 0; min-width: 0; }
+.rp-fact dt { font-size: var(--fs-sm); color: var(--muted); }
+.rp-fact dd { margin: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rp-titleblock .rp-facts { grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); }
+
+.rp-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: var(--space-4) var(--space-5); align-items: start; }
+
+.rp-table-wrap { overflow-x: auto; min-width: 0; }
+.rp-table { font-size: var(--fs-sm); }
+.rp-table caption { text-align: left; font-size: var(--fs-sm); padding-bottom: var(--space-1); }
+.rp-table th, .rp-table td { padding: var(--space-1) var(--space-2); vertical-align: top; }
+.rp-table tbody th { color: var(--text); font-size: var(--fs-sm); }
+.rp-table td { white-space: nowrap; }
+.rp-schedule td:nth-child(2) { white-space: normal; min-width: 14rem; }
+.rp-top, .rp-under { display: block; }
+.rp-under { font-size: var(--fs-sm); }
+
+.rp-note { font-size: var(--fs-sm); }
+.rp-link { overflow-wrap: anywhere; }
+.rp-list { margin: 0; padding-left: var(--space-5); display: grid; gap: var(--space-1); }
+.rp-bad, .rp-error { color: var(--bad); }
+.rp-flag { color: var(--warn); border: thin solid var(--warn); border-radius: var(--radius); padding: var(--space-2) var(--space-3); }
+.rp-flag-bad { color: var(--bad); border-color: var(--bad); }
+
+.rp-chart { height: 18rem; min-width: 0; }
+.rp-chart-print { display: none; width: 100%; }
+
+@media (max-width: 800px) {
+  #report { gap: var(--space-4); }
+  .rp-facts, .rp-titleblock .rp-facts, .rp-two { grid-template-columns: minmax(0, 1fr); }
+  .rp-chart { height: 14rem; }
+}
+
+/* Paper: the report alone, light (theme.css), A4 or Letter as the print dialog chooses. Rows
+   never split, headers repeat, each page carries the mission (set by ui/report) and its number. */
+@media print {
+  @page {
+    margin: 1.6cm 1.4cm 1.8cm;
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font-family: var(--font-num); font-size: 0.7em; color: var(--muted); }
+    @top-left { font-family: var(--font); font-size: 0.7em; color: var(--muted); }
+  }
+  /* Smaller type on paper: every theme size is in rem, so this scales them all. */
+  html { font-size: 75%; }
+  html, body { background: var(--bg); }
+  /* Block, not grid, on paper: Chrome splits a grid badly across pages (a footnote drew over the
+     next page's rows, and a heading was left alone at a page's foot). */
+  #report, .rp-section { display: block; }
+  .rp-section { margin-top: var(--space-4); }
+  .rp-section > * + * { margin-top: var(--space-2); }
+  .rp-section h2, .rp-section h3 { break-after: avoid; }
+  .rp-table-wrap { overflow: visible; }
+  .rp-table { font-size: var(--fs-sm); }
+  .rp-table thead { display: table-header-group; }
+  .rp-table tr, .rp-fact, .rp-flag, .rp-list li { break-inside: avoid; }
+  .rp-chart { display: none; }
+  .rp-chart-print { display: block; break-inside: avoid; }
+  .rp-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rp-titleblock .rp-facts { grid-template-columns: minmax(0, 1fr); }
+  .rp-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  a { color: var(--text); }
+}
