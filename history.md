@@ -21,6 +21,22 @@ P5 asked for both.
 - Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
 - Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
 
+## 15 Nov 2026: ground slope as a map layer and a readout line (T41)
+
+### SPEC.md: 4. Features, F3 and F14
+
+- Was: F3 listed the Sun's and Earth's rows only; F14 had four layers (lit %, Earth-visible %,
+  never lit, height).
+- Now: F3 adds the ground slope at the site; F14 adds a fifth layer, slope.
+- Why: the challenge statement asks how to represent steep slopes at the south pole. Slope showed
+  only as shading on the map and in 3D, and nothing measured it.
+
+### docs/data-contract.md: section 3
+
+- Was: `dem.cell()` read a `nodata` cell as 0, and nothing could tell a hole from a 0 m height.
+- Now: `dem.hasData(row, col)`, and `core/slope.ts` (method in its table row).
+- Why: a slope next to a hole would be a cliff that isn't there; T41 gives it null instead.
+
 ## 15 Nov 2026: the curated list may hold 25 sites (T36)
 
 The team agreed on 15 Nov 2026.
