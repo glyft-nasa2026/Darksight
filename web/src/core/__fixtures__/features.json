@@ -15,13 +15,15 @@
       "page": "https://planetarynames.wr.usgs.gov/Feature/4987"
     },
     "blue-ghost-2": {
-      "feature": "Nassau",
-      "gazetteer_id": 4159,
-      "type": "Crater, craters",
-      "lat": -24.9137,
-      "lon": 177.337,
-      "diameter_km": 75.800552,
-      "page": "https://planetarynames.wr.usgs.gov/Feature/4159"
+      "feature": "Nassau F",
+      "gazetteer_id": 11543,
+      "type": "Satellite Feature",
+      "lat": -25.3349,
+      "lon": -179.0946,
+      "diameter_km": 115.36932,
+      "page": "https://planetarynames.wr.usgs.gov/Feature/11543",
+      "margin_km": 5.0,
+      "margin_reason": "A rim target: the team puts the landing ellipse on the north-east rim of Nassau F (EPSC2026-593), so it lies about half the diameter from the centre, and the gazetteer's diameter is approximate. 5 km allows for the rim's width."
     },
     "blue-ghost-3": {
       "feature": "Mons Gruithuisen Gamma",

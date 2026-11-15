@@ -49,11 +49,17 @@ KML_NAME = "MOON_nomenclature_center_pts.kml"
 KML_NS = "{http://www.opengis.net/kml/2.2}"
 R_KM = 1737.4
 
-# Planned site id -> the IAU feature its owner names as the target. A region target adds
+# Planned site id -> the IAU feature its owner names as the target. A region or rim target adds
 # "margin_km" and "margin_reason"; a target on no named feature has "feature": None and "reason".
 TARGETS: dict[str, dict] = {
     "im-3": {"feature": "Reiner Gamma"},
-    "blue-ghost-2": {"feature": "Nassau"},
+    "blue-ghost-2": {
+        "feature": "Nassau F",
+        "margin_km": 5.0,
+        "margin_reason": "A rim target: the team puts the landing ellipse on the north-east rim of Nassau F "
+                         "(EPSC2026-593), so it lies about half the diameter from the centre, and the "
+                         "gazetteer's diameter is approximate. 5 km allows for the rim's width.",
+    },
     "blue-ghost-3": {"feature": "Mons Gruithuisen Gamma"},
     "chandrayaan-4": {"feature": "Mons Mouton"},
 }

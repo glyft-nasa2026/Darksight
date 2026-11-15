@@ -361,8 +361,9 @@ plus `margin_km`, from the feature's centre, on the `R` sphere.
 
 The keys of `sites` are exactly the planned site ids. `lon` is in -180..180 (the file gives 0 to
 360 east). `diameter_km` is the gazetteer's "approximate diameter or longest dimension".
-`file_date` is the day the gazetteer made the file (it is regenerated nightly). A region target
-adds `margin_km` and `margin_reason`; a target on no named feature is
+`file_date` is the day the gazetteer made the file (it is regenerated nightly). A region target,
+or a point published as on a crater's rim, adds `margin_km` and `margin_reason`; a target on no
+named feature is
 `{ "feature": null, "reason": "..." }`, and the QuickMap contact sheet and a person check it
 alone.
 

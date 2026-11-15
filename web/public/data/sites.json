@@ -182,14 +182,14 @@
   {
     "id": "blue-ghost-2",
     "name": "Blue Ghost Mission 2",
-    "lat": -23.81389,
-    "lon": 176.82972,
+    "lat": -23.813,
+    "lon": -177.742,
     "agency": "Firefly Aerospace / NASA CLPS",
     "year": 2027,
     "status": "planned",
     "group": "lander",
-    "note": "Planned, no earlier than 2027. Far side, on the rim of Nassau crater: LuSEE-Night's site.",
-    "source": "https://www.bnl.gov/newsroom/news.php?a=119559"
+    "note": "Planned, no earlier than 2027. Far side, Nassau F's north-east rim; team gives 182.258 E.",
+    "source": "https://arxiv.org/abs/2301.10345"
   },
   {
     "id": "blue-ghost-3",
@@ -212,7 +212,7 @@
     "year": 2028,
     "status": "planned",
     "group": "lander",
-    "note": "Planned for 2028. Sample return; site MM-4 on Mons Mouton, ISRO's pick of four.",
+    "note": "Planned for 2028. Sample return; site MM-4 on Mons Mouton, best of ISRO's four candidates.",
     "source": "https://www.hou.usra.edu/meetings/lpsc2026/pdf/1198.pdf"
   },
   {
