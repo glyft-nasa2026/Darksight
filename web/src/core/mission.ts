@@ -711,3 +711,30 @@ export function missionAt(plan: OkPlan, tMs: number): MissionState {
   state.ground = { lat: deg(Math.asin(clamp1(u[2]))), lon: deg(Math.atan2(y, x)) };
   return state;
 }
+
+/**
+ * Where a Moon-fixed point (latitude and longitude in degrees, height in km) is at tMs, in the
+ * lunar-orbit frame that missionAt's moonPlane uses: [x, y] as moonPlane (km, the Moon at the
+ * origin, the site at (0, R_MOON) at touchdown), z along the orbit's normal (site × travel).
+ * The inverse of missionAt's ground point. The animation places the landing site, and turns
+ * the Moon's grid, with this.
+ */
+export function moonFixedInPlane(plan: OkPlan, tMs: number, latDeg: number, lonDeg: number, altKm = 0): [number, number, number] {
+  const { site, travel } = plan.geometry;
+  const r = R_MOON + altKm;
+  const la = rad(latDeg);
+  const lo = rad(lonDeg);
+  const fx = Math.cos(la) * Math.cos(lo);
+  const fy = Math.cos(la) * Math.sin(lo);
+  const fz = Math.sin(la);
+  // Undo the Moon's turn since touchdown (missionAt turns the other way to find the ground point).
+  const spin = -MOON_SPIN * ((tMs - plan.touchdownMs) / 1000);
+  const u = [fx * Math.cos(spin) + fy * Math.sin(spin), -fx * Math.sin(spin) + fy * Math.cos(spin), fz];
+  const normal = [
+    site[1] * travel[2] - site[2] * travel[1],
+    site[2] * travel[0] - site[0] * travel[2],
+    site[0] * travel[1] - site[1] * travel[0],
+  ];
+  const dot = (a: number[], b: readonly number[]): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  return [-r * dot(u, travel), r * dot(u, site), r * dot(u, normal)];
+}

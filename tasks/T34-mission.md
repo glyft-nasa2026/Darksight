@@ -1,6 +1,6 @@
 # T34: Mission simulation, launch to touchdown
 
-Status: second delivery in progress (P5, branch `t34-mission-b`, draft pull request #104; the first, #100, merged). The team agreed on 15 Nov 2026 (F20 in `SPEC.md`); every "Done when" line passes. Added: "Proceed", the launch-site picker on a globe and the launch simulation page; the twelve new pad coordinates still need a person's check. Not after the M3 freeze
+Status: third delivery in progress (P5, branch `t34-mission-c`, issue #105: auto speed, the site placed on the Moon, labels, a new tab; #100 and #104 merged). The team agreed on 15 Nov 2026 (F20 in `SPEC.md`); every "Done when" line passes. Added: "Proceed", the launch-site picker on a globe and the launch simulation page; the twelve new pad coordinates still need a person's check. Not after the M3 freeze
 
 | | |
 |---|---|
