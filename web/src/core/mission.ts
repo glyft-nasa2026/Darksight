@@ -39,6 +39,11 @@ export const PARKING_ALT_KM = 185;
 export const LUNAR_ORBIT_ALT_KM = 100;
 /** The lowest descent start, km: periapsis of the descent orbit (the brief and Apollo). */
 export const DESCENT_START_ALT_KM = 15;
+/**
+ * Gravity, drag and steering losses on the way to low Earth orbit, km/s: the middle of the
+ * "typically 1.5–2 km/s" of the delta-v budget (issue #181; docs/sources/issue-181.md).
+ */
+export const ASCENT_LOSSES_KMS = 1.75;
 /** The Moon's sphere of influence, km: a (m/M)^(2/5) with a = 384,400 km. Inside it the craft is drawn on its arrival hyperbola. */
 export const MOON_SOI_KM = 66_100;
 
@@ -247,8 +252,6 @@ export type Descent = {
 };
 
 const DT = 0.25;               // integration step, s
-// Halvings in planDescent's searches: 2^-36 of the throttle range, or of 84 km (about a micron).
-const SEARCH_STEPS = 36;
 const MAX_DESCENT_S = 3 * 3600;
 
 /**
@@ -351,9 +354,144 @@ export function simulateDescent(
   };
 }
 
+/** Where braking hands over to the approach: the "high gate" altitude, km (issue #181). */
+export const HIGH_GATE_KM = 2;
+/** Braking ends when the along-track speed is down to this, km/s. */
+const BRAKING_END_KMS = 0.05;
+/** How fast the altitude loop follows its profile in braking, rad/s (a time constant of 33 s). */
+const ALT_LOOP = 0.03;
+/** The landing phase's descent rate: altitude over this many seconds, between 1 and 30 m/s. */
+const LANDING_RATE_S = 40;
+/** The landing phase's speed loops' time constant, s. */
+const LANDING_TAU_S = 4;
+/** A touchdown under this is a landing, km/s. */
+export const LANDED_KMS = 0.003;
+
+/**
+ * A guided powered descent from the periapsis of a LUNAR_ORBIT_ALT_KM × startAltKm orbit, in the
+ * phases Apollo flew (Bennett 1970, NASA TM X-58040; issue #181):
+ *
+ * - Braking, at full thrust: mostly against the motion, the rest up or down so the altitude
+ *   follows a profile that falls with the along-track speed, from startAltKm to HIGH_GATE_KM.
+ * - Approach and landing, throttled: the last along-track speed taken out, then straight down at
+ *   the altitude over LANDING_RATE_S, from 30 m/s to 1 m/s at the ground.
+ *
+ * The thrust is worked out at the start of each step and held through it (fourth-order
+ * Runge-Kutta in the orbit's plane, as simulateDescent). Ends at the ground; a lander whose
+ * engine can't hold it up comes down fast, which planDescent rejects.
+ */
+export function simulateGuidedDescent(
+  startAltKm: number, m0Kg: number, thrustN: number, ispS: number, keepSamples = false,
+): Descent & { brakingS: number } {
+  const rp = R_MOON + startAltKm;
+  const a = (R_MOON + LUNAR_ORBIT_ALT_KM + rp) / 2;
+  const fMax = thrustN / 1000;                 // kg km/s²
+  const exhaust = ispS * G0;                   // km/s
+  let r = rp;
+  let ang = 0;
+  let vr = 0;
+  let vt = visViva(MU_MOON, rp, a);
+  let m = m0Kg;
+  const vt0 = vt;
+  const span = startAltKm - HIGH_GATE_KM;
+  let braking = true;
+  let brakingS = 0;
+  // The thrust force held through a step, radial and along-track, and the mass flow.
+  let fr = 0;
+  let ft = 0;
+  let mdot = 0;
+  const steer = (): void => {
+    const hNow = r - R_MOON;
+    const aMax = fMax / m;
+    const gNet = MU_MOON / (r * r) - (vt * vt) / r;   // upward thrust that holds the height
+    let ar: number;
+    let at: number;
+    if (braking && vt > BRAKING_END_KMS && hNow > HIGH_GATE_KM / 4) {
+      const s = Math.max(0, vt / vt0);
+      const hRef = HIGH_GATE_KM + span * s * s;
+      const vrRef = ((2 * span * s) / vt0) * -aMax;   // the profile's rate at full braking
+      ar = gNet + ALT_LOOP * ALT_LOOP * (hRef - hNow) + 2 * ALT_LOOP * (vrRef - vr);
+      ar = Math.max(-aMax, Math.min(aMax, ar));
+      at = -Math.sqrt(Math.max(0, aMax * aMax - ar * ar));
+    } else {
+      braking = false;
+      const vzCmd = -Math.max(0.001, Math.min(0.03, hNow / LANDING_RATE_S));
+      at = -vt / LANDING_TAU_S;
+      ar = gNet + (vzCmd - vr) / LANDING_TAU_S;
+      const mag = Math.hypot(ar, at);
+      if (mag > aMax) { ar *= aMax / mag; at *= aMax / mag; }
+      if (ar < 0) ar = 0;
+    }
+    fr = ar * m;
+    ft = at * m;
+    mdot = Math.hypot(fr, ft) / exhaust;
+  };
+  let dr = 0, da = 0, du = 0, dw = 0;
+  const deriv = (r1: number, vr1: number, vt1: number, m1: number): void => {
+    dr = vr1;
+    da = vt1 / r1;
+    du = -MU_MOON / (r1 * r1) + (vt1 * vt1) / r1 + fr / m1;
+    dw = (-vr1 * vt1) / r1 + ft / m1;
+  };
+  const samples: DescentSample[] = [];
+  const sample = (tS: number): void => {
+    samples.push({ tS, altKm: r - R_MOON, angle: ang, speedKmS: Math.hypot(vr, vt), massKg: m });
+  };
+  if (keepSamples) sample(0);
+  const h = DT / 2;
+  let t = 0;
+  let nextSample = 1;
+  while (t < MAX_DESCENT_S) {
+    steer();
+    if (braking) brakingS = t;
+    deriv(r, vr, vt, m);
+    const k1r = dr, k1a = da, k1u = du, k1w = dw;
+    deriv(r + k1r * h, vr + k1u * h, vt + k1w * h, m - mdot * h);
+    const k2r = dr, k2a = da, k2u = du, k2w = dw;
+    deriv(r + k2r * h, vr + k2u * h, vt + k2w * h, m - mdot * h);
+    const k3r = dr, k3a = da, k3u = du, k3w = dw;
+    deriv(r + k3r * DT, vr + k3u * DT, vt + k3w * DT, m - mdot * DT);
+    const k4r = dr, k4a = da, k4u = du, k4w = dw;
+    const nr = r + (DT / 6) * (k1r + 2 * k2r + 2 * k3r + k4r);
+    const na = ang + (DT / 6) * (k1a + 2 * k2a + 2 * k3a + k4a);
+    const nvr = vr + (DT / 6) * (k1u + 2 * k2u + 2 * k3u + k4u);
+    const nvt = vt + (DT / 6) * (k1w + 2 * k2w + 2 * k3w + k4w);
+    const nm = m - mdot * DT;
+    if (nr <= R_MOON || nm <= 0) {
+      const f = nr < r ? (r - R_MOON) / (r - nr) : 1;
+      ang += (na - ang) * f;
+      vr += (nvr - vr) * f;
+      vt += (nvt - vt) * f;
+      m += (nm - m) * f;
+      r = R_MOON;
+      t += DT * f;
+      break;
+    }
+    r = nr; ang = na; vr = nvr; vt = nvt; m = nm;
+    t += DT;
+    if (keepSamples && t >= nextSample) {
+      sample(t);
+      nextSample += 1;
+    }
+  }
+  if (keepSamples && samples[samples.length - 1].tS !== t) sample(t);
+  return {
+    end: 'ground',
+    durationS: t,
+    dvKmS: dvFor(m0Kg, m, ispS),
+    propellantKg: m0Kg - m,
+    angle: ang,
+    rangeKm: ang * R_MOON,
+    endAltKm: Math.max(0, r - R_MOON),
+    endSpeedKmS: Math.hypot(vr, vt),
+    samples,
+    brakingS,
+  };
+}
+
 export type DescentPlan = {
   startAltKm: number;
-  throttle: number;        // 0..1 of the lander's thrust, held through the descent
+  throttle: number;        // 0..1 of the lander's thrust through braking (full)
   doiDvKmS: number;
   massAtIgnitionKg: number;
   descent: Descent;
@@ -368,34 +506,16 @@ export type DescentPlan = {
  */
 export function planDescent(massAfterLoiKg: number, lander: Lander): DescentPlan | null {
   const rOrbit = R_MOON + LUNAR_ORBIT_ALT_KM;
-  const doi = (h: number): number => descentOrbitDv(rOrbit, R_MOON + h);
-  const massAt = (h: number): number => massAfterLoiKg - propellantFor(massAfterLoiKg, doi(h), lander.ispS);
-  const run = (h: number, throttle: number, keep = false): Descent =>
-    simulateDescent(h, massAt(h), lander.thrustN, lander.ispS, throttle, keep);
-  const plan = (h: number, throttle: number): DescentPlan => ({
-    startAltKm: h, throttle, doiDvKmS: doi(h), massAtIgnitionKg: massAt(h), descent: run(h, throttle, true),
-  });
-
-  if (run(DESCENT_START_ALT_KM, 1).end === 'stopped') {
-    let lo = 0;   // lands moving
-    let hi = 1;   // stops above the ground
-    for (let i = 0; i < SEARCH_STEPS; i++) {
-      const mid = (lo + hi) / 2;
-      if (run(DESCENT_START_ALT_KM, mid).end === 'ground') lo = mid;
-      else hi = mid;
-    }
-    return plan(DESCENT_START_ALT_KM, hi);
-  }
-  const top = LUNAR_ORBIT_ALT_KM - 1;
-  if (run(top, 1).end === 'ground') return null;
-  let lo = DESCENT_START_ALT_KM;
-  let hi = top;
-  for (let i = 0; i < SEARCH_STEPS; i++) {
-    const mid = (lo + hi) / 2;
-    if (run(mid, 1).end === 'ground') lo = mid;
-    else hi = mid;
-  }
-  return plan(hi, 1);
+  const h = DESCENT_START_ALT_KM;
+  const doiDv = descentOrbitDv(rOrbit, R_MOON + h);
+  const mass = massAfterLoiKg - propellantFor(massAfterLoiKg, doiDv, lander.ispS);
+  // Guided from 15 km, as Apollo flew (issue #181). An engine that can't hold the lander up near
+  // the ground comes down fast: no landing.
+  // An engine that cannot lift the lander in the Moon's gravity at ignition cannot hover or land.
+  if (lander.thrustN / 1000 <= mass * (MU_MOON / (R_MOON * R_MOON))) return null;
+  const descent = simulateGuidedDescent(h, mass, lander.thrustN, lander.ispS, true);
+  if (descent.endAltKm > 0 || descent.endSpeedKmS >= LANDED_KMS) return null;
+  return { startAltKm: h, throttle: 1, doiDvKmS: doiDv, massAtIgnitionKg: mass, descent };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -494,8 +614,9 @@ export function planMission(input: MissionInput): MissionPlan {
   const rPark = R_EARTH + PARKING_ALT_KM;
   const transfer = transferFor(rPark, input.earthMoonKm, times.coastS);
   if (!transfer) return { ok: false, error: 'coast-out-of-range' };
-  // Ideal ascent, launched due east: orbital speed less what Earth's turning gives at the pad.
-  const ascentDv = circularSpeed(MU_EARTH, rPark) - EARTH_SPIN * R_EARTH * Math.cos(rad(pad.lat));
+  // Ascent, launched due east: orbital speed less what Earth's turning gives at the pad, plus the
+  // cited gravity and drag losses (issue #181).
+  const ascentDv = circularSpeed(MU_EARTH, rPark) - EARTH_SPIN * R_EARTH * Math.cos(rad(pad.lat)) + ASCENT_LOSSES_KMS;
 
   // Moon side.
   const rOrbit = R_MOON + LUNAR_ORBIT_ALT_KM;
