@@ -427,7 +427,7 @@ export function mount(el: HTMLElement): void {
   const launchInfo = make('div', 'ms-info');
   const landInfo = make('div', 'ms-info');
   const side = make('div', 'ms-side');
-  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote, proceedButton, proceedNote, reportButton, reportNote);
+  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote, proceedButton, proceedNote);
 
   // --- Animation -----------------------------------------------------------------------------
   const view = make('div', 'ms-view');
@@ -472,7 +472,8 @@ export function mount(el: HTMLElement): void {
   conds.setAttribute('aria-live', 'polite');
   const warnings = make('div', 'ms-warnings');
   const condsBox = make('div', 'ms-conds-box');
-  condsBox.append(condsTitle, conds, warnings);
+  // The report (T35) sits under the landing site's numbers: the last thing the card says.
+  condsBox.append(condsTitle, conds, warnings, reportButton, reportNote);
   const bottom = make('div', 'ms-bottom');
   bottom.append(tableWrap, condsBox);
   const model = make('p', 'ms-note muted',
