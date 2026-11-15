@@ -1,6 +1,6 @@
 # T39: Why the Moon is different, in plain words
 
-Status: not started
+Status: in progress (Yi Hung, branch `t39-moon-vs-earth`, draft pull request): a "Why the Moon is different" section in the About panel, five points, each with a button to the part of the page that shows it
 
 | | |
 |---|---|
