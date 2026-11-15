@@ -127,7 +127,8 @@ hard-codes them. File budget: 15 MB.
 
 ### `globe.bin` + `globe.json`, `north.bin` + `north.json` (made by `data-prep/make_globe.py`, issue #66)
 
-Heights of the Moon north of the south-pole height map, for the picture on the 3D globe only.
+Heights of the Moon north of the south-pole height map, for pictures only: the 3D globe, and
+the flat map (whole-Moon view, the fading ring around a polar view, and the north polar view).
 No number shown to the user comes from them, and nothing in `core/` loads them:
 `web/src/scene/globe.ts` fetches them by itself, beside the other files, and the globe is a
 plain sphere until they arrive or when they are missing (the mock data set has none). Both come
@@ -144,8 +145,9 @@ from the same LOLA gridded data record as `dem.bin`.
 }
 ```
 
-Read by the 3D globe and by the whole-Moon 2D map (one download, `sharedGlobe()` in
-`web/src/scene/globeHeights.ts`); both only illustrate.
+Read by the 3D globe and by the 2D map (one download, `sharedGlobe()` in
+`web/src/scene/globeHeights.ts`); both only illustrate. The 2D map reads `north.bin` through
+`sharedNorth()` in `web/src/scene/globe.ts` for its north polar view (issue #112).
 
 `globe.bin`: little-endian int16, `width * height` values, row by row. Height in metres =
 `value * height_scale`, above the `R` sphere. A latitude-longitude grid laid out like
@@ -320,8 +322,8 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.meta` |
 | `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` |
 | `horizon.ts` | T00 flat skyline, then T05 | `skylineAt(dem: Dem | null, site: Site): Skyline` · `skylineElev(s: Skyline, az: number): number` (interpolated) |
-| `projection.ts` | T31 | `polarForward(lat, lon): { x, y }` and `polarInverse(x, y): { lat, lon }` (section 2's formulas, metres) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
-| `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
+| `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
+| `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
 | `sky.ts` | issue #80 | `Mat3` (three rows; `apply(m, v)` takes a vector from the first frame to the second) · `moonFromIcrf(tMs)` (ICRF to the Moon-fixed frame: the IAU WGCCRE lunar model, Archinal et al. 2011; within 0.02 degrees of DE440's mean-Earth frame) · `earthFromIcrf(tMs)` (ICRF to Earth-fixed: IAU 1976 precession and 1982 sidereal time, UTC for UT1, no nutation) · `moonFromEarthIcrf(earthKm, tMs)` · `moonOrbitIcrf(eph, tMs): { toMoon, pole }` · `alignFrames(fromX, fromZ, toX, toZ)` · `apply`, `applyInverse`, `multiply`, `angleBetween`. Turns the star map only; Sun and Earth angles still come from `geometry.ts` |
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
