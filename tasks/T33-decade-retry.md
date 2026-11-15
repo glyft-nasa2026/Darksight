@@ -1,6 +1,6 @@
 # T33: A decade that failed to download is tried again
 
-Status: in progress (Yi Hung, branch `t33-decade-retry`, draft pull request). Next: retry in `state.ts`, `tableGap`, the wording in the modules, a Playwright page test for the browser check
+Status: in review (Yi Hung, branch `t33-decade-retry`, draft pull request #147). "Done when" lines 1-4 pass, line 4 as a Playwright page test (`web/e2e/decade-retry.spec.ts`) instead of DevTools by hand; line 5: `npm run build` passes, `npm test` 580 of 582 (two `core/` timing tests fail only under another session's load, pass alone). Waiting for the wording to be agreed in #147. Follow-up: the mission page's "too near the edge of the table" for a failed decade
 
 | | |
 |---|---|

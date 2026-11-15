@@ -15,20 +15,25 @@ const AT_2026 = '-89.5,0,2026-11-15T00:00:00Z';
 async function open(page: Page, hash: string): Promise<void> {
   await page.goto(`./#${hash}`);
   await page.getByRole('button', { name: /Start exploring/ }).click();
-  await expect(page.locator('#mission')).not.toBeEmpty({ timeout: 60_000 });
+  // #sky is the last slot site.ts mounts on this page (#mission has its own page, T34-f).
+  await expect(page.locator('#sky')).not.toBeEmpty({ timeout: 60_000 });
 }
 
-/** Every place that says why there are no numbers, in the failed decade's words. */
+/**
+ * Every place that says why there are no numbers, in the failed decade's words. Read all at the
+ * same moment, and again until they agree: while a retry downloads they all say "Loading".
+ */
 async function expectFailedWords(page: Page): Promise<void> {
-  await expect(page.locator('#readout')).toContainText(FAILED, { timeout: 30_000 });
-  await expect(page.locator('#panel')).toContainText(FAILED);
-  await expect(page.locator('#nudge')).toContainText(FAILED);
-  await expect(page.locator('#sky')).toContainText(FAILED);
-  await expect(page.locator('#timeline')).toContainText(FAILED);
-  await expect(page.locator('#status')).toContainText(STATUS);
-  for (const id of ['readout', 'panel', 'nudge', 'sky', 'timeline', 'scene']) {
-    await expect(page.locator(`#${id}`), `#${id} says "outside"`).not.toContainText('outside the');
-  }
+  await expect(async () => {
+    const text = await page.evaluate((ids) =>
+      Object.fromEntries(ids.map((id) => [id, document.getElementById(id)?.textContent ?? ''])),
+    ['readout', 'panel', 'nudge', 'sky', 'timeline', 'scene', 'status']);
+    for (const id of ['readout', 'panel', 'nudge', 'sky', 'timeline', 'scene']) {
+      expect(text[id], `#${id}`).toContain(FAILED);
+      expect(text[id], `#${id} says "outside"`).not.toContain('outside the');
+    }
+    expect(text.status, '#status').toContain(STATUS);
+  }).toPass({ timeout: 40_000 });
 }
 
 /** The readout shows the Sun's numbers again and nothing says the decade failed. */
@@ -40,6 +45,7 @@ async function expectNumbers(page: Page, timeout: number): Promise<void> {
 }
 
 test('a decade that did not download says so, shows no Sun in 3D, and comes back when unblocked', async ({ page }, info) => {
+  test.setTimeout(180_000);
   const thrown: string[] = [];
   page.on('pageerror', (err) => thrown.push(err.message));
   let blocked = 0;
@@ -53,15 +59,16 @@ test('a decade that did not download says so, shows no Sun in 3D, and comes back
   // disc off (scene/index.ts, `tabled`); the screenshot is kept with the test's results.
   const message = page.locator('.scene-message');
   await expect(message).toBeVisible();
-  await expect(message).toHaveText(FAILED);
+  await expect(message).toHaveText(FAILED, { timeout: 15_000 });
   const failedShot = info.outputPath('3d-view-2050s-failed.png');
   await page.locator('.scene-viewport').screenshot({ path: failedShot });
   await info.attach('3d view, 2050s failed', { path: failedShot, contentType: 'image/png' });
 
-  // Unblock and wait: the retry, 10 s after the failure, brings the numbers back. No reload.
+  // Unblock and wait: the next retry brings the numbers back, no reload. It comes 10 s after
+  // the first failure, then 20 s, 40 s and at most 60 s after the next ones (state.ts).
   await page.evaluate(() => { (window as unknown as { stillHere: boolean }).stillHere = true; });
   await page.unroute(DECADE);
-  await expectNumbers(page, 45_000);
+  await expectNumbers(page, 75_000);
   expect(await page.evaluate(() => (window as unknown as { stillHere?: boolean }).stillHere)).toBe(true);
   const backShot = info.outputPath('3d-view-2050s-back.png');
   await page.locator('.scene-viewport').screenshot({ path: backShot });
