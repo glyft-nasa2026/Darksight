@@ -4,6 +4,17 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: second audit pass (Compare row names, the slope's distance, three status lines)
+
+Yi Hung asked for all three after the audit in pull request #189 listed them.
+
+### SPEC.md: F6 Compare table
+
+- Was: rows "Sunset in" and "Earthset in" ("Sun now, sunset in, Earth now, Earthset in").
+- Now: "Next sunrise or sunset" and "Next Earthrise or Earthset".
+- Why: the cells under "Sunset in" read "Sunrise in 3 d 5 h", "No sunset in the next 60 days" or
+  "Permanently shadowed (until 2100)" as often as a sunset, so the row's name contradicted them.
+
 ## 15 Nov 2026: the terrain skyline over the whole Moon (T37, option C)
 
 ### docs/decisions.md: 14 Nov, "Real terrain for any point south of 85 S"

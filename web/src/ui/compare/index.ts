@@ -80,14 +80,15 @@ function buildRows(cols: Column[]): Row[] {
       values: cols.map((c) => c.now?.sunFrac ?? null),
       higherIsBetter: true,
     },
-    countdownRow('Sunset in', 'sun', cols),
+    // Named for both directions: a cell reads "Sunrise in 3 d 5 h" as often as "Sunset in 3 d 4 h".
+    countdownRow('Next sunrise or sunset', 'sun', cols),
     {
       name: 'Earth now',
       cells: cols.map((c) => (!c.now ? '–' : c.earthUp ? 'Visible' : 'Hidden')),
       values: cols.map((c) => (c.now ? (c.earthUp ? 1 : 0) : null)),
       higherIsBetter: true,
     },
-    countdownRow('Earthset in', 'earth', cols),
+    countdownRow('Next Earthrise or Earthset', 'earth', cols),
     sumRow('Lit % (next 30 days)', (s) => s.litPct, pctText, true),
     sumRow('Longest unbroken light', (s) => s.longestLit_h, hoursText, true),
     sumRow('Longest dark', (s) => s.longestDark_h, hoursText, false),
