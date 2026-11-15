@@ -150,7 +150,7 @@ export function mount(el: HTMLElement): void {
   const setFolded = (f: boolean): void => {
     folded = f;
     body.hidden = f;
-    fold.textContent = f ? '+' : '−';
+    fold.textContent = f ? '▼' : '▲';   // issue #126: ▼ opens the panel, ▲ folds it
     fold.setAttribute('aria-expanded', String(!f));
     fold.setAttribute('aria-label', f ? 'Show the nudge controls' : 'Hide the nudge controls');
     fold.title = f ? 'Show' : 'Hide';
