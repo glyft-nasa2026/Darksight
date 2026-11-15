@@ -4,6 +4,15 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the nudge panel starts top left (issue #177)
+
+### docs/data-contract.md: 5. Page slots, `#nudge`
+
+- Was: the nudge panel starts in the bottom left corner of the map.
+- Now it starts top left. The scene's status message ("Loading…", "Graphics paused…") moves from
+  top left to bottom left so the panel doesn't cover it.
+- Why: issue #177 asked for the top left corner.
+
 ## 15 Nov 2026: the timeline plays, and the solar panel card has a battery (T40)
 
 P5 asked for both.
