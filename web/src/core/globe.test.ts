@@ -1,6 +1,6 @@
 // T43: the core reader for globe.bin and north.bin (moved from web/src/scene/, which re-exports it).
 import { describe, expect, it } from 'vitest';
-import { parseGlobe, parseNorth, type GlobeMeta } from './globe';
+import { globeFromHeights, northFromHeights, parseGlobe, parseNorth, type GlobeMeta } from './globe';
 import type { DemMeta } from './dem';
 
 const meta: GlobeMeta = { width: 8, height: 4, height_scale: 0.5, source: 'test' };
@@ -52,5 +52,39 @@ describe('parseNorth', () => {
   });
   it('refuses a southern min_lat', () => {
     expect(() => parseNorth({ ...north, min_lat: -80 }, new ArrayBuffer(18))).toThrow(/north\.json/);
+  });
+});
+
+describe('globeFromHeights and northFromHeights (globe.pack and north.pack, unpacked)', () => {
+  const values = Int16Array.from({ length: meta.width * meta.height }, (_, k) => (k * 37) % 500 - 250);
+  const asFile = (v: Int16Array): ArrayBuffer => {
+    const view = new DataView(new ArrayBuffer(v.length * 2));
+    v.forEach((x, i) => view.setInt16(i * 2, x, true));
+    return view.buffer;
+  };
+
+  it('build the same grid as reading the .bin file', () => {
+    const a = globeFromHeights(meta, values), b = parseGlobe(meta, asFile(values));
+    expect(a.range).toEqual(b.range);
+    expect(a.rowSpacingM).toBe(b.rowSpacingM);
+    for (let j = 0; j < meta.height; j++) for (let i = 0; i < meta.width; i++) expect(a.cell(j, i)).toBe(b.cell(j, i));
+    expect(a.heightBilinear(-31, 100)).toBe(b.heightBilinear(-31, 100));
+  });
+
+  it('refuse a grid of the wrong length, or a bad size', () => {
+    expect(() => globeFromHeights(meta, values.subarray(1))).toThrow(/31 heights, expected 32/);
+    expect(() => globeFromHeights(meta, new Int16Array(33))).toThrow(/expected 32/);
+    expect(() => globeFromHeights({ ...meta, height: 1 }, values)).toThrow(/globe\.json/);
+  });
+
+  it('northFromHeights mirrors the latitudes, as parseNorth does', () => {
+    const north: DemMeta = { size: 3, pixel_m: 1000, x_min_m: -1000, y_max_m: 1000, height_scale: 1, nodata: -32768, min_lat: 80, source: 'test' };
+    const cells = new Int16Array(9);
+    cells[4] = 1234;
+    const cap = northFromHeights(north, cells);
+    expect(cap.meta.min_lat).toBe(-80);
+    expect(cap.heightAt(-90, 0)).toBe(parseNorth(north, asFile(cells)).heightAt(-90, 0));
+    expect(cap.heightAt(-90, 0)).toBe(1234);
+    expect(() => northFromHeights({ ...north, min_lat: -80 }, cells)).toThrow(/north\.json/);
   });
 });
