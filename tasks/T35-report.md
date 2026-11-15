@@ -1,8 +1,8 @@
 # T35: Mission report, print and download
 
 Status: second delivery ready for review (P5, branch `t35-report-b`, pull request #173; the plan
-merged in #156). Every "Done when" line passes; the two skyline timing tests in `npm test` fail on
-this machine on `main` too. The added sections and the report's own page still want the team's
+merged in #156). Every "Done when" line passes, except one test in `npm test`: the skyline timing
+test "one real skyline takes under 100 ms" fails on this machine, on `main` too. The added sections and the report's own page still want the team's
 OK in the chat. The `report` design frame was made after the module, not before. Not after the
 M3 freeze
 
