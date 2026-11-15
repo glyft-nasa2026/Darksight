@@ -10,6 +10,7 @@ import {
   flipFor, getState, neverLitFor, samplesFor, skylineFor, subscribe, summaryFor, type AppState, type Scenario,
 } from '../../state';
 import { axisTitle, plotLayout, themeColor } from '../plotTheme';
+import { terrainNote } from '../terrain';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
 // A line of its own, so the state import above stays as other branches edit it (T32).
 import { neverLitPendingFor } from '../../state';
@@ -115,10 +116,11 @@ function drawTable(cols: Column[]): HTMLTableElement {
       make('span', 'cmp-where', where),
       make('span', 'cmp-when muted', `${utcText(c.sc.tMs)} UTC`),
     );
-    // The readout's words, on every column they apply to: with no terrain skyline (north of
-    // 85° S, or the height map not in yet) the column's numbers are for a smooth Moon, and a
-    // crater floor reads as lit.
-    if (!skylineFor(c.sc).terrain) th.append(make('span', 'cmp-ground muted', 'Smooth Moon, no terrain'));
+    // The readout's words, on every column they apply to (T37, ui/terrain.ts): coarse terrain
+    // north of 85° S says so, and a smooth Moon (a height map not in yet or missing) says why,
+    // since then a crater floor reads as lit. Nothing for the detailed polar terrain.
+    const ground = terrainNote(skylineFor(c.sc), c.sc.site, getState().globeStatus);
+    if (ground) th.append(make('span', 'cmp-ground muted', ground));
     hr.append(th);
   }
   head.append(hr);
