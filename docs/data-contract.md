@@ -320,7 +320,7 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 |---|---|---|
 | `ephemeris.ts` | T00 | `loadEphemeris(): Promise<Ephemeris>` (index + home decade) · `loadEphemerisChunk(eph, i): Promise<ArrayBuffer>` · `indexEphemeris(meta): Ephemeris` and `parseEphemeris(meta, buffer: ArrayBuffer): Ephemeris` (no network; tests use them) · `eph.startMs`, `eph.endMs` (whole table), `eph.homeStartMs`, `eph.homeEndMs`, `eph.meta` · `eph.vectorsAt(tMs): { sun: [x,y,z]; earthKm: [x,y,z] }` (straight-line step between rows; Sun re-normalised) · `eph.missing(fromMs, toMs): number[]` (decades not yet loaded) · `eph.withChunk(i, buffer): Ephemeris` (a new value, one more decade) |
 | `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.meta` |
-| `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` |
+| `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` · `sunAltAzAtSite(eph, site): (tMs) => AltAz` (issue #32: `sunAltAz` for one site at many times, the site's axes worked out once; the same numbers bit for bit) |
 | `horizon.ts` | T00 flat skyline, then T05 | `skylineAt(dem: Dem | null, site: Site): Skyline` · `skylineElev(s: Skyline, az: number): number` (interpolated) |
 | `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
 | `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
@@ -455,7 +455,11 @@ needs every decade from the scenario's time to 2100: they download in the backgr
 holding the page on "Loading", and it reads false ("No sunrise in the next 60 days") until they
 are in. It is also false within 60 days of the end of the table, where a few dark hours prove
 nothing. The scan runs back from 2100 and is remembered per site, so a later call for an
-earlier time only scans the new hours.
+earlier time only scans the new hours. A scan of more than `LIT_SCAN_SLICE_HOURS` (20,000 hours)
+does that many at once and the rest in slices of that size between frames, so picking a dark
+spot doesn't freeze the page (issue #32, row 1): a new spot near the pole scans about 650,000
+hours. It reads false while the scan runs, as while decades download, and `state.ts` notifies
+the modules when it is done.
 
 **Timeline window.** `timelineFor` starts at the scenario's own time for a pinned scenario and
 at `windowStartMs` for live. `setLiveTime` leaves the window alone while the new time is inside
