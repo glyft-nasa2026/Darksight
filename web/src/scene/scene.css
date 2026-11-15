@@ -26,3 +26,4 @@
   padding: 0 var(--space-1); border-radius: var(--radius); background: var(--panel); color: var(--text);
   font-family: var(--font-num); font-size: var(--fs-sm); pointer-events: none;
 }
+.scene-drag[hidden] { display: none; }

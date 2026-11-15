@@ -4,6 +4,23 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: a nudge moves at once (issue #126)
+
+MarsRon raised it; P5 asked for it, with the pole steps, transparency and corner button.
+
+### SPEC.md: F11 Nudge
+
+- Was: "Buttons: 1 km north, south, east, west; +1 day, -1 day. Makes a ghost scenario and states
+  the difference in words", with Keep and Discard to take or drop the ghost.
+- Now a press moves the live scenario at once; where it was stays grey on the map as "Before";
+  Undo goes back. Two more steps go straight to a pole. The panel starts folded.
+- Why: the confirmation got in the way of trying several steps, and most visits never nudge.
+
+### docs/data-contract.md: 5. Page slots, `#nudge`
+
+- Was: the nudge sits in one of four corners, picked with four buttons.
+- Now one button moves it round the corners: top left, top right, bottom left, bottom right.
+
 ## 15 Nov 2026: T16's status line after #93
 
 ### tasks/T16-about.md: `Status:`
