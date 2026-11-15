@@ -11,6 +11,8 @@ import {
 import { DEFAULT_PAD_ID, padById } from './core/pads';
 import type { Body, CuratedSite, Flip, Sample, Site, Skyline, Summary } from './core/types';
 import { nextFlip, series, summary, SUN_RADIUS } from './core/windows';
+// T42: a line of its own, so the shared import lines above stay as other branches edit them.
+import { END_LOOK_DAYS, firstWindow, monthsLater, type DateSearch, type Need } from './core/datesearch';
 
 export type Scenario = { id: string; label: string; color: string; site: Site; tMs: number };
 // color is the name of a theme variable, for example '--scn-a'. Never a colour code.
@@ -812,4 +814,48 @@ export function missionFor(): MissionResult {
     };
   }
   return { status: 'ready', plan: missionCache.plan };
+}
+
+// ---------------------------------------------------------------------------------------------
+// T42: date search. The first window, from a scenario's time, in which the Sun, Earth or both
+// stay up for at least minHours (core/datesearch.ts). The decades it reads are fetched here,
+// like a scenario's own, without holding the page on "Loading".
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * core's answer, or 'loading' while the table, or a decade the search needs, is still on its
+ * way; 'failed' (T33) when the decade holding the scenario's time did not download. A decade
+ * further on that failed stops the search there: core answers 'no-rows' at its first missing hour.
+ */
+export type DateSearchFor = DateSearch | { status: 'loading' } | { status: 'failed'; decadeMs: number };
+
+let lastSearch: { key: string; skyline: Skyline; result: DateSearch } | null = null;
+
+/**
+ * The first window from sc.tMs, starting within `months` calendar months, in which `need` holds
+ * for at least minHours. Asks for every decade from sc.tMs to the search's end plus the look
+ * for the window's end (END_LOOK_DAYS); 'loading' until they are in. The last answer is kept,
+ * so a module may ask on every redraw.
+ */
+export function dateSearchFor(sc: Scenario, need: Need, minHours: number, months: number): DateSearchFor {
+  const t = table;
+  if (!state.eph || !t) return { status: 'loading' };
+  const endMs = monthsLater(sc.tMs, months);
+  const lookMs = Math.max(minHours * HOUR_MS, END_LOOK_DAYS * DAY_MS);
+  const toMs = Math.min(endMs + lookMs, t.endMs);
+  let readTo = toMs;
+  if (sc.tMs >= t.startMs && toMs > sc.tMs) {
+    const r = readableTo(sc.tMs, toMs);
+    if (r === null) {
+      return tableGap(sc.tMs) === 'failed' ? { status: 'failed', decadeMs: sc.tMs } : { status: 'loading' };
+    }
+    readTo = r;
+  }
+  const skyline = skylineFor(sc);
+  // readTo and the table are in the key: a decade that arrives later gives a new answer.
+  const key = `${siteKey(sc.site)}|${sc.tMs}|${need}|${minHours}|${months}|${readTo}|${t.missing(t.startMs, t.endMs).length}`;
+  if (lastSearch && lastSearch.key === key && lastSearch.skyline === skyline) return lastSearch.result;
+  const result = firstWindow(t, sc.site, groundFor(sc.site), skyline, sc.tMs, endMs, need, minHours);
+  lastSearch = { key, skyline, result };
+  return result;
 }
