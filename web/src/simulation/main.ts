@@ -12,8 +12,9 @@ import type { CuratedSite } from '../core/types';
 import { getState, landingScenario, missionFor, setData, stateToAddress, subscribe } from '../state';
 import { prefersReducedMotion } from '../ui/launch/earth';
 import {
-  coordText, dayText, dvText, elapsedText, kgText, kmText, speedText, utcText,
+  coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, speedText, utcText,
 } from '../ui/mission/format';
+import { MANOEUVRE_WINDOW_S, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
 import { createScene, scaleFor, type MissionScene, type Scale } from './scene';
 
 const NAMES: Record<StepId, string> = {
@@ -24,7 +25,7 @@ const NAMES: Record<StepId, string> = {
 const LABELS: Record<Scale, string> = {
   near: 'EARTH · ASCENT AND PARKING ORBIT',
   earth: 'EARTH AND MOON · PLANE OF THE TRANSFER',
-  moon: 'MOON · LUNAR ORBIT, THE SITE MARKED',
+  moon: 'MOON · ARRIVAL AND LUNAR ORBIT, THE SITE MARKED',
   descent: 'POWERED DESCENT TO THE SITE',
 };
 const ERRORS = {
@@ -33,22 +34,11 @@ const ERRORS = {
   'thrust-too-low': 'This lander’s engine is too weak to stop before the ground. Go back and give it more thrust.',
 } as const;
 
-// Simulated seconds per real second. "Auto" (the default) picks one per stage (issue #105):
-// Earth orbit 1 h/s, the trip to the Moon 6 h/s, lunar orbit 1 h/s, the landing 30 min/s.
-// The two burns that last minutes, the ascent and the powered descent, play at most at
-// SLOW_SPEED in every mode, so they take about half a minute instead of flashing past.
+// Simulated seconds per real second (pace.ts, issue #105). "Auto" (the default) picks one per
+// stage; every change of speed is gradual, and slows down in time for each burn.
 const SPEEDS: [label: string, s: number][] = [['1 min/s', 60], ['1 h/s', 3600], ['6 h/s', 6 * 3600]];
-const AUTO_SPEED: Record<StepId, number> = {
-  launch: 3600, parking: 3600,
-  tli: 6 * 3600, coast: 6 * 3600,
-  loi: 3600, 'lunar-orbit': 3600,
-  doi: 1800, 'descent-orbit': 1800, 'powered-descent': 1800, touchdown: 1800,
-};
-const SLOW_SPEED = 30;
-const SLOW_STEPS: StepId[] = ['launch', 'powered-descent'];
-
-/** "30 s/s", "30 min/s", "6 h/s". */
-const rateText = (s: number): string => (s < 60 ? `${s} s/s` : s < 3600 ? `${s / 60} min/s` : `${s / 3600} h/s`);
+/** An instant burn (TLI, LOI, DOI) shows as firing for this long either side of its moment. */
+const FIRING_S = 120;
 
 function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -72,7 +62,10 @@ const scaleLabel = make('span', 'sim-scale');
 const message = make('p', 'sim-message muted', 'Loading');
 message.setAttribute('role', 'status');
 const trips = make('div', 'sim-trip');
-stage.append(canvasBox, scaleLabel, trips, message);
+// What the craft is doing now, in words: how it reaches the right orbit before landing.
+const caption = make('p', 'sim-caption');
+caption.setAttribute('aria-live', 'polite');
+stage.append(canvasBox, scaleLabel, trips, caption, message);
 
 const live = make('div', 'sim-live');
 live.setAttribute('aria-live', 'off');
@@ -127,7 +120,11 @@ let plan: OkPlan | null = null;
 let picture: MissionScene | null = null;
 let cursor = 0;
 let playing = false;
-let speed: 'auto' | number = 'auto';
+let speed: Mode = 'auto';
+let pace = 3600;                                   // the speed playing now, easing toward the limit
+let limits: ReturnType<typeof regions> = [];
+const setSpeed = (m: Mode): void => { speed = m; if (plan) limits = regions(plan, m); drawControls(); };
+const settlePace = (): void => { if (plan) pace = paceLimit(limits, cursor); };
 let frame = 0;
 let lastMs = 0;
 const stepButtons = new Map<StepId, HTMLButtonElement>();
@@ -137,35 +134,77 @@ const endMs = (): number => (plan ? plan.runsOutMs ?? plan.touchdownMs : 0);
 const autoButton = make('button', 'btn sim-small', 'Auto');
 autoButton.type = 'button';
 autoButton.dataset.speed = 'auto';
-autoButton.addEventListener('click', () => { speed = 'auto'; drawControls(); });
+autoButton.addEventListener('click', () => setSpeed('auto'));
 speeds.append(autoButton);
+const rateNow = make('span', 'sim-rate');
 for (const [label, s] of SPEEDS) {
   const b = make('button', 'btn sim-small', label);
   b.type = 'button';
   b.dataset.speed = String(s);
-  b.addEventListener('click', () => { speed = s; drawControls(); });   // a manual speed turns Auto off
+  b.addEventListener('click', () => setSpeed(s));   // a manual speed turns Auto off; the change glides
   speeds.append(b);
 }
 
-/** The speed playing now: Auto's for this step, or the chosen one; the burns capped. */
-function paceAt(id: StepId): number {
-  const base = speed === 'auto' ? AUTO_SPEED[id] : speed;
-  return SLOW_STEPS.includes(id) ? Math.min(base, SLOW_SPEED) : base;
-}
+controls.insertBefore(rateNow, scrub);
 
 function drawControls(): void {
   play.textContent = playing ? '❚❚ Pause' : cursor >= endMs() && plan ? '↺ Replay' : '▶ Play';
   for (const b of speeds.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.speed === String(speed)));
-  autoButton.textContent = speed === 'auto' && plan ? `Auto · ${rateText(paceAt(plan.steps[missionAt(plan, cursor).stepIndex].id))}` : 'Auto';
+  autoButton.textContent = speed === 'auto' && plan ? `Auto · ${rateText(pace)}` : 'Auto';
+  // A manual speed: say what is playing while it glides, or while a burn holds it slower.
+  rateNow.textContent = speed !== 'auto' && plan && Math.abs(Math.log(pace / speed)) > 0.01 ? `now ${rateText(pace)}` : '';
+}
+
+/** The engine is firing: the ascent, the powered descent, or close to an instant burn. */
+function firing(p: OkPlan, id: StepId, t: number): boolean {
+  if (id === 'launch' || id === 'powered-descent') return t < p.touchdownMs;
+  return (['tli', 'loi', 'doi'] as StepId[]).some((b) => Math.abs(t - stepOf(p, b).startMs) <= FIRING_S * 1000);
+}
+
+/** What the craft is doing, and how it gets into the orbit it needs, with the plan's numbers. */
+function captionFor(p: OkPlan, id: StepId, st: ReturnType<typeof missionAt>): string {
+  const near = (b: StepId): boolean => Math.abs(cursor - stepOf(p, b).startMs) <= MANOEUVRE_WINDOW_S * 1000;
+  const o = p.orbit;
+  const lunar = `${Math.round(o.lunarOrbitAltKm)} km`;
+  if (near('tli')) {
+    return `Translunar injection: a ${dvText(stepOf(p, 'tli').dvKmS ?? 0)} burn stretches the parking orbit into a long ellipse that reaches the Moon’s distance.`;
+  }
+  if (near('loi')) {
+    return `Lunar orbit insertion: at the closest point of the fly-by, a ${dvText(stepOf(p, 'loi').dvKmS ?? 0)} braking burn slows the craft enough for the Moon to capture it, in a ${lunar} circular polar orbit.`;
+  }
+  if (near('doi')) {
+    return `Descent orbit insertion: a ${dvText(stepOf(p, 'doi').dvKmS ?? 0)} burn lowers the far side of the orbit to ${kmText(o.descentStartAltKm)} above the ground, just before the landing site.`;
+  }
+  switch (id) {
+    case 'launch': return `Liftoff: the launch vehicle climbs to a ${Math.round(o.parkingAltKm)} km parking orbit.`;
+    case 'parking': return `Parking orbit at ${Math.round(o.parkingAltKm)} km, coasting round Earth to the point where translunar injection starts.`;
+    case 'coast':
+      return st.approach
+        ? `Arriving at the Moon: inside its sphere of influence the craft falls in on a hyperbola, ${speedText(o.vInfKmS)} faster than the Moon, aimed to pass ${lunar} above it. Without a burn it would fly past.`
+        : `Coasting to the Moon for ${durationText(o.coastS)}, slowing as it climbs away from Earth.`;
+    case 'loi':
+    case 'lunar-orbit':
+      return `In a ${lunar} polar orbit, ${durationText(o.lunarOrbitPeriodS)} a lap. The Moon turns underneath until the landing site comes under the track.`;
+    case 'doi':
+    case 'descent-orbit':
+      return `On the descent orbit: coasting down from ${lunar} to ${kmText(o.descentStartAltKm)}, where the powered descent begins.`;
+    case 'powered-descent':
+      return `Powered descent: the engine brakes the craft from orbital speed to a stop on the site. Now ${speedText(st.speedKmS)}, ${kmText(st.rangeToGoKm ?? 0)} to go.`;
+    case 'touchdown':
+      return p.runsOutMs !== null ? 'Out of propellant before the ground: touchdown not reached.' : `Touchdown, with ${kgText(p.totals.propellantLeftKg)} of propellant left.`;
+    default: return '';
+  }
 }
 
 function drawFrame(): void {
   if (!plan || !picture) return;
   const st = missionAt(plan, cursor);
   const step = plan.steps[st.stepIndex];
-  const scale = scaleFor(step.id);
-  picture.update(st, scale);
+  const scale = scaleFor(step.id, st);
+  picture.update(st, scale, firing(plan, step.id, cursor));
   scaleLabel.textContent = LABELS[scale];
+  const words = captionFor(plan, step.id, st);
+  if (caption.textContent !== words) caption.textContent = words;
 
   const parts: [string, string][] = [
     ['', NAMES[step.id]],
@@ -199,8 +238,8 @@ function tick(now: number): void {
   if (!playing || !plan) return;
   const dt = Math.min(0.25, (now - lastMs) / 1000);
   lastMs = now;
-  const step = plan.steps[missionAt(plan, cursor).stepIndex];
-  cursor = Math.min(endMs(), cursor + dt * paceAt(step.id) * 1000);
+  pace = nextPace(pace, paceLimit(limits, cursor), dt);
+  cursor = Math.min(endMs(), cursor + dt * pace * 1000);
   if (cursor >= endMs()) playing = false;
   drawFrame();
   drawControls();
@@ -209,7 +248,7 @@ function tick(now: number): void {
 
 function start(): void {
   if (!plan) return;
-  if (cursor >= endMs()) cursor = plan.launchMs;
+  if (cursor >= endMs()) { cursor = plan.launchMs; settlePace(); }
   playing = true;
   lastMs = performance.now();
   frame = requestAnimationFrame(tick);
@@ -227,6 +266,7 @@ play.addEventListener('click', () => (playing ? stop() : start()));
 scrub.addEventListener('input', () => {
   if (!plan) return;
   cursor = Math.min(endMs(), plan.launchMs + (Number(scrub.value) / 1000) * (plan.touchdownMs - plan.launchMs));
+  settlePace();   // a jump in time starts at that moment's speed
   drawFrame();
   drawControls();
 });
@@ -247,6 +287,7 @@ function drawChapters(p: OkPlan): void {
       make('span', 'sim-when', dayText(s.startMs)), make('span', 'sim-when', detail));
     b.addEventListener('click', () => {
       cursor = Math.min(endMs(), s.startMs);
+      settlePace();
       drawFrame();
       drawControls();
     });
@@ -315,6 +356,8 @@ function render(): void {
   const sc = landingScenario()!;
   picture = createScene(canvasBox, p, padById(s.padId), sc.site, sc.color);
   cursor = p.launchMs;
+  limits = regions(p, speed);
+  settlePace();
   drawTrip(p);
   drawChapters(p);
   drawFrame();
