@@ -1,6 +1,6 @@
 # T17: Slides, demo video, submission text
 
-Status: done on branch `t17-pitch` (Fabian, 15 Nov 2026). Waiting on people: upload the video and paste its link; the outside-viewer test; the last check after the final merge (`pitch/checklist.md`).
+Status: built by Fabian; refreshed against main 4626e8e by Yi Hung's session (pull request #130, 15 Nov 2026). Waiting on people: upload the video and paste its link; the outside-viewer test; the last check after the final merge (`pitch/checklist.md`).
 
 | | |
 |---|---|

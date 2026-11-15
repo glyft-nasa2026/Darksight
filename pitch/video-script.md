@@ -1,7 +1,7 @@
 # Demo video: script
 
 **Limit:** 30 seconds or less (Space Apps project submission guide, 13 Nov 2026; a longer video
-is not eligible for global judging). **File:** `pitch/demo/darksight-demo.webm`, 28.8 s,
+is not eligible for global judging). **File:** `pitch/demo/darksight-demo.webm`, 29.2 s,
 1280 × 720, silent, English captions burned in. **Made by** `node pitch/tools/record-demo.mjs`,
 which drives the deployed site at darksight.space and cuts out the loading.
 
@@ -16,11 +16,11 @@ the day it is recorded:
 |---|---|---|
 | 0:00–0:03 | Title card on the page background | NASA SPACE APPS 2026 · LUNAR LANDING SITE NAVIGATOR · TEAM GLYFT / **DARKSIGHT** / When does a landing site on the Moon have sunlight and a line to Earth? |
 | 0:03–0:07.5 | Problem card | A launch slips by a day. Does the landing site still get sunlight for power, and a line to Earth for radio? Today that answer takes about an hour across three tools. |
-| 0:07.5–0:13.5 | The page scrolls to the Compare card; ring around it | Darksight compares sites in seconds. Shackleton rim: **100.0 %** lit over 30 days. The crater floor next to it: **0.0 %**. |
-| 0:13.5–0:15 | Back to the map; ring around the Nudge panel | Now move the pin just **1 km north**… |
-| 0:15–0:21.5 | "1.0 km N" pressed; the panel lists the change in red | …and the sunlight collapses: **−17 days of sunlight in 30 days**, and Earth drops out of sight. One kilometre. |
-| 0:21.5–0:25 | Ghost discarded; ring around the Horizons badge in the top bar | Real NASA LOLA terrain and JPL ephemeris. Every angle checked against **JPL Horizons**: largest difference **0.000001°**. |
-| 0:25–0:28.8 | End card | FOR MISSION PLANNERS, EDUCATORS AND THE CURIOUS / **DARKSIGHT** / Free in any browser: darksight.space |
+| 0:07.5–0:13.75 | The page scrolls to the Compare card; ring around it | Darksight compares sites in seconds. Shackleton rim: **100.0 %** lit over 30 days. The crater floor next to it: **0.0 %**. |
+| 0:13.75–0:16 | Back to the map; ring around the Nudge panel, which opens | Now move the pin just **1 km north**… |
+| 0:16–0:22.5 | "1.0 km N" pressed: the pin moves 1 km and the panel lists the change in red | …and the sunlight collapses: **−17 days of sunlight in 30 days**, and Earth drops out of sight. One kilometre. |
+| 0:22.5–0:26 | Undo puts the pin back; ring around the Horizons badge in the top bar | Real NASA LOLA terrain and JPL ephemeris. Every angle checked against **JPL Horizons**: largest difference **0.000001°**. |
+| 0:26–0:29.2 | End card | FOR MISSION PLANNERS, EDUCATORS AND THE CURIOUS / **DARKSIGHT** / Free in any browser: darksight.space |
 
 A small label stays in the top-right corner the whole time: "AI-assisted build (Claude Code) ·
 screen recording of the real site". The guide asks for a visible mark on any video made with
@@ -31,10 +31,10 @@ code and the captions were written with AI help, so it carries the label.
 
 | Needed | Where |
 |---|---|
-| Compare | 0:07.5–0:13.5 |
-| Nudge | 0:13.5–0:21.5 |
-| Horizons badge | 0:21.5–0:25 |
-| Within the limit | 28.8 s, checked with ffmpeg (`Duration: 00:00:28.80`) |
+| Compare | 0:07.5–0:13.75 |
+| Nudge | 0:13.75–0:22.5 |
+| Horizons badge | 0:22.5–0:26 |
+| Within the limit | 29.2 s, checked with ffprobe (`duration=29.240000`) |
 
 ## To record it again
 

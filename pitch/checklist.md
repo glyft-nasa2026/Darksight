@@ -21,7 +21,7 @@ made both. The video is the demo link; the slides are linked from the detailed d
 |---|---|---|---|---|
 | Project Name | yes | none stated | "Darksight" (`submission.md`) | ready |
 | High-Level Project Summary | yes | none stated; what, how it addresses the challenge, why it matters | `submission.md` (about 180 words) | ready |
-| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 28.8 s, English captions | **needs a person:** upload to YouTube (public or unlisted) and paste the link |
+| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 29.2 s, English captions | **needs a person:** upload to YouTube (public or unlisted) and paste the link |
 | Link to Final Project | yes | public, no login | https://darksight.space (repo linked in the description) | ready |
 | Detailed Project Description | yes | none stated; what, how, benefits, goals, tools | `submission.md` | ready |
 | Use of Super Intelligence (SI) | yes | say where and how; AI images and videos need a visible watermark; code and data need a note in text and metadata; judges don't see this answer | `submission.md`; labels on every slide and in the video | ready (see open item 3) |
@@ -52,19 +52,19 @@ reads them from the page while it records.
 | −17 days of sunlight in 30 days; no Earth in the next 60 days (1 km north of the rim) | Nudge panel after "1.0 km N" |
 | Sunset in 47 d 18 h (rim) | Compare table and readout |
 | 0.000001°, 18 cases, 0.1° tolerance | Horizons badge and About panel, from `web/public/data/validation.json` |
-| 240 m cells, 150 km skyline, real terrain south of 85° S, 1900–2100 every 3 h | About panel, "Known limits"; `SPEC.md` sections 5, 6 and 8 |
-| 20 curated sites | About panel |
-| 519 tests | `npm test` on this branch after merging main, 15 Nov 2026 |
-| 188 distinct sources, 145 AI-use records | `references.md`, `ai-use.md`, built from `docs/` |
+| Real terrain everywhere: 240 m cells south of 85° S, 3.8 km elsewhere; 150 km skyline; 1900–2100 every 3 h | About panel, "Known limits"; `SPEC.md` sections 5, 6 and 8 |
+| 24 curated sites (14 landed, 4 planned, 4 candidates, 2 references) | About panel; `web/public/data/sites.json` |
+| 782 tests | `npm test` on this branch after merging main (fe6955c), 15 Nov 2026 |
+| 302 distinct sources from 67 files, 236 AI-use records from 70 files | `references.md`, `ai-use.md`, built from `docs/` |
 
 ## "Done when" (tasks/T17-pitch.md)
 
 | Line | Status |
 |---|---|
 | Every field above has its text or file | Pass, except the demo **link**: the file is ready, but a person has to upload it |
-| The video runs within the form's limit and shows compare, nudge and the Horizons badge | Pass: 28.8 s; compare 0:07.5, nudge 0:13.5, badge 0:21.5 (`video-script.md`) |
+| The video runs within the form's limit and shows compare, nudge and the Horizons badge | Pass: 29.2 s (ffprobe `duration=29.240000`); compare 0:07.5, nudge 0:13.75, badge 0:22.5 (`video-script.md`); re-recorded from darksight.space at main 4626e8e |
 | Someone outside the team can say what the tool does after watching it once | **Not done yet**: needs a person (test below) |
-| Slides use the palette in `docs/design.md`; T19's two screenshots or updated ones | Pass: palette tokens copied from `docs/design.md`; updated desktop and phone screenshots of darksight.space in `img/` |
+| Slides use the palette in `docs/design.md`; T19's two screenshots or updated ones | Pass: palette tokens copied from `docs/design.md`; desktop and phone screenshots of darksight.space in `img/`, taken again at main 4626e8e |
 | Last check after the last pull request has merged | **Not yet possible**: other pull requests are still open. Run it as below |
 
 ### The outside-viewer test
@@ -94,10 +94,11 @@ If the panel is missing one, arrange one more T16 delivery (or a redeploy of `ma
 again; anyone can take it. Then paste the "Space Agency Partner Data and Other References" block
 again.
 
-Run on 15 Nov 2026 against this branch (after merging main at 964eca2) and the live site:
+Run on 15 Nov 2026 against this branch (after merging main at 3f917e7) and the live site (4626e8e):
 
 ```
-PASS submission lists: 46 docs/sources files and 47 docs/ai-use files, all collected
+PASS submission lists: 68 docs/sources files and 70 docs/ai-use files, all collected
+note docs/sources/issue-58.md: no entries yet
 FAIL About panel on https://darksight.space/ is missing:
   docs/sources/T17.md
   docs/ai-use/T17.md
@@ -107,8 +108,7 @@ The only files missing are this branch's own, which aren't deployed yet. Before 
 entries, the same check passed: "PASS About panel on https://darksight.space/ shows every file
 with entries".
 
-Files with no entries yet (nothing to cover; recheck at the end): sources issue-58, T14, T23,
-T26, T28, T29; ai-use T14, T23, T26, T28, T29. T17's own files reach the About panel once this
+Files with no entries yet (nothing to cover; recheck at the end): `docs/sources/issue-58.md`. T17's own files reach the About panel once this
 branch has merged and deployed, which is one more reason to run the check at the very end.
 
 ## Open items for the team
@@ -125,7 +125,8 @@ branch has merged and deployed, which is one more reason to run the check at the
 4. **Character limits:** none in the guide. If the form has a counter, trim the description first.
 5. **Re-record** the video and screenshots after a redeploy that changes the wording on screen:
    `node pitch/tools/record-demo.mjs`, `node pitch/tools/screenshots.mjs`, then
-   `node pitch/tools/build-slides.mjs`.
+   `node pitch/tools/build-slides.mjs`. Playwright's own ffmpeg encodes only VP8; for VP9 give the
+   system one: `FFMPEG=/usr/bin/ffmpeg node pitch/tools/record-demo.mjs`.
 
 ## Files in `pitch/`
 
@@ -134,7 +135,7 @@ branch has merged and deployed, which is one more reason to run the check at the
 | `checklist.md` | This file |
 | `submission.md` | The text for every form field |
 | `video-script.md` | Scene-by-scene script and timings of the demo video |
-| `demo/darksight-demo.webm` | The demo video, 28.8 s, 1280 × 720, VP9 |
+| `demo/darksight-demo.webm` | The demo video, 29.2 s, 1280 × 720, VP9 |
 | `slides.html`, `darksight-slides.pdf`, `slides-png/` | The 7-slide deck: source, PDF, one PNG per slide |
 | `img/` | Screenshots of darksight.space used on the slides |
 | `references.md`, `ai-use.md` | Every source and AI-use record, generated from `docs/` |
