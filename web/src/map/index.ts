@@ -41,6 +41,12 @@ const GLOBAL_W = 1440, GLOBAL_H = 720;            // the whole-Moon layer withou
 const RELIEF_LIGHT = 1.2;
 /** Cosine of the Sun's zenith angle at which the whole-Moon map reaches full daylight (about 5 degrees up). */
 const DAWN = 0.08;
+/**
+ * Brightness of ground the Sun does not reach, on both maps (issue #154). At 0.3 shadowed ground
+ * went nearly black and the relief and height colours under it were lost; at 0.5 it still reads
+ * clearly darker than any lit ground, and its shape shows.
+ */
+const SHADOW_LIGHT = 0.5;
 /** A press that moves less than this many CSS pixels is a click, not a drag (as in the 3D scene). */
 const CLICK_SLOP = 5;
 /** Time changes closer together than this are a drag: the light layers are drawn coarser until they stop. */
@@ -169,7 +175,7 @@ export function mount(el: HTMLElement): void {
    * through the height colours. Flat ground under a low Sun reads as lit, slopes facing it brighter.
    */
   const brightness = (frac: number, cosI: number): number =>
-    0.3 + 0.7 * frac * Math.min(1, Math.max(0, 0.4 + 2 * cosI));
+    SHADOW_LIGHT + (1 - SHADOW_LIGHT) * frac * Math.min(1, Math.max(0, 0.4 + 2 * cosI));
 
   function buildPolarBase(s: AppState, lit: boolean): void {
     const sc = selected();
@@ -262,7 +268,7 @@ export function mount(el: HTMLElement): void {
             t = Math.min(1, Math.max(0, (dem.heightAt(lat, lon) - range[0]) / span));
           }
           const k = (j - rows[0]) * W + i;
-          paint(image.data, k * 4, t, day ? (day[k] > 0 ? 0.6 + 0.4 * day[k] : 0.3) : 0.6);
+          paint(image.data, k * 4, t, day ? (day[k] > 0 ? 0.6 + 0.4 * day[k] : SHADOW_LIGHT) : 0.6);
         }
       }
     }
@@ -349,7 +355,7 @@ export function mount(el: HTMLElement): void {
     const ramp = new Float32Array(256 * 3);
     for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) ramp[i * 3 + c] = lo[c] + ((hi[c] - lo[c]) * i) / 255;
     // Night (and every cell, with no Sun table) has one light, so its pixels come from a table.
-    const still = new Uint32Array(256), stillLight = day ? 0.3 : 0.6;
+    const still = new Uint32Array(256), stillLight = day ? SHADOW_LIGHT : 0.6;
     for (let i = 0; i < 256; i++) still[i] = rgbaWord(ramp[i * 3] * stillLight, ramp[i * 3 + 1] * stillLight, ramp[i * 3 + 2] * stillLight);
     const n = sun ? Math.hypot(sun[0], sun[1], sun[2]) || 1 : 1;
     // Slopes are stored as n * 127: fold that into the Sun's direction.
@@ -360,7 +366,7 @@ export function mount(el: HTMLElement): void {
         if (!(up > 0)) { out[d] = still[tones[k]]; continue; }
         const facing = slopes[k * 3] * sx + slopes[k * 3 + 1] * sy + slopes[k * 3 + 2] * sz;
         // Daylight comes in over the first few degrees of Sun, so the day's edge is not a hard step.
-        const light = Math.min(1, Math.max(0.3, 0.3 + Math.min(1, up / DAWN) * (0.3 + 0.4 * up + RELIEF_LIGHT * (facing - up))));
+        const light = Math.min(1, Math.max(SHADOW_LIGHT, SHADOW_LIGHT + Math.min(1, up / DAWN) * (0.3 + 0.4 * up + RELIEF_LIGHT * (facing - up))));
         const r = tones[k] * 3;
         out[d] = rgbaWord(ramp[r] * light, ramp[r + 1] * light, ramp[r + 2] * light);
       }

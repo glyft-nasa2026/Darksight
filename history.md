@@ -4,6 +4,26 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: freeze checklist (T26)
+
+### SPEC.md: 10. Open decisions
+
+- Was: eight rows with a decision, who and importance, and no answer. The load-time row said
+  "proposed, not yet agreed".
+- Now each row has an Answer column, taken from `docs/decisions.md`, T17's `pitch/checklist.md`
+  (pull request #130), T22's status and `docs/load-time.md`. The deadline is 22:00, from Yi
+  Hung; the checklist's 23:59 (NASA's guide) was written in first and corrected the same day.
+  The Figma seat row is struck out: T22 made its pictures with no Figma file.
+- Why: T26 step 5. At the freeze no decision stays open.
+
+### tasks/T32-never-lit-checking.md, tasks/T34-mission.md: `Status:`
+
+- Was: T32 "in review … draft pull request"; T34 "seventh delivery in progress (P5, branch
+  `t34-mission-g` …)", written by #151 before it merged.
+- Now T32 says merged in #138 with line 5 not checked on a preview; T34 says done, seven
+  deliveries merged, the last #151.
+- Why: T26 step 4 found both behind what merged (#138, #151). Yi Hung asked T26 to fix them.
+
 ## 15 Nov 2026: the mission card gets its own page (T34)
 
 P5 asked for it.
