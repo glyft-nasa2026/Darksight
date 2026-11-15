@@ -18,11 +18,11 @@ coordinate overlapping edits.
 
 ### tasks/T32-never-lit-checking.md, tasks/T34-mission.md: `Status:`
 
-- Was: T32 "in review … draft pull request"; T34 "sixth delivery in progress … draft pull
-  request #145".
-- Now T32 says merged in #138 with line 5 not checked on a preview; T34 says done, six
-  deliveries merged.
-- Why: T26 step 4 found both behind what merged (#138, #145). Yi Hung asked T26 to fix them.
+- Was: T32 "in review … draft pull request"; T34 "seventh delivery in progress (P5, branch
+  `t34-mission-g` …)", written by #151 before it merged.
+- Now T32 says merged in #138 with line 5 not checked on a preview; T34 says done, seven
+  deliveries merged, the last #151.
+- Why: T26 step 4 found both behind what merged (#138, #151). Yi Hung asked T26 to fix them.
 
 ## 15 Nov 2026: the mission card gets its own page (T34)
 
@@ -32,8 +32,8 @@ P5 asked for it.
 
 - Was: "`#mission` (T34) is a full-width card after `#sky`, and last on a phone", on the site's
   page; the launch simulation's "Back" went to `index.html`.
-- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" on the
-  landing scenario's card; the simulation's "Back" goes to `mission.html`.
+- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" beside
+  "Copy share link" in the Scenarios panel, once a landing point is chosen; the simulation's "Back" goes to `mission.html`.
 - Why: the card is long and sat at the very bottom of the site, far from the "Land here" that
   fills it.
 

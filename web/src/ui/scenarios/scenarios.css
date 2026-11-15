@@ -187,13 +187,11 @@
   color: var(--accent);
 }
 
-/* T34: "Open mission" beside "Landing site", on the landing card only: the mission planner page. */
-.scn-open {
-  align-self: center;
-  flex: none;
-  font-size: var(--fs-sm);
-  padding: var(--space-1) var(--space-2);
-  white-space: nowrap;
+/* T34: "Open mission" beside "Copy share link", once a landing point is chosen. The two wrap
+   to the next line together, never apart. */
+.scn-share {
+  display: flex;
+  gap: var(--space-2);
 }
 
 .scn-open[hidden] {
