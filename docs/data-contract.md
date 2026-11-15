@@ -127,9 +127,12 @@ hard-codes them. File budget: 15 MB.
 
 ### `globe.bin` + `globe.json`, `north.bin` + `north.json` (made by `data-prep/make_globe.py`, issue #66)
 
-Heights of the Moon north of the south-pole height map, for pictures only: the 3D globe, and
+Heights of the Moon north of the south-pole height map, for pictures: the 3D globe, and
 the flat map (whole-Moon view, the fading ring around a polar view, and the north polar view).
-No number shown to the user comes from them, and nothing in `core/` loads them:
+One exception, agreed 15 Nov 2026 (`docs/decisions.md`): map layers cover the whole Moon (SPEC
+section 6), so the height and slope layers, and the readout's slope line, take heights from these
+files where `dem.bin` does not reach, through a reader in `core/` that T43 adds to this section.
+Until T43 merges, no number shown to the user comes from them, and nothing in `core/` loads them:
 `web/src/scene/globe.ts` fetches them by itself, beside the other files, and the globe is a
 plain sphere until they arrive or when they are missing (the mock data set has none). Both come
 from the same LOLA gridded data record as `dem.bin`.
@@ -614,8 +617,8 @@ creates `<section class="scene-layers">` under its map caption, outside the view
 floats over the map, and calls `mount(el)` on it. The controls show in 2D mode only and say when
 the map shows the whole Moon or the north pole rather than the south pole. The layers are drawn
 by the 2D map (`web/src/map/`): in its draw step, after the terrain and before the grid and pins,
-on the south-polar map only (`kind === 'south'`; the LOLA maps used here cover the south pole
-only), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
+on the south-polar map only for now (`kind === 'south'`; T43 extends every layer to the north
+polar and whole-Moon maps, SPEC section 6), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
 stereographic metres (section 2) into canvas pixels, and it redraws whenever `onLayersChange()`
 fires (data arriving, a switch, an opacity change, each frame of a fade). Both come from
 `web/src/ui/layers/index.ts`, which also holds the one store of layer settings (`layerStore`).
