@@ -612,12 +612,27 @@ function lastLitMs(eph: Ephemeris, sc: Scenario, downToMs: number): number | nul
   const sunlit = sunlitTest(eph, sc);
   const next = (): void => {
     if (litScans.get(key) !== scan) return;
-    if (scanSlice(scan, sunlit)) { setTimeout(next, 0); return; }
+    if (scanSlice(scan, sunlit)) { soon(next); return; }
     scan.running = false;
     notify(false);
   };
-  setTimeout(next, 0);
+  soon(next);
   return null;
+}
+
+// Runs fn as a new task, after the browser has had its turn. A message, not setTimeout(fn, 0):
+// browsers hold nested timeouts back by 4 ms each, which made 30-odd slices 0.2 s slower.
+const slices: (() => void)[] = [];
+const sliceChannel = typeof MessageChannel === 'function' ? new MessageChannel() : null;
+if (sliceChannel) {
+  sliceChannel.port1.onmessage = () => { slices.shift()?.(); };
+  // In Node (the tests) an open port would keep the process alive; browsers have no unref.
+  (sliceChannel.port1 as { unref?: () => void }).unref?.();
+}
+function soon(fn: () => void): void {
+  if (!sliceChannel) { setTimeout(fn, 0); return; }
+  slices.push(fn);
+  sliceChannel.port2.postMessage(null);
 }
 
 /** Scans up to one slice of hours. True when there is more to scan. */

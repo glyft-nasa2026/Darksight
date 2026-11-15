@@ -718,8 +718,7 @@ describe('"never lit" on a long table: the scan runs in slices (issue #32, row 1
     const stop = subscribe(() => { calls++; });
     expect(neverLitFor(getState().live)).toBe(false);   // one slice done, the rest to come
     expect(calls).toBe(0);
-    await tick();
-    expect(neverLitFor(getState().live)).toBe(false);   // still scanning: two slices of three
+    expect(neverLitFor(getState().live)).toBe(false);   // asked again while scanning: no wait
     for (let i = 0; i < 10 && calls === 0; i++) await tick();
     stop();
     expect(calls).toBe(1);
