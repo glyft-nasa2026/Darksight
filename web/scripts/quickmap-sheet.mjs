@@ -1,18 +1,20 @@
 // T36 step 5: the QuickMap contact sheet. For every planned site in public/data/sites.json (or
-// the ids given), opens LROC QuickMap in headless Chromium, switches to a projection that shows
-// the site without foreshortening, types "lat,lon" into QuickMap's search box and picks "Create
-// Point at ...", which drops a pin and centres the map on it. Saves two screenshots per site
-// (200 and 50 m per pixel) and one HTML page of them all into data-prep/raw/quickmap/
-// (git-ignored).
+// the ids given), opens LROC QuickMap in headless Chromium, turns on QuickMap's Nomenclature layer
+// (the IAU feature names), switches to a projection that shows the site without foreshortening,
+// types "lat,lon" into QuickMap's search box and picks "Create Point at ...", which drops a pin
+// and centres the map on it. Saves two screenshots per site and one HTML page of them all into
+// data-prep/raw/quickmap/ (git-ignored): "wide", zoomed out from 200 m per pixel until the whole
+// named feature in features.json fits the view, and "close", at about 50 m per pixel. Each
+// picture is taken with the mouse on the pin, so the LAT/LON readout in it is the pin's.
 //
 //   cd web && node scripts/quickmap-sheet.mjs [site-id ...]
 //
-// It never guesses. It stops with a message, and writes no sheet, when the search box or the
-// "Create Point" choice isn't found, when the projection doesn't switch, when the map doesn't
-// move (QuickMap's prjExtent in the address stays the same), or when QuickMap's own LAT/LON
-// readout at the map's centre isn't the site. A person then looks at the sheet and confirms each
-// pin is on its named feature (features.json); F12 needs a person's check, not a model's.
-// QuickMap is a public website, so run this by hand, not in CI.
+// It never guesses. It stops with a message, and writes no sheet, when the search box, the
+// Nomenclature layer or the "Create Point" choice isn't found, when the projection doesn't
+// switch, when the map doesn't move (QuickMap's prjExtent in the address stays the same), or
+// when QuickMap's own LAT/LON readout at the map's centre isn't the site. A person then looks at
+// the sheet and confirms each pin is on its named feature; F12 needs a person's check, not a
+// model's. QuickMap is a public website, so run this by hand, not in CI.
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -27,6 +29,8 @@ const QUICKMAP = 'https://quickmap.lroc.im-ldi.com/';   // quickmap.lroc.asu.edu
 const SEARCH = 'Type a lat,lon(,height) or search...';
 const R_M = 1_737_400;
 const VIEW = { width: 1280, height: 900 };
+const CLOSE_M = 60;   // the close view: zoom in until a pixel is at most this many metres
+const ROOM = 1.1;     // the wide view: 10% room around the feature
 
 /**
  * QuickMap's own name for the projection that shows a site best: a polar view near a pole, the
@@ -54,7 +58,60 @@ async function closeDialog(page, waitMs) {
   await dialog.waitFor({ state: 'hidden', timeout: 5000 });
 }
 
-/** QuickMap's LAT, LON and RES readout for the mouse at the centre of the map canvas. */
+/**
+ * Turns on QuickMap's Nomenclature layer (Layers, Add Layers, Overlays), so the pictures name the
+ * features, then closes the layer panel again.
+ */
+async function addNames(page) {
+  const layers = page.getByRole('link', { name: 'Layers' });
+  const add = page.getByText('Add Layers', { exact: true });
+  await layers.click();
+  try {
+    await add.waitFor({ timeout: 10000 });
+  } catch {
+    throw new Stop('QuickMap\'s Layers panel did not open');
+  }
+  await add.click();
+  await page.getByPlaceholder('Search layers...').fill('Nomenclature');
+  const item = page.getByText('Nomenclature', { exact: true });
+  try {
+    await item.first().waitFor({ timeout: 10000 });
+  } catch {
+    throw new Stop('QuickMap\'s layer list has no "Nomenclature" layer');
+  }
+  await item.first().click();
+  await page.getByText('Close', { exact: true }).click();
+  try {
+    await page.getByText(/^\d+ features$/).waitFor({ timeout: 15000 });
+  } catch {
+    throw new Stop('the Nomenclature layer did not appear in QuickMap\'s layer panel');
+  }
+  await layers.click();
+  try {
+    await add.waitFor({ state: 'hidden', timeout: 10000 });
+  } catch {
+    throw new Stop('QuickMap\'s Layers panel did not close');
+  }
+}
+
+/** Great-circle distance in km on the 1737.4 km sphere (haversine), as check_features.py. */
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const rad = Math.PI / 180;
+  const h = Math.sin((lat2 - lat1) * rad / 2) ** 2
+    + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
+  return 2 * (R_M / 1000) * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** How far from the pin the wide view must reach to show the whole feature, in km; null if none. */
+function reachKm(site, f) {
+  if (!f || f.feature === null) return null;
+  return distanceKm(site.lat, site.lon, f.lat, f.lon) + f.diameter_km / 2 + (f.margin_km ?? 0);
+}
+
+/**
+ * QuickMap's LAT, LON and RES readout for the mouse at the centre of the map canvas, and half the
+ * canvas's shorter side in pixels. Leaves the mouse there, on the pin.
+ */
 async function readoutAtCentre(page) {
   const box = await page.locator('canvas').first().boundingBox();
   if (!box) throw new Stop('the map canvas was not found');
@@ -65,7 +122,7 @@ async function readoutAtCentre(page) {
   const text = await page.evaluate(() => document.body.innerText);
   const m = text.match(/LAT\s*\n\s*(-?[\d.]+)\s*\n\s*LON\s*\n\s*(-?[\d.]+)\s*\n\s*RES\s*\n\s*([\d.]+)\s*m\/px/);
   if (!m) throw new Stop('QuickMap\'s LAT/LON readout did not show a position at the map centre');
-  return { lat: Number(m[1]), lon: Number(m[2]), resM: Number(m[3]) };
+  return { lat: Number(m[1]), lon: Number(m[2]), resM: Number(m[3]), halfPx: Math.min(box.width, box.height) / 2 };
 }
 
 /** Throws unless QuickMap's readout at the centre is the site, to within two pixels. */
@@ -89,7 +146,6 @@ async function clearView(page) {
     await close.click();
     await inspector.waitFor({ state: 'hidden', timeout: 5000 });
   }
-  await page.mouse.move(VIEW.width - 5, VIEW.height / 2);
 }
 
 async function settle(page) {
@@ -97,7 +153,7 @@ async function settle(page) {
   await page.waitForTimeout(2500);
 }
 
-async function shoot(browser, site) {
+async function shoot(browser, site, f) {
   const page = await browser.newPage({ viewport: VIEW });
   try {
     await page.goto(QUICKMAP, { waitUntil: 'domcontentloaded', timeout: 90000 });
@@ -108,6 +164,7 @@ async function shoot(browser, site) {
       throw new Stop(`QuickMap's search box (placeholder "${SEARCH}") was not found`);
     }
     await closeDialog(page, 15000);
+    await addNames(page);
 
     const projection = projectionFor(site.lat, site.lon);
     const projButton = page.locator('button[aria-label^="Projection:"]');
@@ -125,18 +182,25 @@ async function shoot(browser, site) {
     await closeDialog(page, 1000);
 
     const before = new URL(page.url()).searchParams.get('prjExtent');
+    const typed = `${site.lat},${site.lon}`;
     await search.click();
-    await page.keyboard.type(`${site.lat},${site.lon}`, { delay: 30 });
+    await page.keyboard.type(typed, { delay: 30 });
+    const held = await search.inputValue();
+    if (held !== typed) throw new Stop(`${site.id}: the search box holds "${held}", not "${typed}"`);
+    // The list follows the typing, so it can still show a half-typed point ("7.585," reads as
+    // 0° LON): wait until it offers the whole one.
     const create = page.locator('[cmdk-item]').filter({ hasText: 'Create Point at' }).first();
-    try {
-      await create.waitFor({ timeout: 15000 });
-    } catch {
-      throw new Stop(`${site.id}: QuickMap offered no "Create Point at" for "${site.lat},${site.lon}"`);
+    const isSite = (text) => {
+      const m = text.match(/(-?[\d.]+)° LAT, (-?[\d.]+)° LON/);
+      return Boolean(m) && Number(m[1]) === site.lat && Number(m[2]) === site.lon;
+    };
+    let offered = '';
+    for (const end = Date.now() + 15000; Date.now() < end; await page.waitForTimeout(300)) {
+      offered = (await create.count()) ? await create.innerText() : '';
+      if (isSite(offered)) break;
     }
-    const offered = (await create.innerText()).match(/(-?[\d.]+)° LAT, (-?[\d.]+)° LON/);
-    if (!offered || Number(offered[1]) !== site.lat || Number(offered[2]) !== site.lon) {
-      throw new Stop(`${site.id}: QuickMap read the search as "${await create.innerText()}"`);
-    }
+    if (!offered) throw new Stop(`${site.id}: QuickMap offered no "Create Point at" for "${typed}"`);
+    if (!isSite(offered)) throw new Stop(`${site.id}: QuickMap read the search as "${offered}"`);
     await create.click();
     try {
       await page.waitForFunction((b) => new URL(location.href).searchParams.get('prjExtent') !== b, before,
@@ -144,28 +208,41 @@ async function shoot(browser, site) {
     } catch {
       throw new Stop(`${site.id}: the map did not move (prjExtent stayed ${before})`);
     }
-    await settle(page);
-
-    const wide = await readoutAtCentre(page);
-    checkReadout(site, wide, 'after "Create Point"');
     const link = page.url();
     await clearView(page);
     await settle(page);
+
+    // Wide: zoom out until the whole feature fits. Each readout leaves the mouse on the pin, so
+    // the readout in the picture is the pin's.
+    const zoom = async (title, when) => {
+      await page.locator(`button[title="${title}"]`).click();
+      await page.waitForTimeout(800);
+      await settle(page);
+      const r = await readoutAtCentre(page);
+      checkReadout(site, r, when);
+      return r;
+    };
+    const reach = reachKm(site, f);
+    let wide = await readoutAtCentre(page);
+    checkReadout(site, wide, 'after "Create Point"');
+    for (let n = 0; reach !== null && (wide.resM / 1000) * wide.halfPx < reach * ROOM; n++) {
+      if (n === 5) throw new Stop(`${site.id}: ${f.feature} still doesn't fit the view at ${wide.resM} m/px`);
+      const before = wide.resM;
+      wide = await zoom('Zoom out', 'after zooming out');
+      if (!(wide.resM > before)) throw new Stop(`${site.id}: zooming out left the map at ${wide.resM} m/px`);
+    }
     await page.screenshot({ path: join(OUT, `${site.id}-wide.png`) });
 
-    const zoomIn = page.getByRole('button', { name: /zoom in/i }).or(page.locator('button', { hasText: /^\+$/ })).first();
-    for (let i = 0; i < 2; i++) {
-      await zoomIn.click();
-      await page.waitForTimeout(800);
+    // Close: zoom in until a pixel is at most CLOSE_M metres.
+    let close = wide;
+    for (let n = 0; close.resM > CLOSE_M; n++) {
+      if (n === 8) throw new Stop(`${site.id}: zooming in stopped at ${close.resM} m/px`);
+      const before = close.resM;
+      close = await zoom('Zoom in', 'after zooming in');
+      if (!(close.resM < before)) throw new Stop(`${site.id}: zooming in left the map at ${close.resM} m/px`);
     }
-    await settle(page);
-    const close = await readoutAtCentre(page);
-    checkReadout(site, close, 'after zooming in');
-    if (!(close.resM < wide.resM)) throw new Stop(`${site.id}: zooming in left the map at ${close.resM} m/px`);
-    await page.mouse.move(VIEW.width - 5, VIEW.height / 2);
-    await settle(page);
     await page.screenshot({ path: join(OUT, `${site.id}-close.png`) });
-    return { site, projection, link, wide, close };
+    return { site, projection, link, wide, close, reach };
   } finally {
     await page.close();
   }
@@ -174,7 +251,7 @@ async function shoot(browser, site) {
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function sheet(rows, features, made) {
-  const cards = rows.map(({ site, projection, link, wide, close }) => {
+  const cards = rows.map(({ site, projection, link, wide, close, reach }) => {
     const f = features.sites[site.id];
     const feature = !f ? 'not in features.json'
       : f.feature === null ? `no named feature (${esc(f.reason)})`
@@ -189,9 +266,11 @@ function sheet(rows, features, made) {
   QuickMap, ${esc(projection)}: <a href="${esc(link)}">open this view</a> (the view only: QuickMap keeps a
   created point in the browser that made it, so type ${site.lat},${site.lon} into its search box and pick
   "Create Point at" to see the pin there).
-  QuickMap's readout at the pin: ${wide.lat}, ${wide.lon} (${wide.resM} m/px) and ${close.lat}, ${close.lon} (${close.resM} m/px).</p>
-  <figure><img src="${esc(site.id)}-wide.png" alt="${esc(site.name)} at ${wide.resM} m per pixel"><figcaption>${wide.resM} m per pixel, the pin is the blue dot at the centre</figcaption></figure>
-  <figure><img src="${esc(site.id)}-close.png" alt="${esc(site.name)} at ${close.resM} m per pixel"><figcaption>${close.resM} m per pixel</figcaption></figure>
+  QuickMap's readout at the pin: ${wide.lat}, ${wide.lon} (${wide.resM} m/px) and ${close.lat}, ${close.lon} (${close.resM} m/px).
+  ${reach === null ? 'No named feature, so the wide view is QuickMap\'s 200 m/px.'
+    : `The wide view reaches at least ${(reach * ROOM).toFixed(0)} km from the pin: the feature's far edge is about ${reach.toFixed(0)} km away (distance to its centre, plus half its diameter${f?.margin_km ? ', plus the margin' : ''}).`}</p>
+  <figure><img src="${esc(site.id)}-wide.png" alt="${esc(site.name)} at ${wide.resM} m per pixel"><figcaption>Wide, ${wide.resM} m per pixel: the pin is the blue dot at the centre</figcaption></figure>
+  <figure><img src="${esc(site.id)}-close.png" alt="${esc(site.name)} at ${close.resM} m per pixel"><figcaption>Close, ${close.resM} m per pixel</figcaption></figure>
 </section>`;
   }).join('\n');
   return `<!doctype html>
@@ -208,8 +287,10 @@ img { width: 100%; height: auto; }
 <p>Made ${esc(made)} by <code>web/scripts/quickmap-sheet.mjs</code> from LROC QuickMap (${esc(QUICKMAP)}),
 for the planned sites in <code>web/public/data/sites.json</code>. Gazetteer file of ${esc(features.file_date)}.</p>
 <p><b>For the person checking:</b> for each site, confirm the blue pin sits on the feature named under
-"Should be on" (open the QuickMap link to pan and zoom). Then write your name, the date and the result
-for each site in <code>docs/sources/T36.md</code>. A model looking at these pictures doesn't count (F12).</p>
+"Should be on" (open the QuickMap link to pan and zoom). The names on the map are QuickMap's Nomenclature
+layer (the IAU names); a name is written at its feature's centre, not at its edge. The LAT/LON readout at
+the bottom of each picture is the pin. Then write your name, the date and the result for each site in
+<code>docs/sources/T36.md</code>. A model looking at these pictures doesn't count (F12).</p>
 ${cards}
 </body></html>
 `;
@@ -231,7 +312,7 @@ async function main() {
   try {
     for (const site of sites) {
       console.log(`${site.id}: ${site.lat}, ${site.lon} ...`);
-      const row = await shoot(browser, site);
+      const row = await shoot(browser, site, features.sites[site.id]);
       console.log(`  ok: ${row.projection}; readout ${row.wide.lat}, ${row.wide.lon} at ${row.wide.resM} m/px, `
         + `${row.close.lat}, ${row.close.lon} at ${row.close.resM} m/px`);
       rows.push(row);
