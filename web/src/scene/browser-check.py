@@ -85,6 +85,31 @@ def enter(page):
     }""", timeout=120000)
 
 
+# A floor the readout calls hidden must look dark: under this share of the same ground's brightness
+# with no Sun at all (a time outside the table, which the map draws without light or shadow).
+# The same ground cancels its height colour, so only the light is compared. Relative, not a fixed
+# brightness: the shadow level (SHADOW_LIGHT, issue #154) and the theme's colours change.
+DARK_SHARE = 0.9
+
+
+def floor_luma(image):
+    """Mean brightness of a small ring around the canvas centre: the selected site's ground, without
+    its pin. The pin and its outline in the page colour reach about 9 px from the centre."""
+    w, h = image.size
+    ring = [image.getpixel((w//2+x, h//2+y)) for x in range(-14, 15) for y in range(-14, 15) if 10**2 <= x*x+y*y <= 14**2]
+    return sum(sum(v)/3 for v in ring) / len(ring)
+
+
+def sunless_floor_luma(page, canvas, t_ms, path):
+    """floor_luma with the live time at `t_ms`, a time outside the Sun and Earth table."""
+    from PIL import Image
+    page.evaluate("async t => (await import('/src/state.ts')).setLiveTime(t)", t_ms)
+    page.wait_for_timeout(300)
+    assert 'outside the Sun and Earth table' in page.locator('.scene-message').inner_text()
+    canvas.screenshot(path=path)
+    return floor_luma(Image.open(path).convert('RGB'))
+
+
 def passed(name, detail):
     checks.append({'check': name, 'result': 'PASS', 'output': detail})
     print(json.dumps(checks[-1]), flush=True)
@@ -138,6 +163,8 @@ with sync_playwright() as p:
         assert times['darkFrac'] == 0, times
         never_lit = times['litFrac'] == 0
         from PIL import Image
+        before_table = page.evaluate("async () => Date.parse((await import('/src/state.ts')).getState().eph.meta.start) - 86400000")
+        sunless_luma = sunless_floor_luma(page, actual_canvas, before_table, '/tmp/t12-public-sunless.png')
         rendered = []
         for label in ('dark', 'lit'):
             page.evaluate("async t => (await import('/src/state.ts')).setLiveTime(t)", times[label])
@@ -147,16 +174,14 @@ with sync_playwright() as p:
             path = f'/tmp/t12-public-{label}.png'
             actual_canvas.screenshot(path=path)
             rendered.append(Image.open(path).convert('RGB'))
-        w, h = rendered[0].size
-        def floor_luma(image):
-            ring = [image.getpixel((w//2+x, h//2+y)) for x in range(-10, 11) for y in range(-10, 11) if 6**2 <= x*x+y*y <= 10**2]
-            return sum(sum(v)/3 for v in ring) / len(ring)
         actual_luma = floor_luma(rendered[0])
-        assert actual_luma < 55, actual_luma
-        # Whenever the readout says hidden, the floor must look dark, at the Sun's highest too.
+        assert actual_luma < DARK_SHARE * sunless_luma, (actual_luma, sunless_luma)
+        # Whenever the readout says hidden, the floor must look dark, at the Sun's highest too:
+        # still drawn in shadow, so the same as at the Sun's lowest.
         lit_luma = floor_luma(rendered[1])
         if never_lit:
-            assert lit_luma < 55, lit_luma
+            assert lit_luma < DARK_SHARE * sunless_luma, (lit_luma, sunless_luma)
+            assert abs(lit_luma - actual_luma) < 2, (lit_luma, actual_luma)
         actual_changed = sum(a != b for a, b in zip(rendered[0].tobytes(), rendered[1].tobytes()))
         assert actual_changed > 1000, actual_changed
         page.get_by_role('button', name='3D orbit', exact=True).click()
@@ -164,7 +189,7 @@ with sync_playwright() as p:
         page.get_by_role('button', name='2D map', exact=True).click()
         assert page.evaluate("async () => (await import('/src/state.ts')).getState().live.site") == floor_site
         assert not errors and not graphics_warnings, (errors, graphics_warnings)
-        passed('public data files', {'height_map': actual['dem']['source'], 'grid_size': actual['dem']['size'], 'pixel_m': actual['dem']['pixel_m'], 'ephemeris': actual['eph']['source'], 'ephemeris_rows': actual['eph']['rows'], 'sites': actual['sites'], 'clicked_site': actual_site, 'error_cells': actual_error, 'dark_floor_at': floor_site, 'hidden_floor_mean_rgb': round(actual_luma, 2), 'floor_never_lit': never_lit, 'floor_mean_rgb_at_highest_sun': round(lit_luma, 2), 'changed_color_channels': actual_changed, 'camera_switch': 'site preserved'})
+        passed('public data files', {'height_map': actual['dem']['source'], 'grid_size': actual['dem']['size'], 'pixel_m': actual['dem']['pixel_m'], 'ephemeris': actual['eph']['source'], 'ephemeris_rows': actual['eph']['rows'], 'sites': actual['sites'], 'clicked_site': actual_site, 'error_cells': actual_error, 'dark_floor_at': floor_site, 'hidden_floor_mean_rgb': round(actual_luma, 2), 'floor_never_lit': never_lit, 'floor_mean_rgb_at_highest_sun': round(lit_luma, 2), 'floor_mean_rgb_without_sun': round(sunless_luma, 2), 'changed_color_channels': actual_changed, 'camera_switch': 'site preserved'})
         # A hash-only navigation would retain the actual data and pins instead of loading fixtures.
         page.goto('about:blank')
 
@@ -201,10 +226,14 @@ with sync_playwright() as p:
     from PIL import Image
     image = Image.open('/tmp/t12-map-hidden.png').convert('RGB')
     w, h = image.size
-    floor = [image.getpixel((w//2+x, h//2+y)) for x in range(-10, 11) for y in range(-10, 11) if 6**2 <= x*x+y*y <= 10**2]
-    floor_luma = sum(sum(v)/3 for v in floor) / len(floor)
-    assert floor_luma < 55, floor_luma
+    hidden_floor = floor_luma(image)
     first = image.tobytes()
+    # The same floor with no Sun (a day before the table starts), then back to the hidden time.
+    hidden_t = page.evaluate("async () => (await import('/src/state.ts')).getState().live.tMs")
+    sunless_floor = sunless_floor_luma(page, map_canvas, T0 - 86400000, '/tmp/t12-map-sunless.png')
+    assert hidden_floor < DARK_SHARE * sunless_floor, (hidden_floor, sunless_floor)
+    page.evaluate("async t => (await import('/src/state.ts')).setLiveTime(t)", hidden_t)
+    page.wait_for_timeout(300)
     page.evaluate("async () => (await import('/src/state.ts')).pin()")
     page.evaluate(f"async () => (await import('/src/state.ts')).setLiveTime({T0 + 12*3600000})")
     page.wait_for_timeout(300)
@@ -212,7 +241,7 @@ with sync_playwright() as p:
     second = Image.open('/tmp/t12-map-scrubbed.png').convert('RGB').tobytes()
     changed = sum(a != b for a, b in zip(first, second))
     assert changed > 1000, changed
-    passed('Sun lighting and scrub', {'hidden_floor_mean_rgb': round(floor_luma, 2), 'changed_color_channels': changed})
+    passed('Sun lighting and scrub', {'hidden_floor_mean_rgb': round(hidden_floor, 2), 'floor_mean_rgb_without_sun': round(sunless_floor, 2), 'changed_color_channels': changed})
     page.evaluate("async () => (await import('/src/state.ts')).select('a')")
     page.wait_for_timeout(250)
     map_canvas.screenshot(path='/tmp/t12-pinned-time.png')
