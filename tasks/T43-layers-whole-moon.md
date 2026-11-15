@@ -1,6 +1,6 @@
 # T43: Map layers over the whole Moon
 
-Status: not started
+Status: in progress (MarsRon, branch t43-layers-whole-moon): contract first, then core, data-prep, map and legend. The LOLA team publishes north maps (AVGVISIB_65N_240M_201608, _EARTH, LPSR_65N_240M_201608), so the north uses them.
 
 | | |
 |---|---|
