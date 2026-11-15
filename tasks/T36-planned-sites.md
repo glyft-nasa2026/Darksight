@@ -1,6 +1,6 @@
 # T36: Upcoming mission targets in the site list
 
-Status: not started. Step 1 is done: the team agreed on 15 Nov 2026 that the list may hold 25 sites (the 20 stay, and up to 5 upcoming targets are added; `docs/decisions.md`, F12 in `SPEC.md`)
+Status: done (pull request #162): four planned sites (`im-3`, `blue-ghost-2`, `blue-ghost-3`, `chandrayaan-4`; 24 in all), `data-prep/check_features.py`, `features.json` and its contract entry, the planned-site test, "(planned)" after the name in the site list, and `web/scripts/quickmap-sheet.mjs`; Yi Hung checked the four pins on the contact sheet (F12). Extra scope: `web/src/ui/scenarios/input.ts` and `input.test.ts`. Open: IM-3's point has no independent second source (`docs/sources/T36.md`)
 
 | | |
 |---|---|

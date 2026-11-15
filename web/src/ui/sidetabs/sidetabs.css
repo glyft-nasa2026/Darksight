@@ -1,0 +1,5 @@
+/* Scenarios | Timeline tabs over the side card (T40). Only ui/theme.css variables. */
+#sidetabs { display: flex; gap: var(--space-1); }
+#sidetabs .btn { flex: 1; }
+/* The card not shown. More specific than a card's own `#scenarios { display: … }`. */
+#sidecard > .card[hidden] { display: none; }
