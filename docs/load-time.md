@@ -114,10 +114,12 @@ measurement gave 1.45 s and 0.62 s.
 | Budget | On "Fast 4G" | Measured | Result |
 |---|---|---|---|
 | Sun and Earth numbers on screen | 3 s | 6.46 s (median of 3) | **Fail** |
+| Sun and Earth numbers on screen, again after issue #95's fix (pull request #143, commit `3f08f71`, measured 15 Nov 2026) | 3 s | 1.73 s (median of 3: 2.18, 1.72, 1.73) | **Pass** |
 | Height map in | 20 s | 29.20 s (median of 3) | **Fail** |
 | Height map in, again after issue #96's fix 1 (pull request #109, commit `d70ffbd`, measured 15 Nov 2026) | 20 s | 16.44 s (median of 3: 16.63, 16.42, 16.44) | **Pass** |
 | Longest freeze after loading, phone (Realme 6) | 0.5 s | 1.022 s (Shackleton floor, one session) | **Fail**: every one of the five spots is over 0.5 s (785 to 1022 ms). Issue #32, row 1 |
-| Longest freeze after loading | 0.5 s | 0.486 s (Shackleton floor, laptop) | **Pass**, by 14 ms, on the laptop only. Not yet measured on a phone, which will be slower. The 1.06 s freeze when `globe.bin` arrives after loading is outside the four actions; see section 6, item 3 |
+| Longest freeze after loading, phone (Realme 6), again after issue #32's fix (pull request #132, measured 15 Nov 2026) | 0.5 s | 534 ms (Shackleton floor, two sessions: 311 to 534 ms a spot, median about 450; the same spots on `main` before it, `964eca2`: 615 to 867 ms) | **Accepted as is** by the team (Leon, issue #32): 8 of the 10 spots are under 0.5 s, two are 510 and 534 ms. Measured on builds served from the laptop over USB (`adb reverse`), so the processor and not the network; the freeze is the change handler's own run time measured in the page |
+| Longest freeze after loading | 0.5 s | 0.486 s (Shackleton floor, laptop) | **Pass**, by 14 ms, on the laptop. The phone is in the two rows above. The 1.06 s freeze when `globe.bin` arrives after loading is outside the four actions; see section 6, item 3 |
 
 ## 6. Fails and who can fix them
 
@@ -125,7 +127,15 @@ Each item has its numbers and the files a fix would touch, so anyone can claim i
 task or pull request. This task changes no code. After a fix merges, the same measurement is
 run again and a second row is added to section 5.
 
-**1. Numbers on screen: 6.46 s against 3 s.** Follow-up: issue #95, not claimed yet.
+**1. Numbers on screen: 6.46 s against 3 s.** Follow-up: issue #95. Fixed by pull request #143:
+Plotly is a file of its own, loaded on first use (the site script went from 1.60 MB sent to
+0.05 MB), and the height map now starts once the Sun and Earth table is in, so `2020.bin` has the
+line to itself. Measured again on 15 Nov 2026 on darksight.space, commit `3f08f71`
+(`assets/main-DrT7Krmn.js`), same laptop, Brave and method: **1.73 s** on Fast 4G (2.18, 1.72,
+1.73), `2020.bin` in at 1.68 to 1.96 s; 1.51 s with no throttle (1.51, 2.36, 1.48). The sky and
+timeline charts say "Loading chart" until Plotly is in, and draw at about 5.3 s on Fast 4G. The
+height map waits for the table: "Loading" gone at 16.82 s (17.04, 16.75, 16.82), still within
+its 20 s budget. The options below were the ones considered.
 
 - The data is not the problem: `2020.bin` is in at 2.9 s. The page waits for the 1.60 MB site
   script, which starts downloading only when "Start exploring" is clicked and arrives at

@@ -2,6 +2,7 @@
 // A full-screen layer over the site, in this order:
 //   1. The main page, as soon as the site opens. Its big logo starts where the loading screen's
 //      logo sits, in the middle, and glides out to the right. The data files load behind it.
+//      Under its first screen it scrolls to about, team, privacy, licence and a footer (more.ts).
 //   2. "Start exploring": the big logo glides back to the middle and the loading screen shows
 //      how far the data is. The site's code starts downloading at the click (main.ts's
 //      loadSite); its modules are mounted once the loading screen is on screen. Both block the
@@ -20,6 +21,7 @@
 import './intro.css';
 import { logo } from './logo';
 import { loadFraction, readyToOpen, type LoadProgress } from './model';
+import { moreButton, moreSections } from './more';
 
 const GLIDE_MS = 900;
 const GLIDE_EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
@@ -144,7 +146,11 @@ export function startIntro(options: IntroOptions): Intro {
   start.type = 'button';
   const text = make('div', 'intro-text');
   text.append(title, sub, start);
-  page.append(glow, bigLogo, mark, text);
+  const more = moreButton();
+  const first = make('div', 'intro-first');
+  first.append(glow, bigLogo, mark, text, more);
+  const below = moreSections();
+  page.append(first, below);
 
   let latest: LoadProgress | null = null;
   let started = false;
@@ -247,6 +253,7 @@ export function startIntro(options: IntroOptions): Intro {
     // From here on a failure must not leave the button dead (it already counts as pressed):
     // anything that throws skips the glide and goes straight to the loading screen.
     try {
+      page.scrollTop = 0; // the glide starts from the big logo on the first screen
       settleAnimations(page);
       // The code downloads during the glide; the glide only moves and fades, so it stays smooth
       // even while the code starts up.
@@ -259,7 +266,7 @@ export function startIntro(options: IntroOptions): Intro {
       const to = smallLogoBox();
       const from = bigLogo.getBoundingClientRect();
       const fade = { duration: GLIDE_MS / 2, easing: 'ease-out', fill: 'forwards' } as const;
-      for (const el of [text, mark, glow]) el.animate([{ opacity: 1 }, { opacity: 0 }], fade);
+      for (const el of [text, mark, glow, more, below]) el.animate([{ opacity: 1 }, { opacity: 0 }], fade);
       bigLogo.animate(
         [{ transform: 'none', opacity: getComputedStyle(bigLogo).opacity }, { transform: boxToBox(from, to), opacity: 1 }],
         { duration: GLIDE_MS, easing: GLIDE_EASE, fill: 'forwards' },

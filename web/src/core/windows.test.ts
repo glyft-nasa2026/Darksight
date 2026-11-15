@@ -486,6 +486,20 @@ describe('countdownText', () => {
     expect(countdownText('earth', false, null, t, true)).toBe('Earth never visible');
   });
 
+  // T32: while the decades to 2100 download, a dark site says it is still checking.
+  it('says it is still checking to 2100 when the Sun is down, no rise is found and checking is true', () => {
+    expect(countdownText('sun', false, null, t, false, true)).toBe('No sunrise in the next 60 days · checking to 2100…');
+    expect(countdownText('sun', false, null, t, false, false)).toBe('No sunrise in the next 60 days');
+  });
+
+  it('lets neverLit win over checking, and a found flip or the Sun up win over both', () => {
+    expect(countdownText('sun', false, null, t, true, true)).toBe('Permanently shadowed (until 2100)');
+    expect(countdownText('sun', false, rise, t, false, true)).toBe('Sunrise in 3 d 4 h');
+    expect(countdownText('sun', true, null, t, false, true)).toBe('No sunset in the next 60 days');
+    expect(countdownText('sun', true, set, t, false, true)).toBe('Sunset in 3 d 4 h');
+    expect(countdownText('earth', false, null, t, false, true)).toBe('Earth never visible');
+  });
+
   // The same wording, reached from a table through series and nextFlip as the readout does.
   const line = (e: Ephemeris, site: Site, ground: number, sky: Skyline, tMs: number, body: Body, neverLit = false): string =>
     countdownText(body, isUp(one(e, site, sky, tMs, ground), body), nextFlip(e, site, ground, sky, tMs, body), tMs, neverLit);

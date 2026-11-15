@@ -1,6 +1,6 @@
 # T32: A dark site says it is still checking to 2100
 
-Status: not started
+Status: in review (Fabian, branch `t32-never-lit-checking`, draft pull request). Lines 1-4 and 6 of "Done when" pass; line 5 passes on a local build with Fast 4G figures and waits for a check on the pull request preview. Follow-ups: the mission card (`ui/mission/index.ts`, T34) now that #123 and #133 have merged; pending during #132's sliced scan, whichever merges second
 
 | | |
 |---|---|
@@ -44,16 +44,16 @@ waiting for decades, the text should say so.
 
 ## Done when
 
-- [ ] A state test: a never-lit site with the later decades still downloading gives
+- [x] A state test: a never-lit site with the later decades still downloading gives
       `neverLitPendingFor` true and `neverLitFor` false; after they arrive, false and true.
-- [ ] A state test: a later decade fails to download, so `neverLitPendingFor` is false and the
+- [x] A state test: a later decade fails to download, so `neverLitPendingFor` is false and the
       text is today's "No sunrise in the next 60 days".
-- [ ] A state test: a lit site, or a dark site with a sunrise within 60 days, never reads pending.
-- [ ] A `countdownText` test for the new wording, and one showing that `neverLit` wins.
+- [x] A state test: a lit site, or a dark site with a sunrise within 60 days, never reads pending.
+- [x] A `countdownText` test for the new wording, and one showing that `neverLit` wins.
 - [ ] On the pull request's preview, with DevTools on "Fast 4G" and the site's data cleared, the
       plain address shows the floor column (A) with the "checking" text, and then
       "Permanently shadowed (until 2100)". Never "No sunrise…" in between.
-- [ ] `npm test` and `npm run build` pass.
+- [x] `npm test` and `npm run build` pass.
 
 ## Notes
 
