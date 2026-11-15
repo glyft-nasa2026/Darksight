@@ -41,14 +41,31 @@
   display: none;
 }
 
-.ly-note,
-.ly-where {
+.ly-note {
   margin: 0;
   font-size: var(--fs-sm);
 }
 
-.ly-where[hidden] {
+/* T43: each layer that is on, its value and source at the selected site. */
+.ly-legend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.ly-legend[hidden] {
   display: none;
+}
+
+.ly-at-name {
+  font-weight: 600;
+}
+
+.ly-at {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 800px) {

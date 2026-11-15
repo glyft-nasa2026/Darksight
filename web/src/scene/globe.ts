@@ -6,44 +6,10 @@ import {
   Color, DataTexture, LinearFilter, LinearMipmapLinearFilter, NoColorSpace, RepeatWrapping,
   RGBAFormat, SRGBColorSpace, UnsignedByteType, type BufferGeometry,
 } from 'three';
-import { parseDem, type Dem, type DemMeta } from '../core/dem';
 import { MOON_RADIUS_KM } from '../core/types';
-import { afterHeightMap } from '../loadOrder';
 import { GLOBE_RELIEF, globeNormalRows, type GlobeHeights } from './globeHeights';
 
 export * from './globeHeights';
-
-/**
- * The north cap's height grid (contract section 2: north.bin + north.json) as a height map of
- * mirrored latitudes: its grid is the mirror image of dem.bin's, so the south-pole code reads
- * it unchanged when every latitude is negated. Ask it for (-lat, lon).
- */
-export function parseNorth(meta: DemMeta, buffer: ArrayBuffer): Dem {
-  if (!(meta.min_lat > 0)) throw new Error('north.json: "min_lat" must be a northern latitude');
-  return parseDem({ ...meta, min_lat: -meta.min_lat }, buffer);
-}
-
-/** Fetches the north cap from data/ next to the page. Rejects if it is missing or malformed. */
-export async function loadNorth(): Promise<Dem> {
-  const base = import.meta.env.BASE_URL + 'data/';
-  const metaRes = await fetch(base + 'north.json');
-  if (!metaRes.ok) throw new Error(`north.json: HTTP ${metaRes.status}`);
-  const meta = (await metaRes.json().catch(() => {
-    throw new Error('north.json: missing, or not JSON');
-  })) as DemMeta;
-  const binRes = await fetch(base + 'north.bin');
-  if (!binRes.ok) throw new Error(`north.bin: HTTP ${binRes.status}`);
-  return parseNorth(meta, await binRes.arrayBuffer());
-}
-
-let sharedCap: Promise<Dem> | null = null;
-/**
- * loadNorth, fetched once for the 3D globe and the flat map's north polar view (issue #112),
- * and only after the height map has finished downloading (issue #96).
- */
-export function sharedNorth(): Promise<Dem> {
-  return sharedCap ??= afterHeightMap().then(loadNorth);
-}
 
 /** The latitude and longitude a texture coordinate of the globe's textures stands for. */
 export function uvSite(u: number, v: number): { lat: number; lon: number } {
