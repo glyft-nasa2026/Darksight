@@ -98,10 +98,9 @@ export function mount(el: HTMLElement): void {
         <output>1×</output>
       </label>
     </div>
-    <div class="scene-viewport"><p class="scene-message muted" role="status">Loading Sun and Earth table…</p><section id="nudge" aria-label="Nudge"></section></div>
+    <div class="scene-viewport"><p class="scene-message muted" role="status">Loading Sun and Earth table…</p><section id="nudge" aria-label="Nudge"></section><section class="scene-layers" aria-label="Map layers" data-map-corner="tr"></section></div>
     <p class="scene-help muted">Click to pick a site · drag to pan · scroll to zoom</p>
-    <p class="scene-caption muted">Lighting illustrates the terrain; use the readout for visibility.</p>
-    <section class="scene-layers" aria-label="Map layers"></section>`;
+    <p class="scene-caption muted">Lighting illustrates the terrain; use the readout for visibility.</p>`;
   const viewport = el.querySelector<HTMLDivElement>('.scene-viewport')!;
   const message = el.querySelector<HTMLParagraphElement>('.scene-message')!;
   const help = el.querySelector<HTMLParagraphElement>('.scene-help')!;
@@ -116,7 +115,8 @@ export function mount(el: HTMLElement): void {
   // 2D mode. It needs no WebGL, so it works even where the 3D scene can't.
   const mapHost = document.createElement('div');
   viewport.prepend(mapHost); mountMap(mapHost);
-  // T14 map layers: controls under the map caption (not over the map); the map draws the layers.
+  // T14 map layers: icon switches floating over the map in its top right corner, which the nudge
+  // panel then leaves free (data-map-corner); the map draws the layers.
   mountLayers(el.querySelector<HTMLElement>('.scene-layers')!);
   const centreMap = (): void => { mapHost.dispatchEvent(new Event('map:centre')); };
   let renderer: WebGLRenderer;

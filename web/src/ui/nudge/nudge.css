@@ -5,7 +5,9 @@
 
 #nudge {
   position: absolute;
-  z-index: 1;
+  /* Above the map-layer icons (ui/layers, top right): on a narrow map the two can meet, and the
+     nudge's own corner and fold buttons must stay reachable. */
+  z-index: 2;
   display: flex;
   flex-direction: column;
   width: min(calc(var(--space-5) * 12), calc(100% - var(--space-2) * 2));
