@@ -1,6 +1,6 @@
 # T29: Map and scene cross-fade
 
-Status: in progress (Leon, branch `t29-transition`, draft pull request #168). Every "Done when" line passes in `web/e2e/transition.spec.ts`, `npm test` and `npm run build`. Next: Leon looks at the fade on a real screen and a phone, then the pull request is marked ready
+Status: done (Leon, pull request #168). Every "Done when" line passes in `web/e2e/transition.spec.ts`, `npm test` and `npm run build`, and Leon looked at the fade on a laptop screen and on a phone before merging (15 Nov 2026). Not run: `browser-check.py` (needs Python Playwright, Pillow and `/tmp`, not set up on Leon's Windows laptop). Extra scope: `web/e2e/transition.spec.ts`, `web/src/scene/browser-check.py` and one paragraph in contract section 5
 
 | | |
 |---|---|
