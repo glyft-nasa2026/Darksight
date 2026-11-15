@@ -41,7 +41,7 @@ const LABELS: Record<Scale, string> = {
   near: 'EARTH · ASCENT AND PARKING ORBIT · A PICTURE OF THE MODEL',
   earth: 'EARTH AND MOON · PLANE OF THE TRANSFER · MOON DRAWN LARGER THAN SCALE',
   moon: 'MOON · PLANE OF THE LUNAR ORBIT · THE SITE AT THE TOP',
-  descent: 'POWERED DESCENT · ALTITUDE AGAINST DISTANCE TO THE SITE · HEIGHT EXAGGERATED',
+  descent: 'POWERED DESCENT · ALTITUDE AGAINST DISTANCE TO THE SITE · HEIGHT EXAGGERATED · DISTANCE ON A SQUARE-ROOT SCALE',
 };
 
 function make<K extends keyof HTMLElementTagNameMap>(
@@ -102,62 +102,6 @@ function fit(minX: number, maxX: number, minY: number, maxY: number): (p: Pt) =>
 const pathD = (pts: Pt[]): string =>
   pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
 
-const INSET_KM = 20;   // the descent close-up's reach before the site
-
-/**
- * A close-up of the last INSET_KM before the site in the descent picture, on its own scale. The
- * main picture stretches heights about 25 times, so even a gentle approach looks like a cliff at
- * the site; here the stretch is far smaller and the label says how much. Points are raw
- * [-distance to go, altitude] in km, from missionAt. Returns what moves the craft.
- */
-function closeUp(raw: Sampled, root: SVGGElement, siteColor: string): (st: MissionState) => void {
-  const near = raw.filter((x) => x.p[0] >= -INSET_KM);
-  const box = { x: W * 0.6, y: H * 0.04, w: W * 0.37, h: H * 0.42 };
-  const top = Math.max(0.1, ...near.map((x) => x.p[1])) * 1.5;   // headroom for the label
-  const x0 = -INSET_KM * 1.04;
-  const x1 = INSET_KM * 0.06;
-  const y0 = -top * 0.32;
-  const map = ([x, y]: Pt): Pt =>
-    [box.x + ((x - x0) / (x1 - x0)) * box.w, box.y + box.h - ((y - y0) / (top - y0)) * box.h];
-  const g = svg('g', 'ms-inset');
-  g.append(svg('rect', 'ms-inset-box', { x: box.x, y: box.y, width: box.w, height: box.h }));
-  const [gx0, gy] = map([x0, 0]);
-  const [gx1] = map([x1, 0]);
-  g.append(svg('line', 'ms-ground', { x1: gx0, y1: gy, x2: gx1, y2: gy }));
-  for (let d = 0; d <= INSET_KM; d += 10) {
-    const [tx] = map([-d, 0]);
-    g.append(svg('line', 'ms-gridl', { x1: tx, y1: gy, x2: tx, y2: gy + 6 }));
-    const label = svg('text', 'ms-tick', { x: tx, y: gy + 22, 'text-anchor': d === INSET_KM ? 'start' : 'middle' });
-    label.textContent = d === 0 ? 'site' : `${d} km`;
-    g.append(label);
-  }
-  const stretch = (box.h / (top - y0)) / (box.w / (x1 - x0));
-  const title = svg('text', 'ms-tick', { x: box.x + 10, y: box.y + 24 });
-  title.textContent = `Last ${INSET_KM} km · heights ×${Math.max(1, Math.round(stretch))}`;
-  g.append(title);
-  const [sx, sy] = map([0, 0]);
-  const site = svg('circle', 'ms-site ms-marker', { cx: sx, cy: sy, r: 5 });
-  site.style.setProperty('--ms-site', `var(${siteColor})`);
-  const screen = near.map((x) => ({ t: x.t, p: map(x.p) }));
-  const ahead = svg('path', 'ms-ahead', { d: pathD(screen.map((x) => x.p)) });
-  const flown = svg('path', 'ms-flown');
-  const craft = svg('circle', 'ms-craft ms-marker', { r: 5 });
-  g.append(ahead, flown, site, craft);
-  root.append(g);
-  return (st) => {
-    const inside = st.rangeToGoKm !== null && st.rangeToGoKm <= INSET_KM;
-    craft.style.display = inside ? '' : 'none';
-    const done = screen.filter((x) => x.t <= st.tMs).map((x) => x.p);
-    if (inside) {
-      const here = map([-st.rangeToGoKm!, st.altKm]);
-      craft.setAttribute('cx', here[0].toFixed(1));
-      craft.setAttribute('cy', here[1].toFixed(1));
-      if (done.length) done.push(here);
-    }
-    flown.setAttribute('d', done.length > 1 ? pathD(done) : '');
-  };
-}
-
 /**
  * A picture is one layer of the card's SVG. Its anchors say where Earth, the Moon and the site
  * are in it and how many viewBox units a kilometre is there, so a change of scale can zoom from
@@ -186,7 +130,6 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
   let place: (s: MissionState) => Pt | null;
   let moonMark: SVGCircleElement | null = null;
   let moonR = 0;
-  const extras: ((st: MissionState) => void)[] = [];   // other parts that follow the craft
 
   if (scale === 'near' || scale === 'earth') {
     const rEarthOrbit = plan.orbit.earthMoonKm;
@@ -244,17 +187,22 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     const raw = track(plan, pdi, td, 300, (s) => (s.rangeToGoKm === null ? null : [-s.rangeToGoKm, s.altKm]));
     const range = plan.orbit.descentRangeKm;
     const top = plan.orbit.descentStartAltKm;
-    const x0 = -range * 1.04;
-    const x1 = range * 0.06;
+    // The distance on a square-root scale: on an even one the heights are stretched about 25
+    // times and the last few km (the approach, 2 km down over about 8 km) draw as a cliff.
+    // This gives the last km room, so the approach shows as the slope it is (issue #192).
+    const sq = (x: number): number => Math.sign(x) * Math.sqrt(Math.abs(x));
+    const u0 = sq(-range) * 1.04;
+    const u1 = sq(range) * 0.05;
     const y0 = -top * 0.12;
     const y1 = top * 1.15;
-    map = ([x, y]) => [((x - x0) / (x1 - x0)) * W, H - ((y - y0) / (y1 - y0)) * H];
+    map = ([x, y]) => [((sq(x) - u0) / (u1 - u0)) * W, H - ((y - y0) / (y1 - y0)) * H];
     pts = raw;
-    const [gx0, gy] = map([x0, 0]);
-    const [gx1] = map([x1, 0]);
+    const [gx0, gy] = map([-range * 1.08, 0]);
+    const [gx1] = map([range * 0.0025, 0]);
     root.append(svg('line', 'ms-ground', { x1: gx0, y1: gy, x2: gx1, y2: gy }));
-    // Distance ticks every 100 km and the start altitude, as the timeline's axes do.
-    for (let d = 0; d <= range; d += 100) {
+    // Distance ticks, closer near the site, and the start altitude.
+    const ticks = [0, 10, 50, ...Array.from({ length: Math.floor(range / 100) }, (_, i) => (i + 1) * 100)];
+    for (const d of ticks) {
       const [tx] = map([-d, 0]);
       root.append(svg('line', 'ms-gridl', { x1: tx, y1: gy, x2: tx, y2: gy + 6 }));
       const label = svg('text', 'ms-tick', { x: tx, y: gy + 22, 'text-anchor': 'middle' });
@@ -270,10 +218,9 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     const site = svg('circle', 'ms-site ms-marker', { cx: sx, cy: sy, r: 7 });
     site.style.setProperty('--ms-site', `var(${siteColor})`);
     root.append(site);
-    const along = W / (x1 - x0);   // units per km of distance to the site
+    const along = sx - map([-1, 0])[0];   // units per km over the last km before the site
     anchors = () => ({ site: { p: [sx, sy], s: along } });
     place = (st) => (st.rangeToGoKm === null ? null : map([-st.rangeToGoKm, st.altKm]));
-    extras.push(closeUp(raw, root, siteColor));
   }
 
   const screen = pts.map((x) => ({ t: x.t, p: map(x.p) }));
@@ -293,7 +240,6 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
       const done = screen.filter((x) => x.t <= st.tMs).map((x) => x.p);
       if (here && done.length) done.push(here);
       flown.setAttribute('d', done.length > 1 ? pathD(done) : '');
-      for (const follow of extras) follow(st);
       if (moonMark) {
         const [mx, my] = map(st.earthPlane.moon);
         moonMark.setAttribute('cx', mx.toFixed(1));

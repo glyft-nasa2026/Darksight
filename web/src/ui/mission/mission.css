@@ -55,7 +55,6 @@
 .ms-svg .ms-craft { fill: var(--text); stroke: var(--accent); stroke-width: calc(var(--space-1) / 2); }
 .ms-svg .ms-site { fill: var(--ms-site); stroke: var(--bg); }
 .ms-svg .ms-tick { fill: var(--muted); font-family: var(--font-num); font-size: var(--fs-sm); }
-.ms-svg .ms-inset-box { fill: var(--bg); stroke: var(--border); }
 
 @media (max-width: 800px) {
   .ms-top, .ms-bottom { grid-template-columns: minmax(0, 1fr); }
