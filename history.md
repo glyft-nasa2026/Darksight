@@ -4,7 +4,7 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
-## 15 Nov 2026: SPEC section 10 answered at the freeze (T26)
+## 15 Nov 2026: freeze checklist (T26)
 
 ### SPEC.md: 10. Open decisions
 
@@ -12,9 +12,17 @@ coordinate overlapping edits.
   "proposed, not yet agreed".
 - Now each row has an Answer column, taken from `docs/decisions.md`, T17's `pitch/checklist.md`
   (pull request #130), T22's status and `docs/load-time.md`. The deadline is 22:00, from Yi
-  Hung; the checklist's 23:59 (NASA's guide) was written in first and corrected the same day. The Figma seat row is struck out:
-  T22 made its pictures with no Figma file.
+  Hung; the checklist's 23:59 (NASA's guide) was written in first and corrected the same day.
+  The Figma seat row is struck out: T22 made its pictures with no Figma file.
 - Why: T26 step 5. At the freeze no decision stays open.
+
+### tasks/T32-never-lit-checking.md, tasks/T34-mission.md: `Status:`
+
+- Was: T32 "in review … draft pull request"; T34 "sixth delivery in progress … draft pull
+  request #145".
+- Now T32 says merged in #138 with line 5 not checked on a preview; T34 says done, six
+  deliveries merged.
+- Why: T26 step 4 found both behind what merged (#138, #145). Yi Hung asked T26 to fix them.
 
 ## 15 Nov 2026: the mission card gets its own page (T34)
 
