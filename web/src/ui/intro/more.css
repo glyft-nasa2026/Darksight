@@ -147,9 +147,12 @@
 /* On the first screen, under the hero text. */
 .landing-more {
   position: absolute;
-  left: 50%;
+  /* Centred with margins, not a transform: the entrance animation (intro-up) sets transform. */
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
   bottom: var(--space-5);
-  transform: translateX(-50%);
   font: inherit;
   font-size: var(--fs-sm);
   color: var(--muted);
