@@ -13,6 +13,9 @@ import {
 import type { Pad } from '../core/pads';
 import { disposeScene, earthDirection, makeEarth, prefersReducedMotion, themeLength } from '../ui/launch/earth';
 import { themeColor } from '../ui/plotTheme';
+import { alignFrames } from '../core/sky';
+import type { Vec3 } from '../core/ephemeris';
+import { makeStarField } from '../scene/stars';
 
 export type Scale = 'near' | 'earth' | 'moon' | 'descent';
 
@@ -65,6 +68,7 @@ export type MissionScene = {
 
 export function createScene(
   container: HTMLElement, plan: OkPlan, pad: Pad, site: { lat: number; lon: number }, siteColor: string,
+  sky: { toMoon: Vec3; pole: Vec3 } | null = null,
 ): MissionScene {
   const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -84,6 +88,16 @@ export function createScene(
   const loi = step('loi').startMs;
   const pdi = step('powered-descent').startMs;
   const td = plan.touchdownMs;
+
+  // The real sky (issue #80). The floor of the scene is the plane of the transfer; it is laid on
+  // the Moon's real orbit plane at touchdown (core/sky.ts moonOrbitIcrf), with the Moon where it
+  // really is then. Without the table's Earth vectors there are no stars.
+  const stars = makeStarField();
+  if (sky) {
+    const moonAt = P(missionAt(plan, td).earthPlane.moon).normalize();
+    stars.turn(alignFrames(sky.toMoon, sky.pole, [moonAt.x, moonAt.y, moonAt.z], [0, 1, 0]));
+    scene.add(stars.object);
+  }
 
   // Earth, turned so the pad is under the craft at launch.
   const earth = makeEarth(R_EARTH * KM, true);
@@ -387,6 +401,7 @@ export function createScene(
       cancelAnimationFrame(frame);
       sizer.disconnect();
       controls.dispose();
+      stars.dispose();
       disposeScene(scene);
       renderer.dispose();
       renderer.domElement.remove();

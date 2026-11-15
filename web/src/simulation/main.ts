@@ -8,6 +8,7 @@ import './simulation.css';
 import { loadEphemeris } from '../core/ephemeris';
 import { missionAt, SEQUENCE, type OkPlan, type StepId } from '../core/mission';
 import { padById } from '../core/pads';
+import { moonOrbitIcrf } from '../core/sky';
 import type { CuratedSite } from '../core/types';
 import { getState, landingScenario, missionFor, setData, stateToAddress, subscribe } from '../state';
 import { prefersReducedMotion } from '../ui/launch/earth';
@@ -354,7 +355,8 @@ function render(): void {
   message.hidden = true;
   hud.hidden = false;
   const sc = landingScenario()!;
-  picture = createScene(canvasBox, p, padById(s.padId), sc.site, sc.color);
+  picture = createScene(canvasBox, p, padById(s.padId), sc.site, sc.color,
+    s.eph ? moonOrbitIcrf(s.eph, p.touchdownMs) : null);
   cursor = p.launchMs;
   limits = regions(p, speed);
   settlePace();
