@@ -21,10 +21,10 @@ made both. The video is the demo link; the slides are linked from the detailed d
 |---|---|---|---|---|
 | Project Name | yes | none stated | "Darksight" (`submission.md`) | ready |
 | High-Level Project Summary | yes | none stated; what, how it addresses the challenge, why it matters | `submission.md` (about 180 words) | ready |
-| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 29.2 s, English captions | **needs a person:** upload to YouTube (public or unlisted) and paste the link |
+| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 29.7 s, English captions | ready: uploaded to Google Drive by MarsRon, https://drive.google.com/file/d/1BNsboqQI9dvgL6qAwDgmxr1zFZH-55Px/view (opens without signing in, checked with curl on 15 Nov 2026) |
 | Link to Final Project | yes | public, no login | https://darksight.space (repo linked in the description) | ready |
 | Detailed Project Description | yes | none stated; what, how, benefits, goals, tools | `submission.md` | ready |
-| Use of Super Intelligence (SI) | yes | say where and how; AI images and videos need a visible watermark; code and data need a note in text and metadata; judges don't see this answer | `submission.md`; labels on every slide and in the video | ready (see open item 3) |
+| Use of Super Intelligence (SI) | yes | say where and how; AI images and videos need a visible watermark; code and data need a note in text and metadata; judges don't see this answer | `submission.md`; labels on every slide (the video is a screen recording, not AI-generated, so it carries none) | ready (see open item 3) |
 | NASA Data | yes | at least one NASA dataset or resource, for a Global Award | `submission.md` | ready |
 | Space Agency Partner Data and Other References | yes | every data source, resource and tool, open source included | `submission.md`, full list in `references.md` | ready (run the last check below) |
 | Images on the Project page | optional | JPG, PNG or GIF up to 10 MB; no video or document uploads | `slides-png/slide-1.png` … `slide-7.png` (1280 × 720) | optional |
@@ -34,7 +34,7 @@ made both. The video is the demo link; the slides are linked from the detailed d
 ## Before pressing "Submit for Judging"
 
 - [ ] All five team members are confirmed participants at the same Local Event (Kuala Lumpur); waitlisted means not eligible.
-- [ ] Every link opens in a private window without signing in: the YouTube video, darksight.space, the GitHub repo, `pitch/darksight-slides.pdf` and `pitch/references.md` on GitHub (once this branch has merged).
+- [ ] Every link opens in a private window without signing in: the video on Google Drive, darksight.space, the GitHub repo, `pitch/darksight-slides.pdf` and `pitch/references.md` on GitHub (once this branch has merged).
 - [ ] No image, video or audio of anyone under 18 (none used).
 - [ ] No NASA logo, flag or mission identifier in AI-made content (none used).
 - [ ] Optional: request a FortiGuard Web Filter Classification for darksight.space (Category: Education or Web-based application; Company Name: N/A), so judges' networks don't block it.
@@ -62,7 +62,7 @@ reads them from the page while it records.
 | Line | Status |
 |---|---|
 | Every field above has its text or file | Pass, except the demo **link**: the file is ready, but a person has to upload it |
-| The video runs within the form's limit and shows compare, nudge and the Horizons badge | Pass: 29.2 s (ffprobe `duration=29.240000`); compare 0:07.5, nudge 0:13.75, badge 0:22.5 (`video-script.md`); re-recorded from darksight.space at main 4626e8e |
+| The video runs within the form's limit and shows compare, nudge and the Horizons badge | Pass, except the nudge: 29.7 s (ffprobe `duration=29.680000`); compare 0:13.3, badge 0:24.3 (`video-script.md`); re-recorded from darksight.space on 15 Nov 2026 (`t17-pitch-b`). The second version leaves out the nudge on purpose: the team chose a feature tour with the launch simulation instead |
 | Someone outside the team can say what the tool does after watching it once | **Not done yet**: needs a person (test below) |
 | Slides use the palette in `docs/design.md`; T19's two screenshots or updated ones | Pass: palette tokens copied from `docs/design.md`; desktop and phone screenshots of darksight.space in `img/`, taken again at main 4626e8e |
 | Last check after the last pull request has merged | **Not yet possible**: other pull requests are still open. Run it as below |
@@ -112,9 +112,9 @@ branch has merged and deployed, which is one more reason to run the check at the
 
 ## Open items for the team
 
-1. **Upload the video** to YouTube (or another public host) and paste the link into the demo
-   field. The form can't take the file itself.
-2. **"About an hour across three tools"** (video 0:03, slide 2, summary) comes from the T17
+1. ~~**Upload the video**~~ Done: Google Drive link in `submission.md`. Paste it into the demo
+   field of the form.
+2. **"About an hour across three tools"** (slide 2, summary; no longer in the video) comes from the T17
    ticket's story, not from a measurement. Confirm it's fair, or soften the wording (the script and
    slides each have it once).
 3. **AI-made pictures in the repo.** The guide asks for a visible watermark on AI-generated images.
@@ -134,7 +134,7 @@ branch has merged and deployed, which is one more reason to run the check at the
 | `checklist.md` | This file |
 | `submission.md` | The text for every form field |
 | `video-script.md` | Scene-by-scene script and timings of the demo video |
-| `demo/darksight-demo.webm` | The demo video, 29.2 s, 1280 × 720, VP9 |
+| `demo/darksight-demo.webm` | The demo video, 29.7 s, 1280 × 720, VP9 |
 | `slides.html`, `darksight-slides.pdf`, `slides-png/` | The 7-slide deck: source, PDF, one PNG per slide |
 | `img/` | Screenshots of darksight.space used on the slides |
 | `references.md`, `ai-use.md` | Every source and AI-use record, generated from `docs/` |
