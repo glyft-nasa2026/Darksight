@@ -43,7 +43,14 @@ await desk.addStyleTag({ content: '#about { visibility: hidden; }' });
 await desk.locator('#compare').screenshot({ path: join(out, 'compare.png') });
 await desk.addStyleTag({ content: '#about { visibility: visible; }' });
 await desk.evaluate(() => window.scrollTo(0, 0));
+// The nudge panel starts folded (issue #126): open it, then take the step.
+await desk.evaluate(() => {
+  const f = document.querySelector('#nudge .nudge-fold');
+  if (f?.getAttribute('aria-expanded') === 'false') f.click();
+});
 await desk.evaluate(() => [...document.querySelectorAll('#nudge button')].find((b) => b.textContent.trim() === '1.0 km N')?.click());
+await desk.waitForFunction(() => /days of sunlight in 30 days/.test(document.getElementById('nudge')?.innerText ?? ''),
+  null, { timeout: 10_000 });
 await desk.waitForTimeout(1500);
 await desk.locator('#scene').screenshot({ path: join(out, 'nudge.png') });
 await desk.close();

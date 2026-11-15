@@ -34,8 +34,9 @@ const out = join(repo, 'pitch/demo');
 const raw = join(out, 'raw');
 const frames = join(out, 'frames');
 
-/** Playwright's own ffmpeg build (installed with its browsers). */
+/** $FFMPEG if set, else Playwright's own ffmpeg build (installed with its browsers). */
 function ffmpegPath() {
+  if (process.env.FFMPEG) return process.env.FFMPEG;
   const base = process.env.PLAYWRIGHT_BROWSERS_PATH
     ?? (process.platform === 'win32' ? join(process.env.LOCALAPPDATA ?? '', 'ms-playwright')
       : process.platform === 'darwin' ? join(homedir(), 'Library/Caches/ms-playwright')
@@ -172,6 +173,11 @@ await ring(null);
 await caption('Now move the pin just <b>1 km north</b>…');
 await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
 await ring('#nudge');
+// The panel starts folded (issue #126): open it on camera.
+await page.evaluate(() => {
+  const f = document.querySelector('#nudge .nudge-fold');
+  if (f?.getAttribute('aria-expanded') === 'false') f.click();
+});
 await sleep(1200);
 const clicked = await page.evaluate(() => {
   const b = [...document.querySelectorAll('#nudge button')].find((x) => x.textContent.trim() === '1.0 km N');
@@ -179,19 +185,21 @@ const clicked = await page.evaluate(() => {
   return !!b;
 });
 if (!clicked) throw new Error('No "1.0 km N" button');
-await sleep(400);
+// The step moves the live site at once; its result shows when the new skyline is traced.
+await page.waitForFunction(() => /days of sunlight in 30 days/.test(document.getElementById('nudge')?.innerText ?? ''),
+  null, { timeout: 10_000 }).catch(() => {});
 const nudge = await page.evaluate(() => {
   const t = document.getElementById('nudge')?.innerText.replace(/\s+/g, ' ') ?? '';
   const sun = t.match(/[−-][\d.]+ days of sunlight in 30 days/)?.[0] ?? '';
-  const earth = /no Earth there/.test(t) ? 'and Earth drops out of sight' : '';
+  const earth = /no Earth now in the next 60 days|Earth hidden now|loses Earth/.test(t) ? 'and Earth drops out of sight' : '';
   return { sun, earth, t };
 });
 if (!nudge.sun) throw new Error(`Nudge result not found: ${nudge.t}`);
 await caption(`…and the sunlight collapses: <span class="bad">${nudge.sun.replace('-', '−')}</span>${nudge.earth ? `,<br>${nudge.earth}` : ''}. One kilometre.`);
 await sleep(2000); await still('nudge'); await sleep(3900);
 
-// 21 to 24.5 s: the Horizons check.
-await page.evaluate(() => [...document.querySelectorAll('#nudge button')].find((x) => x.textContent.trim() === 'Discard')?.click());
+// 21 to 24.5 s: the Horizons check. Undo puts the live site back on the rim.
+await page.evaluate(() => [...document.querySelectorAll('#nudge button')].find((x) => x.textContent.trim() === 'Undo')?.click());
 await ring('#about .about-badge');
 await caption(`Real NASA LOLA terrain and JPL ephemeris. Every angle checked against <b>JPL Horizons</b>:<br>largest difference ${horizonsDiff}.`);
 await sleep(1300); await still('horizons'); await sleep(2000);
@@ -214,7 +222,12 @@ const rawPath = await video.path();
 const ss = (demoT0 - videoT0) / 1000;
 const dur = Math.min((demoT1 - demoT0) / 1000, LIMIT_S - 0.2);
 const final = join(out, 'darksight-demo.webm');
-execFileSync(ffmpegPath(), ['-y', '-loglevel', 'error', '-ss', ss.toFixed(2), '-i', rawPath,
-  '-t', dur.toFixed(2), '-an', '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '30', '-row-mt', '1', final]);
+// VP9 where the ffmpeg has it; Playwright's own build has only VP8 (FFMPEG=/usr/bin/ffmpeg for VP9).
+const ffmpeg = ffmpegPath();
+const vp9 = /libvpx-vp9/.test(execFileSync(ffmpeg, ['-hide_banner', '-encoders'], { encoding: 'utf8' }));
+const codec = vp9 ? ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '30', '-row-mt', '1']
+  : ['-c:v', 'libvpx', '-b:v', '2M', '-crf', '10'];
+execFileSync(ffmpeg, ['-y', '-loglevel', 'error', '-ss', ss.toFixed(2), '-i', rawPath,
+  '-t', dur.toFixed(2), '-an', ...codec, final]);
 rmSync(raw, { recursive: true, force: true });
-console.log(JSON.stringify({ final, startS: +ss.toFixed(2), durationS: +dur.toFixed(2), facts, nudge: nudge.sun, earth: nudge.earth }, null, 2));
+console.log(JSON.stringify({ final, codec: vp9 ? 'VP9' : 'VP8', startS: +ss.toFixed(2), durationS: +dur.toFixed(2), facts, nudge: nudge.sun, earth: nudge.earth }, null, 2));
