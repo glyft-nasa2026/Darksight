@@ -53,11 +53,14 @@ by side: lit % and Earth contact % over the next 30 days, the longest unbroken l
 dark and the longest gap in contact, with the best value in each row marked and a 30-day Sun and
 Earth strip per scenario. A timeline, a sky panorama with the terrain skyline, and a 2D map and 3D
 scene (the Sun lights the real terrain; Earth bobs at the horizon) show the same answer from
-different angles. Map layers show LOLA's average sunlight, Earth visibility and permanent shadow
-over the whole Moon.
+different angles. Map layers show average sunlight, Earth visibility and permanent shadow over the
+whole Moon: LOLA's maps with terrain near both poles, our own smooth-Moon averages elsewhere, and
+the page says which applies.
 
-**The 1 km nudge.** Small moves change everything at the pole. The nudge buttons (1 km north, south,
-east, west; one day earlier or later) make a ghost scenario and say the difference in words. From
+**The 1 km nudge.** Small moves change everything at the pole. The nudge buttons move the site north, south,
+east or west (1 km to start, 0.1 to 10 km on a slider), one day earlier or later, or to a pole. The
+site moves at once, where it was stays in grey on the map, and the panel says the difference in
+words; Undo puts it back. From
 the Shackleton rim on 15 Nov 2026, 1 km north gives "−17 days of sunlight in 30 days" and no Earth in
 the next 60 days. The rim is lit 100.0 % of the next 30 days; the crater floor beside it, 0.0 %.
 
