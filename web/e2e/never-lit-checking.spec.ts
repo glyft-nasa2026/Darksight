@@ -25,7 +25,7 @@ test('the floor column says checking to 2100, then permanently shadowed, with no
     else void route.continue();
   });
 
-  // Every text column A's Sun countdown ("Sunset in" row) shows, as the page changes it.
+  // Every text column A's Sun countdown ("Next sunrise or sunset" row) shows, as the page changes it.
   await page.addInitScript(() => {
     const w = window as Watched;
     w.floorTexts = [];
@@ -35,7 +35,7 @@ test('the floor column says checking to 2100, then permanently shadowed, with no
       const col = [...table.querySelectorAll('thead th')]
         .findIndex((th) => th.querySelector('.cmp-label')?.textContent === 'A');
       const row = [...table.querySelectorAll('tbody tr')]
-        .find((tr) => tr.querySelector('th')?.textContent === 'Sunset in');
+        .find((tr) => tr.querySelector('th')?.textContent === 'Next sunrise or sunset');
       const td = col > 0 ? row?.children[col] : undefined;
       return td ? (td.firstChild?.nodeValue ?? null) : null;   // a hidden " (best)" may follow
     };

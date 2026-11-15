@@ -46,38 +46,48 @@ function siteCodeList(): Plugin {
   };
 }
 
+/** The height grids the build packs: the file name and its grid size, read from its .json. */
+const HEIGHT_GRIDS: { name: string; grid: (meta: Record<string, unknown>) => unknown[] }[] = [
+  { name: 'dem', grid: (m) => [m.size, m.size] },            // the south-pole height map
+  { name: 'globe', grid: (m) => [m.width, m.height] },       // the whole Moon
+  { name: 'north', grid: (m) => [m.size, m.size] },          // the north cap
+];
+
 /**
- * Writes data/dem.pack beside data/dem.bin in the build: the same heights, packed losslessly
- * (src/core/heightPack.ts) and gzipped, about a third of the size (contract section 2). dem.bin
- * stays the source file. The dev server has no packed copy, so the site loads dem.bin there.
+ * Writes data/dem.pack, data/globe.pack and data/north.pack beside the .bin files in the build:
+ * the same heights, packed losslessly (src/core/heightPack.ts) and gzipped, a third to two thirds
+ * of the size (contract section 2). The .bin files stay the source files. The dev server has no
+ * packed copies, so the site loads the .bin files there.
  */
-function packHeightMap(): Plugin {
+function packHeightMaps(): Plugin {
   let publicDir = '';
   return {
-    name: 'darksight-pack-height-map',
+    name: 'darksight-pack-height-maps',
     apply: 'build',
     configResolved(config) {
       publicDir = config.publicDir;
     },
     generateBundle() {
-      const metaFile = join(publicDir, 'data/dem.json');
-      const binFile = join(publicDir, 'data/dem.bin');
-      if (!existsSync(metaFile) || !existsSync(binFile)) return;   // a data set without a height map
-      const { size } = JSON.parse(readFileSync(metaFile, 'utf8')) as { size: number };
-      const bin = readFileSync(binFile);
-      if (!Number.isInteger(size) || bin.length !== size * size * 2) {
-        this.warn(`dem.bin is ${bin.length} bytes, not ${size} x ${size} heights: no dem.pack written`);
-        return;
+      for (const { name, grid } of HEIGHT_GRIDS) {
+        const metaFile = join(publicDir, `data/${name}.json`);
+        const binFile = join(publicDir, `data/${name}.bin`);
+        if (!existsSync(metaFile) || !existsSync(binFile)) continue;   // a data set without this grid
+        const [w, h] = grid(JSON.parse(readFileSync(metaFile, 'utf8')) as Record<string, unknown>).map(Number);
+        const bin = readFileSync(binFile);
+        if (!Number.isInteger(w) || !Number.isInteger(h) || bin.length !== w * h * 2) {
+          this.warn(`${name}.bin is ${bin.length} bytes, not ${w} x ${h} heights: no ${name}.pack written`);
+          continue;
+        }
+        const heights = new Int16Array(w * h);
+        for (let i = 0; i < heights.length; i++) heights[i] = bin.readInt16LE(i * 2);
+        const packed = gzipSync(packHeights(heights, w, h), { level: 9 });
+        // Every height must come back exactly before the file ships.
+        const back = unpackHeights(gunzipSync(packed), w, h);
+        for (let i = 0; i < heights.length; i++) {
+          if (back[i] !== heights[i]) this.error(`${name}.pack: cell ${i} unpacks to ${back[i]}, not ${heights[i]}`);
+        }
+        this.emitFile({ type: 'asset', fileName: `data/${name}.pack`, source: packed });
       }
-      const heights = new Int16Array(size * size);
-      for (let i = 0; i < heights.length; i++) heights[i] = bin.readInt16LE(i * 2);
-      const packed = gzipSync(packHeights(heights, size, size), { level: 9 });
-      // Every height must come back exactly before the file ships.
-      const back = unpackHeights(gunzipSync(packed), size, size);
-      for (let i = 0; i < heights.length; i++) {
-        if (back[i] !== heights[i]) this.error(`dem.pack: cell ${i} unpacks to ${back[i]}, not ${heights[i]}`);
-      }
-      this.emitFile({ type: 'asset', fileName: 'data/dem.pack', source: packed });
     },
   };
 }
@@ -86,7 +96,7 @@ function packHeightMap(): Plugin {
 // any repo name and on the mirror. Data files are loaded with import.meta.env.BASE_URL.
 export default defineConfig({
   base: './',
-  plugins: [siteCodeList(), packHeightMap()],
+  plugins: [siteCodeList(), packHeightMaps()],
   server: {
     // The dev server may read web/ (as before) and docs/, whose sources and AI-use notes the
     // About panel (T16) collects. Production builds read them from disk and need no setting.

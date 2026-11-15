@@ -28,7 +28,7 @@ export function whereText(p: ReportPhase, r: Report): string {
     case 'coast':
       return `Earth to Moon · Earth–Moon ${kmText(o.earthMoonKm)} at arrival · arrives at ${speedText(o.vInfKmS)}`;
     case 'loi':
-      return `${Math.round(o.lunarOrbitAltKm)} km polar lunar orbit · over ${over}`;
+      return `${Math.round(o.lunarOrbitAltKm)} km lunar orbit, inclined ${o.lunarOrbitIncDeg.toFixed(0)}° · over ${over}`;
     case 'lunar-orbit':
       return `${Math.round(o.lunarOrbitAltKm)} km circular · period ${durationText(o.lunarOrbitPeriodS)} · ${o.lunarOrbitRevolutions.toFixed(1)} revolutions`;
     case 'doi':

@@ -16,7 +16,7 @@ import { prefersReducedMotion } from '../ui/launch/earth';
 import {
   coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, speedText, utcText,
 } from '../ui/mission/format';
-import { MANOEUVRE_WINDOW_S, nextPace, paceLimit, rateText, regions, type Mode } from '../ui/mission/pace';
+import { heldText, MANOEUVRE_WINDOW_S, nextPace, paceLimit, rateText, regions, type Mode } from '../ui/mission/pace';
 import { createScene, scaleFor, type MissionScene, type Scale } from './scene';
 
 const NAMES: Record<StepId, string> = {
@@ -37,7 +37,8 @@ const ERRORS = {
 } as const;
 
 // Simulated seconds per real second (pace.ts, issue #105). "Auto" (the default) picks one per
-// stage; every change of speed is gradual, and slows down in time for each burn.
+// stage; every change of speed is gradual, and slows down in time for each burn. A speed button
+// keeps only the ascent and the powered descent slow; Auto alone slows round TLI, LOI and DOI (#196).
 const SPEEDS: [label: string, s: number][] = [['1 min/s', 60], ['1 h/s', 3600], ['6 h/s', 6 * 3600]];
 /** An instant burn (TLI, LOI, DOI) shows as firing for this long either side of its moment. */
 const FIRING_S = 120;
@@ -153,8 +154,8 @@ function drawControls(): void {
   play.textContent = playing ? '❚❚ Pause' : cursor >= endMs() && plan ? '↺ Replay' : '▶ Play';
   for (const b of speeds.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.speed === String(speed)));
   autoButton.textContent = speed === 'auto' && plan ? `Auto · ${rateText(pace)}` : 'Auto';
-  // A manual speed: say what is playing while it glides, or while a burn holds it slower.
-  rateNow.textContent = speed !== 'auto' && plan && Math.abs(Math.log(pace / speed)) > 0.01 ? `now ${rateText(pace)}` : '';
+  // A manual speed: say what is playing and why, while it glides or a burn holds it slower.
+  rateNow.textContent = plan ? heldText(limits, speed, pace, cursor) : '';
 }
 
 /** The engine is firing: the ascent, the powered descent, or close to an instant burn. */
@@ -172,7 +173,7 @@ function captionFor(p: OkPlan, id: StepId, st: ReturnType<typeof missionAt>): st
     return `Translunar injection: a ${dvText(stepOf(p, 'tli').dvKmS ?? 0)} burn stretches the parking orbit into a long ellipse that reaches the Moon’s distance.`;
   }
   if (near('loi')) {
-    return `Lunar orbit insertion: at the closest point of the fly-by, a ${dvText(stepOf(p, 'loi').dvKmS ?? 0)} braking burn slows the craft enough for the Moon to capture it, in a ${lunar} circular polar orbit.`;
+    return `Lunar orbit insertion: at the closest point of the fly-by, a ${dvText(stepOf(p, 'loi').dvKmS ?? 0)} braking burn slows the craft enough for the Moon to capture it, in a ${lunar} circular orbit inclined ${o.lunarOrbitIncDeg.toFixed(0)}°, the plane the arrival leads into.`;
   }
   if (near('doi')) {
     return `Descent orbit insertion: a ${dvText(stepOf(p, 'doi').dvKmS ?? 0)} burn lowers the far side of the orbit to ${kmText(o.descentStartAltKm)} above the ground, just before the landing site.`;
@@ -186,7 +187,7 @@ function captionFor(p: OkPlan, id: StepId, st: ReturnType<typeof missionAt>): st
         : `Coasting to the Moon for ${durationText(o.coastS)}, slowing as it climbs away from Earth.`;
     case 'loi':
     case 'lunar-orbit':
-      return `In a ${lunar} polar orbit, ${durationText(o.lunarOrbitPeriodS)} a lap. The Moon turns underneath until the landing site comes under the track.`;
+      return `In a ${lunar} orbit inclined ${o.lunarOrbitIncDeg.toFixed(0)}°, ${durationText(o.lunarOrbitPeriodS)} a lap. The Moon turns underneath until the landing site comes under the track.`;
     case 'doi':
     case 'descent-orbit':
       return `On the descent orbit: coasting down from ${lunar} to ${kmText(o.descentStartAltKm)}, where the powered descent begins.`;

@@ -182,7 +182,10 @@ export function mount(el: HTMLElement): void {
       el.replaceChildren(head, message);
       return;
     }
-    const key = `${stateToAddress()}|${s.eph?.meta.source}|${surface.length}|${cond.sunText}|${cond.earthText}`;
+    // The terrain's name is in the key: a height map that arrives after the first draw (T37:
+    // globe.bin, for a site north of 85° S) changes the skyline and the numbers, often with the
+    // same two countdowns.
+    const key = `${stateToAddress()}|${s.eph?.meta.source}|${surface.length}|${cond.sunText}|${cond.earthText}|${cond.terrainText}`;
     if (key === shownKey) return;
     shownKey = key;
 

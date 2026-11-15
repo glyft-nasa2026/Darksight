@@ -80,14 +80,15 @@ function buildRows(cols: Column[]): Row[] {
       values: cols.map((c) => c.now?.sunFrac ?? null),
       higherIsBetter: true,
     },
-    countdownRow('Sunset in', 'sun', cols),
+    // Named for both directions: a cell reads "Sunrise in 3 d 5 h" as often as "Sunset in 3 d 4 h".
+    countdownRow('Next sunrise or sunset', 'sun', cols),
     {
       name: 'Earth now',
       cells: cols.map((c) => (!c.now ? '–' : c.earthUp ? 'Visible' : 'Hidden')),
       values: cols.map((c) => (c.now ? (c.earthUp ? 1 : 0) : null)),
       higherIsBetter: true,
     },
-    countdownRow('Earthset in', 'earth', cols),
+    countdownRow('Next Earthrise or Earthset', 'earth', cols),
     sumRow('Lit % (next 30 days)', (s) => s.litPct, pctText, true),
     sumRow('Longest unbroken light', (s) => s.longestLit_h, hoursText, true),
     sumRow('Longest dark', (s) => s.longestDark_h, hoursText, false),
@@ -226,6 +227,9 @@ export function mount(el: HTMLElement): void {
   // which changes nothing else here, so each notify redraws until no column is checking (T32).
   type Shown = {
     live: Scenario; pinned: Scenario[]; eph: AppState['eph']; dem: AppState['dem']; sites: AppState['sites'];
+    // T37: when globe.bin arrives or fails, every column north of 85° S gets another skyline,
+    // other numbers and another terrain note, with no change to live or pinned.
+    globe: AppState['globe']; globeStatus: AppState['globeStatus'];
     checking: boolean;
   };
   let shown: Shown | null = null;
@@ -259,8 +263,12 @@ export function mount(el: HTMLElement): void {
     const s = getState();
     // Pinned scenarios never change, but live does on every map click, time entry and drag.
     if (shown && !shown.checking && shown.live === s.live && shown.pinned === s.pinned
-      && shown.eph === s.eph && shown.dem === s.dem && shown.sites === s.sites) return;
-    shown = { live: s.live, pinned: s.pinned, eph: s.eph, dem: s.dem, sites: s.sites, checking: false };
+      && shown.eph === s.eph && shown.dem === s.dem && shown.sites === s.sites
+      && shown.globe === s.globe && shown.globeStatus === s.globeStatus) return;
+    shown = {
+      live: s.live, pinned: s.pinned, eph: s.eph, dem: s.dem, sites: s.sites,
+      globe: s.globe, globeStatus: s.globeStatus, checking: false,
+    };
     const id = ++drawId;
 
     if (!s.eph) {

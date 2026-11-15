@@ -472,7 +472,7 @@ export function mount(el: HTMLElement): void {
     'at the surface. The readout uses its own calculation, so its numbers can differ.';
   const heightNote = make('p', 'ly-note muted', 'Height and slope come from the LOLA height maps: ' +
     '240 m cells near the south pole, 1.2 km near the north pole, 3.8 km elsewhere. Slope is measured ' +
-    'over those cells, so a boulder or a small crater does not show.');
+    'across two cells (480 m, 2.4 km and 7.6 km), so a boulder or a small crater does not show.');
   box.append(status, legend, note, heightNote);
   el.replaceChildren(box);
 

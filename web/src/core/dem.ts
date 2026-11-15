@@ -2,7 +2,7 @@
 // heights packed by the build). A square grid in south polar stereographic projection on a
 // sphere of radius R.
 
-import { unpackHeightRows } from './heightPack';
+import { unpackHeightFile } from './heightPack';
 import { MOON_RADIUS_KM } from './types';
 
 export type DemMeta = {
@@ -124,30 +124,14 @@ export function demFromHeights(meta: DemMeta, data: Int16Array): Dem {
   return { meta, covers, heightAt, cell, hasData };
 }
 
-/** Rows rebuilt between two pauses while the packed map unpacks: a few ms each on a laptop. */
-const UNPACK_ROWS = 256;
-const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
-
 /**
  * The stored values from `dem.pack` as downloaded (contract section 2), ready for
  * demFromHeights. Null when the bytes are not gzip at all: a host that answers a missing file
  * with the page itself. Throws when they are gzip but not this grid's packed heights. Unpacks a
- * slice of rows at a time, so the page can paint in between.
+ * slice of rows at a time, so the page can paint in between (core/heightPack.ts).
  */
-export async function unpackDemFile(meta: DemMeta, file: Uint8Array<ArrayBuffer>): Promise<Int16Array | null> {
-  if (file.length < 2 || file[0] !== 0x1f || file[1] !== 0x8b) return null;
-  const size = meta.size;
-  const stream = new Blob([file]).stream().pipeThrough(new DecompressionStream('gzip'));
-  const packed = new Uint8Array(await new Response(stream).arrayBuffer());
-  if (packed.length !== size * size * 2) {
-    throw new Error(`dem.pack: ${packed.length} bytes unpacked, expected ${size * size * 2}`);
-  }
-  const out = new Int16Array(size * size);
-  for (let r = 0; r < size; r += UNPACK_ROWS) {
-    unpackHeightRows(packed, size, size, out, r, r + UNPACK_ROWS);
-    if (r + UNPACK_ROWS < size) await nextTask();
-  }
-  return out;
+export function unpackDemFile(meta: DemMeta, file: Uint8Array<ArrayBuffer>): Promise<Int16Array | null> {
+  return unpackHeightFile(file, meta.size, meta.size, 'dem.pack');
 }
 
 /**

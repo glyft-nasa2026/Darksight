@@ -1,6 +1,6 @@
 # T17: Slides, demo video, submission text
 
-Status: not started
+Status: merged (pull request #130, ecf2456; built by Fabian, refreshed and merged by Yi Hung's session; lists updated on `t17-pitch-b`). Waiting on people: upload the video and paste its link; the outside-viewer test; the last check after the final merge (`pitch/checklist.md`).
 
 | | |
 |---|---|

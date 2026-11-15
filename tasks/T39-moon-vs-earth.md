@@ -1,6 +1,6 @@
 # T39: Why the Moon is different, in plain words
 
-Status: done apart from "Done when" line 2 (Yi Hung, pull request #159): the About panel's "Why the Moon is different" section, five points in two sentences or fewer, each with a button to where the page shows it. Still to do: someone outside the team reads it and says why a crater floor stays dark and why Earth doesn't rise or set at a near-side site (T18's 60-second tester can do it)
+Status: done (Yi Hung, pull request #159; "Done when" line 2 by T18's 60-second tester, `qa/m3.md`, pull request #205): the About panel's "Why the Moon is different" section, five points in two sentences or fewer, each with a button to where the page shows it. After reading it, a friend not on the team said Earth doesn't rise or set at a near-side site because the Moon is tidally locked, and gave the low Sun as why a polar crater floor stays dark, without the crater's walls blocking it
 
 | | |
 |---|---|
@@ -49,7 +49,7 @@ or date comes from `core/` (CLAUDE.md), never worked out in the module.
 ## Done when
 
 - [x] The explainer covers the five points, in two sentences or fewer each.
-- [ ] Someone outside the team reads it and can then say why a crater floor stays dark and why
+- [x] Someone outside the team reads it and can then say why a crater floor stays dark and why
       Earth doesn't rise or set at a near-side site. T18's 60-second tester can do this.
 - [x] Every fact has a source in `docs/sources/T39.md`, and no number about a site or date is
       worked out outside `core/`.

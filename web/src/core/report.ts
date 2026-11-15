@@ -5,7 +5,7 @@
 //
 // Units: times in ms since 1970 (UTC) inside the report, ISO 8601 with Z in the files; Δv and
 // speeds in km/s inside, m/s in the files; altitudes and distances in km; masses in kg.
-import { ASCENT_LOSSES_KMS, HIGH_GATE_KM,
+import { ASCENT_LOSSES_KMS, HIGH_GATE_KM, LOW_GATE_KM,
   APOLLO_11_TIMES, approachSeconds, DESCENT_START_ALT_KM, EXAMPLE_LANDER, missionAt,
   type Lander, type MissionTimes, type OkPlan, type Step, type StepId,
 } from './mission';
@@ -30,8 +30,8 @@ export const MODEL_LIMITS: readonly string[] = [
   'A planning model, not a flight-dynamics solution.',
   'Patched conics from Earth to the Moon; the Earth–Moon picture is the model’s plane, not an ephemeris track.',
   'Burns are instant, except the powered descent, which is simulated.',
-  'A 100 km circular polar lunar orbit.',
-  `A guided powered descent from 15 km in Apollo’s phases: braking at full thrust to a ${HIGH_GATE_KM} km high gate, then throttled straight down to touchdown (Bennett 1970).`,
+  'A 100 km circular lunar orbit in the plane the arrival leads into, through the site at touchdown; LOI at the arrival’s closest point, so the wait before DOI moves from Apollo 11’s by under half a lap. The Moon keeps longitude 0 towards Earth and its axis upright to the transfer’s plane.',
+  `A guided powered descent from 15 km in Apollo’s phases: braking at full thrust to a ${HIGH_GATE_KM} km high gate, an approach on a straight slant to a ${Math.round(LOW_GATE_KM * 1000)} m low gate, then throttled straight down to touchdown (Bennett 1970).`,
   'Phase lengths from Apollo 11 (NASA SP-4029). The launch time is touchdown less the phases: no launch window is solved.',
   'The launch vehicle’s propellant is not modelled. Its Δv includes a cited budget for gravity and drag losses, not a simulated ascent.',
   'No ascent from the Moon and no return to Earth.',

@@ -1,6 +1,6 @@
 # T37: Terrain skyline north of 85 S
 
-Status: done (Fabian, then MarsRon; pull request #193, merged as `7c463d9`). Option C: `dem.bin` (240 m) at or south of 85 S, `globe.bin` (3.8 km) elsewhere. Every "Done when" line passed on `5ffa690` before the merge (`npm test` 779 passed, `npm run build` passed, CI `test-and-build` and `preview` passed; height map in at 6.97 s on Fast 4G, `docs/load-time.md` section 9). `npx playwright test`: 18 of 20; the two `landing-wide.spec.ts` fails also fail on `main`. The browser checks were done by MarsRon before the merge
+Status: done (Fabian, then MarsRon; pull request #193, merged as `7c463d9`; Compare, the timeline and the report page follow `globe.bin` when it arrives, #207). Option C: `dem.bin` (240 m) at or south of 85 S, `globe.bin` (3.8 km) elsewhere. Every "Done when" line passed on `5ffa690` before the merge (`npm test` 779 passed, `npm run build` passed, CI `test-and-build` and `preview` passed; height map in at 6.97 s on Fast 4G, `docs/load-time.md` section 9). `npx playwright test`: 18 of 20; the two `landing-wide.spec.ts` fails also fail on `main`. The browser checks were done by MarsRon before the merge
 
 | | |
 |---|---|
@@ -65,6 +65,49 @@ terrain skyline too, even a coarse one.
 
 Draft pull request #91 labels a Compare column with no terrain "Smooth Moon, no terrain". Agree an
 order with it. Not in scope: looking beyond 150 km.
+
+## After the merge
+
+Rechecked on 15 Nov 2026 on `main` at 6b76957 with real data (pull request #207).
+
+**Fixed in #207**
+
+- **Three cards kept the smooth-Moon answer after `globe.bin` arrived.** It arrives after the
+  height map with no other change of state. The readout and the sky panorama redrew; the Compare
+  card, the timeline and the report page did not, until the next click. At Apollo 15, Compare
+  stayed on "Smooth Moon until the whole-Moon height map loads" and 50.4 % lit (48.2 % with the
+  terrain), and `report.html` printed the same label and 50 %. `web/e2e/globe-arrival.spec.ts`
+  holds `globe.bin` and lets it through; it fails without each of the three changes.
+- **The map caption said "outside terrain coverage"** away from the south-pole height map, beside
+  a readout that says "Coarse terrain". The clause is gone.
+
+**Checked and correct**
+
+- The engine's skyline on `globe.bin` equals an independent one (own reading of the file, own
+  geometry) to 0.0000° at the same distances, at ten sites: both poles' neighbourhoods, the
+  180° line, Apollo 11, 15 and 17, IM-2. Apollo 15's highest point is 10.95° at azimuth 173.
+- The seam: 85° S exactly uses `dem.bin`, 84.9999° S uses `globe.bin`; no grid, no terrain.
+- Breaking the code three ways (heights ignored, the seam moved to 80° S, the cell size times 4)
+  fails 5, 4 and 3 of T37's tests.
+- A coarse skyline takes 7 to 17 ms.
+- The labels while `globe.bin` is loading and when it is missing; the never-lit scan at a
+  coarse-terrain site (82.121° S, 9.79° E: "Permanently shadowed (until 2100)", the layers agree).
+
+**How far the coarse terrain is from the detailed one** (not faults: the page says "Coarse terrain")
+
+| Measure | Before T37 (smooth Moon) | Now |
+|---|---|---|
+| Map shadow drawn where the engine has the Sun up, 80° S to 85° S (5,271 cells, three dates) | 23.7 % | 10.2 % |
+| Sunlight layer against the engine's share of 2026, 80.5° S to 84.5° S, 60 points: median gap, points over 20 | 19, 28 | 5, 6 |
+| The same, 87° N to 89.5° N | 41, 56 | 14, 22 |
+| 88.42° N, 116.87° W (layers: never lit): the engine's share of the year with the Sun in view | 58 % | 0 % |
+
+- Against a 240 m skyline from `dem.bin` at eight sites between 80° S and 85° S, the coarse one
+  is off by 1.7° to 6.7° at its worst azimuth (0.4° to 2.1° on average) and gives 2 to 9 points
+  more sunlight over a year (IM-2: 50.6 % against 48.2 %; 83° S, 60° W: 50.6 % against 41.9 %).
+  *costs time*: IM-2 and Chandrayaan-4 lie inside `dem.bin` and could use it.
+- The walk steps half a cell (1.9 km), so it reads up to 0.9° under a 250 m walk of the same grid
+  at single azimuths (0.14° on average at the worst site). *cosmetic*
 
 ## Prompt to paste into Claude Code
 
