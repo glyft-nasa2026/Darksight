@@ -1,6 +1,8 @@
-// The south-pole height map (contract section 2: dem.bin + dem.json).
-// A square grid in south polar stereographic projection on a sphere of radius R.
+// The south-pole height map (contract section 2: dem.bin + dem.json, and dem.pack, the same
+// heights packed by the build). A square grid in south polar stereographic projection on a
+// sphere of radius R.
 
+import { unpackHeightRows } from './heightPack';
 import { MOON_RADIUS_KM } from './types';
 
 export type DemMeta = {
@@ -40,14 +42,17 @@ export function projectToGrid(meta: DemMeta, lat: number, lon: number): { col: n
   return { col: (x - meta.x_min_m) / meta.pixel_m, row: (meta.y_max_m - y) / meta.pixel_m };
 }
 
-/** Builds the height map from its two files. No network: tests call this with made-up grids. */
-export function parseDem(meta: DemMeta, buffer: ArrayBuffer): Dem {
-  const size = meta.size;
-  if (!Number.isInteger(size) || size < 2) {
+function checkMeta(meta: DemMeta): void {
+  if (!Number.isInteger(meta.size) || meta.size < 2) {
     throw new Error('dem.json: "size" must be a whole number, 2 or more');
   }
   if (!(meta.pixel_m > 0)) throw new Error('dem.json: "pixel_m" must be above 0');
-  const count = size * size;
+}
+
+/** Builds the height map from its two files. No network: tests call this with made-up grids. */
+export function parseDem(meta: DemMeta, buffer: ArrayBuffer): Dem {
+  checkMeta(meta);
+  const count = meta.size * meta.size;
   if (buffer.byteLength < count * 2) {
     throw new Error(`dem.bin: ${buffer.byteLength} bytes, expected ${count * 2}`);
   }
@@ -63,6 +68,17 @@ export function parseDem(meta: DemMeta, buffer: ArrayBuffer): Dem {
     const view = new DataView(buffer);
     for (let i = 0; i < count; i++) data[i] = view.getInt16(i * 2, true);
   }
+  return demFromHeights(meta, data);
+}
+
+/**
+ * Builds the height map from the stored values already in memory, row 0 first (the packed file,
+ * unpacked). parseDem reads dem.bin into the same form.
+ */
+export function demFromHeights(meta: DemMeta, data: Int16Array): Dem {
+  checkMeta(meta);
+  const size = meta.size;
+  if (data.length < size * size) throw new Error(`dem: ${data.length} heights, expected ${size * size}`);
 
   const { height_scale: scale, nodata } = meta;
   const last = size - 1;
@@ -108,9 +124,76 @@ export function parseDem(meta: DemMeta, buffer: ArrayBuffer): Dem {
   return { meta, covers, heightAt, cell, hasData };
 }
 
+/** Rows rebuilt between two pauses while the packed map unpacks: a few ms each on a laptop. */
+const UNPACK_ROWS = 256;
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
 /**
- * Fetches both files from data/ next to the page. onProgress gets 0..1 as dem.bin arrives.
- * Rejects if either file is missing or malformed.
+ * The stored values from `dem.pack` as downloaded (contract section 2), ready for
+ * demFromHeights. Null when the bytes are not gzip at all: a host that answers a missing file
+ * with the page itself. Throws when they are gzip but not this grid's packed heights. Unpacks a
+ * slice of rows at a time, so the page can paint in between.
+ */
+export async function unpackDemFile(meta: DemMeta, file: Uint8Array<ArrayBuffer>): Promise<Int16Array | null> {
+  if (file.length < 2 || file[0] !== 0x1f || file[1] !== 0x8b) return null;
+  const size = meta.size;
+  const stream = new Blob([file]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const packed = new Uint8Array(await new Response(stream).arrayBuffer());
+  if (packed.length !== size * size * 2) {
+    throw new Error(`dem.pack: ${packed.length} bytes unpacked, expected ${size * size * 2}`);
+  }
+  const out = new Int16Array(size * size);
+  for (let r = 0; r < size; r += UNPACK_ROWS) {
+    unpackHeightRows(packed, size, size, out, r, r + UNPACK_ROWS);
+    if (r + UNPACK_ROWS < size) await nextTask();
+  }
+  return out;
+}
+
+/**
+ * Downloads and unpacks `dem.pack`. Null when there is none to use (the dev server, or a data
+ * set without one) or it fails, and loadDem then loads dem.bin.
+ */
+async function loadPacked(url: string, meta: DemMeta, onProgress?: (fraction: number) => void): Promise<Int16Array | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    // Progress from Content-Length, capped, since a host that compresses the file again reports
+    // fewer bytes than arrive; without one, from about the packed size of real terrain.
+    const expected = Number(res.headers.get('content-length')) || (meta.size * meta.size * 2) / 3;
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    const reader = res.body?.getReader();
+    if (!reader) {
+      chunks.push(new Uint8Array(await res.arrayBuffer()));
+      received = chunks[0].length;
+    } else {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        onProgress?.(Math.min(0.99, received / expected));
+      }
+    }
+    const file = new Uint8Array(received);
+    let at = 0;
+    for (const chunk of chunks) {
+      file.set(chunk, at);
+      at += chunk.length;
+    }
+    return await unpackDemFile(meta, file);
+  } catch (err) {
+    console.warn('dem.pack not loaded, loading dem.bin instead:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * Fetches the height map from data/ next to the page: dem.json, then the packed heights
+ * (dem.pack, about a third the size of dem.bin), or dem.bin where there is no packed copy.
+ * onProgress gets 0..1 as the heights arrive. Rejects if dem.json or dem.bin is missing or
+ * malformed.
  */
 export async function loadDem(onProgress?: (fraction: number) => void): Promise<Dem> {
   const base = import.meta.env.BASE_URL + 'data/';
@@ -120,8 +203,12 @@ export async function loadDem(onProgress?: (fraction: number) => void): Promise<
   const meta = (await metaRes.json().catch(() => {
     throw new Error('dem.json: missing, or not JSON');
   })) as DemMeta;
-  if (!Number.isInteger(meta.size) || meta.size < 2) {
-    throw new Error('dem.json: "size" must be a whole number, 2 or more');
+  checkMeta(meta);
+
+  const heights = await loadPacked(base + 'dem.pack', meta, onProgress);
+  if (heights) {
+    onProgress?.(1);
+    return demFromHeights(meta, heights);
   }
 
   const binRes = await fetch(base + 'dem.bin');

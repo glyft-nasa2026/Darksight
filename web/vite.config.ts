@@ -1,6 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import type { IndexHtmlTransformContext, Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { packHeights, unpackHeights } from './src/core/heightPack.ts';
 
 /**
  * Lists the site's code in index.html as <meta name="site-code" content="file file …">: the
@@ -42,11 +46,47 @@ function siteCodeList(): Plugin {
   };
 }
 
+/**
+ * Writes data/dem.pack beside data/dem.bin in the build: the same heights, packed losslessly
+ * (src/core/heightPack.ts) and gzipped, about a third of the size (contract section 2). dem.bin
+ * stays the source file. The dev server has no packed copy, so the site loads dem.bin there.
+ */
+function packHeightMap(): Plugin {
+  let publicDir = '';
+  return {
+    name: 'darksight-pack-height-map',
+    apply: 'build',
+    configResolved(config) {
+      publicDir = config.publicDir;
+    },
+    generateBundle() {
+      const metaFile = join(publicDir, 'data/dem.json');
+      const binFile = join(publicDir, 'data/dem.bin');
+      if (!existsSync(metaFile) || !existsSync(binFile)) return;   // a data set without a height map
+      const { size } = JSON.parse(readFileSync(metaFile, 'utf8')) as { size: number };
+      const bin = readFileSync(binFile);
+      if (!Number.isInteger(size) || bin.length !== size * size * 2) {
+        this.warn(`dem.bin is ${bin.length} bytes, not ${size} x ${size} heights: no dem.pack written`);
+        return;
+      }
+      const heights = new Int16Array(size * size);
+      for (let i = 0; i < heights.length; i++) heights[i] = bin.readInt16LE(i * 2);
+      const packed = gzipSync(packHeights(heights, size, size), { level: 9 });
+      // Every height must come back exactly before the file ships.
+      const back = unpackHeights(gunzipSync(packed), size, size);
+      for (let i = 0; i < heights.length; i++) {
+        if (back[i] !== heights[i]) this.error(`dem.pack: cell ${i} unpacks to ${back[i]}, not ${heights[i]}`);
+      }
+      this.emitFile({ type: 'asset', fileName: 'data/dem.pack', source: packed });
+    },
+  };
+}
+
 // base './' makes every asset address relative, so the same build works on GitHub Pages under
 // any repo name and on the mirror. Data files are loaded with import.meta.env.BASE_URL.
 export default defineConfig({
   base: './',
-  plugins: [siteCodeList()],
+  plugins: [siteCodeList(), packHeightMap()],
   server: {
     // The dev server may read web/ (as before) and docs/, whose sources and AI-use notes the
     // About panel (T16) collects. Production builds read them from disk and need no setting.
