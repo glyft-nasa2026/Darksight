@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Darksight pitch</title>
+<!--
+  T17: the 7-slide deck (the Space Apps limit is seven, title and intro included).
+  Open in a browser and press the arrow keys, or print to PDF: pitch/tools/build-slides.mjs.
+  Colours are docs/design.md's palette (web/src/ui/theme.css on main), defined once in :root.
+  Every number on a slide is copied from the deployed site at 2026-11-15T03:00Z (the same hour
+  as the demo video); see pitch/checklist.md for where each one shows on the site.
+-->
+<style>
+  :root {
+    --bg: #0e1116; --panel: #171b22; --panel-2: #1f2530; --border: #303846;
+    --text: #e6e9ee; --muted: #a3acb9; --accent: #8ab4f8;
+    --ok: #7bd88f; --warn: #f2c94c; --bad: #ff8a80;
+    --scn-a: #E69F00; --scn-b: #0072B2; --scn-c: #009E73; --sun: #F0E442; --earth: #56B4E9;
+    --radius: 6px;
+    --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-num: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+    color-scheme: dark;
+  }
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+  .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; padding: 56px 72px 64px;
+    background: var(--bg); display: flex; flex-direction: column; gap: 24px; break-after: page; }
+  .kicker { font: 600 16px var(--font-num); color: var(--accent); letter-spacing: .14em; text-transform: uppercase; }
+  h1 { margin: 0; font-size: 104px; letter-spacing: .12em; line-height: 1; }
+  h2 { margin: 0; font-size: 46px; line-height: 1.15; }
+  p { margin: 0; font-size: 24px; line-height: 1.45; color: var(--muted); }
+  p.lead { color: var(--text); font-size: 30px; }
+  b, .accent { color: var(--accent); }
+  .bad { color: var(--bad); } .ok { color: var(--ok); }
+  .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .row { display: flex; gap: 40px; align-items: center; flex: 1; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 0; }
+  .shot { border: 1px solid var(--border); border-radius: var(--radius); display: block; max-width: 100%; max-height: 100%; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
+  .big { font: 700 52px var(--font-num); line-height: 1.05; white-space: nowrap; }
+  .label { font: 15px var(--font-num); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  ul { margin: 0; padding-left: 1.1em; font-size: 22px; line-height: 1.5; color: var(--muted); }
+  li strong { color: var(--text); font-weight: 600; }
+  .foot { position: absolute; left: 72px; right: 72px; bottom: 22px; display: flex; justify-content: space-between;
+    font: 13px var(--font-num); color: var(--muted); }
+  .pill { border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; background: var(--panel); }
+  .center { align-items: center; justify-content: center; text-align: center; }
+  .dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; vertical-align: .05em; margin-right: .3em; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media screen { body { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; }
+    .slide { box-shadow: 0 0 0 1px var(--border); } }
+  @media screen and (max-width: 1300px) { body { zoom: .5; } }
+</style>
+</head>
+<body>
+
+<!-- 1. Title -->
+<section class="slide center">
+  <div class="kicker">NASA Space Apps Challenge 2026 · Lunar Landing Site Navigator</div>
+  <h1>DARKSIGHT</h1>
+  <p class="lead">Compare lunar landing sites by sunlight and line of sight to Earth, against the real terrain.</p>
+  <p>Team <b>GLYFT</b>, Kuala Lumpur · Yi Hung · Leon · Yu An · Fabian · Hao Zhe</p>
+  <p class="num accent">darksight.space</p>
+  <div class="foot"><span>1 / 7</span><span class="pill">AI-assisted: drafted with Claude Code · screenshots are the real site</span></div>
+</section>
+
+<!-- 2. The problem -->
+<section class="slide">
+  <div class="kicker">The problem</div>
+  <h2>The launch slips by a day.<br>Is the landing site still a good one?</h2>
+  <div class="row">
+    <div class="col">
+      <div class="card"><div class="label"><span class="dot" style="background:var(--sun)"></span>Sunlight</div><p class="lead">Power. At the south pole the Sun skims the horizon, so a ridge can hide it for days.</p></div>
+      <div class="card"><div class="label"><span class="dot" style="background:var(--earth)"></span>Earth in view</div><p class="lead">Radio. No direct line to Earth, no contact.</p></div>
+    </div>
+    <div class="col">
+      <p class="lead">Answering it today means angles from <b>JPL Horizons</b>, terrain from <b>LROC QuickMap</b>, and a spreadsheet to line the two up.</p>
+      <p>About an hour for one site and one date, and it starts again with every change.</p>
+    </div>
+  </div>
+  <div class="foot"><span>2 / 7</span><span class="pill">AI-assisted: drafted with Claude Code · screenshots are the real site</span></div>
+</section>
+
+<!-- 3. Our answer -->
+<section class="slide">
+  <div class="kicker">Our answer</div>
+  <h2>Two scenarios compared in seconds</h2>
+  <div class="row">
+    <img class="shot" src="img/compare.png" alt="Compare table: Shackleton rim against the crater floor" style="width:620px">
+    <div class="col">
+      <p class="lead">Pick sites and dates, pin up to three, read them side by side.</p>
+      <div class="card"><div class="label">Lit, next 30 days</div>
+        <div class="big"><span class="accent">100.0 %</span> <span class="label">vs</span> <span class="bad">0.0 %</span></div>
+        <p>Shackleton rim against the crater floor beside it, 15 Nov 2026.</p></div>
+      <p>Also: countdowns to sunset and Earthset, longest dark, Earth contact, a 30-day strip per site.</p>
+    </div>
+  </div>
+  <div class="foot"><span>3 / 7</span><span class="pill">AI-assisted: drafted with Claude Code · screenshots are the real site</span></div>
+</section>
+
+<!-- 4. The nudge -->
+<section class="slide">
+  <div class="kicker">The 1 km nudge</div>
+  <h2>Move the pin 1 km. The sunlight collapses.</h2>
+  <div class="row">
+    <img class="shot" src="img/nudge.png" alt="Nudge panel after moving 1 km north from the Shackleton rim" style="width:660px">
+    <div class="col">
+      <div class="card"><div class="label">1.0 km north of the Shackleton rim</div>
+        <div class="big bad">−17 days</div><p>of sunlight in 30 days, and no Earth in the next 60 days.</p></div>
+      <p class="lead">One click on N, S, E, W, +1 day or −1 day shows the change in words.</p>
+      <p>Where to land is a question of metres. Darksight shows how sensitive a site is before anyone commits to it.</p>
+    </div>
+  </div>
+  <div class="foot"><span>4 / 7</span><span class="pill">AI-assisted: drafted with Claude Code · screenshots are the real site</span></div>
+</section>
+
+<!-- 5. Why you can trust it -->
+<section class="slide">
+  <div class="kicker">Checked against JPL Horizons</div>
+  <h2>NASA data in, every angle checked</h2>
+  <img src="img/badge.png" alt="Badge: Checked against JPL Horizons, 0.000001 degrees" style="height:40px; align-self:flex-start">
+  <div class="grid3">
+    <div class="card"><div class="label">Horizons check</div><div class="big num">0.000001°</div>
+      <p>largest difference in 18 cases (Sun and Earth, several sites and times). Tolerance 0.1°. Re-run by a test on every change.</p></div>
+    <div class="card"><div class="label">Terrain</div><div class="big num">240 m</div>
+      <p>LRO LOLA height map of the south pole; each site's skyline traced 150 km out.</p></div>
+    <div class="card"><div class="label">Sun and Earth</div><div class="big num">1900–2100</div>
+      <p>JPL DE440 through Skyfield, every 3 hours. No refraction: the Moon has no air.</p></div>
+  </div>
+  <p>One table of Sun and Earth directions serves every site; the browser does the rest. No server, nothing to install.</p>
+  <div class="foot"><span>5 / 7</span><span class="pill">AI-assisted: drafted with Claude Code · screenshots are the real site</span></div>
+</section>
+
+<!-- 6. Who it's for -->
+<section class="slide">
+  <div class="kicker">Who it's for</div>
+  <div class="row">
+    <div class="col">
+      <h2 style="font-size:38px">Mission planners, educators, the curious</h2>
+      <ul style="font-size:20px">
+        <li><strong>Planners:</strong> shortlist sites and launch dates by power and radio before detailed analysis.</li>
+        <li><strong>Teachers and students:</strong> drag time and watch the Sun circle the pole and Earth bob at the horizon, in 2D or 3D.</li>
+        <li><strong>Anyone:</strong> a share link reopens the same comparison; works on a phone.</li>
+      </ul>
+      <p style="font-size:20px">Also in the site: a planned flight from a launch pad on Earth to touchdown at the chosen site and time.</p>
+    </div>
+    <img class="shot" src="img/desktop.png" alt="Darksight on a desktop" style="width:430px">
+    <img class="shot" src="img/phone.png" alt="Darksight on a phone" style="height:500px">
+  </div>
+  <div class="foot"><span>6 / 7</span><span class="pill">AI-assisted: drafted with Claude Code · screenshots are the real site</span></div>
+</section>
+
+<!-- 7. Data, AI use, links -->
+<section class="slide">
+  <div class="kicker">Data, AI use and links</div>
+  <div class="row" style="align-items:flex-start">
+    <div class="col">
+      <h2 style="font-size:34px">NASA data and resources</h2>
+      <ul>
+        <li>LRO LOLA height maps (PDS Geosciences Node)</li>
+        <li>JPL DE440 / DE421 ephemerides and NAIF lunar kernels</li>
+        <li>JPL Horizons API: the accuracy check</li>
+        <li>NSSDCA Apollo site coordinates, LROC landing-site images</li>
+        <li>NASA GSFC lunar polar illumination map; NASA Blue Marble</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h2 style="font-size:34px">How we used AI</h2>
+      <p>The team wrote the code with AI coding assistants (Claude Code; ChatGPT for one style fix). The idea and the design are the team's. Every task keeps a public log of what the AI generated and what a person checked (tests, reading, the browser), shown in the site's About panel.</p>
+      <div class="card"><p class="lead num"><b>darksight.space</b></p><p class="num">github.com/glyft-nasa2026/Darksight</p></div>
+    </div>
+  </div>
+  <div class="foot"><span>7 / 7</span><span class="pill">AI-assisted: drafted with Claude Code · screenshots are the real site</span></div>
+</section>
+
+<script>
+  // Arrow keys step from slide to slide on screen.
+  const slides = [...document.querySelectorAll('.slide')];
+  let i = 0;
+  addEventListener('keydown', (e) => {
+    if (!['ArrowRight', 'ArrowLeft', 'PageDown', 'PageUp', ' '].includes(e.key)) return;
+    i = Math.max(0, Math.min(slides.length - 1, i + (['ArrowLeft', 'PageUp'].includes(e.key) ? -1 : 1)));
+    slides[i].scrollIntoView({ block: 'center' });
+    e.preventDefault();
+  });
+</script>
+</body>
+</html>
