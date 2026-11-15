@@ -65,8 +65,8 @@ export const CORNERS: readonly Corner[] = ['tl', 'tr', 'bl', 'br'];
 export const CORNER_NAMES: Record<Corner, string> = {
   tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right',
 };
-/** Where the panel starts. */
-export const START_CORNER: Corner = 'bl';
+/** Where the panel starts (issue #177): top left, clear of the layer icons in the top right. */
+export const START_CORNER: Corner = 'tl';
 /** Where to look next when a corner is taken: round the map clockwise from it. */
 const CLOCKWISE: readonly Corner[] = ['tl', 'tr', 'br', 'bl'];
 

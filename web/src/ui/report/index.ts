@@ -5,13 +5,18 @@
 // Every number comes from core/report.ts (built from the plan and missionAt) or from
 // ui/mission/conditions.ts, the card's own landing-site numbers. This file lays them out.
 import './report.css';
+<<<<<<< HEAD
 import { PADS, padById } from '../../core/pads';
 import {
+=======
+import { BRIEF_PAD_COUNT, PADS, padById } from '../../core/pads';
+import { LAUNCH_DV_NOTE,
+>>>>>>> origin/main
   buildReport, descentTrack, EVENT_NAMES, reportCsv, reportFileName, reportJson,
   type LandingConditions, type Report, type ReportWarning,
 } from '../../core/report';
 import type { Data, Layout } from 'plotly.js-dist-min';
-import type { OkPlan } from '../../core/mission';
+import { HIGH_GATE_KM, type OkPlan } from '../../core/mission';
 import { getState, landingScenario, missionFor, samplesFor, stateToAddress, subscribe } from '../../state';
 import { stepCells, totalsCells } from '../mission/cells';
 import { conditionStats, landingConditions, missionWarnings, planMessage } from '../mission/conditions';
@@ -248,7 +253,7 @@ export function mount(el: HTMLElement): void {
       }),
       { cls: 'rp-schedule' },
     );
-    const star = make('p', 'muted rp-note', '* Ideal, without gravity and drag losses: the launch vehicle is not modelled. — means the model gives no number there.');
+    const star = make('p', 'muted rp-note', `${LAUNCH_DV_NOTE} — means the model gives no number there.`);
 
     // 3. Key events
     const events = table(
@@ -288,7 +293,7 @@ export function mount(el: HTMLElement): void {
       ['Descent start', o.descentStartRaised
         ? `${kmText(o.descentStartAltKm)}: raised from 15 km, the engine is too weak to stop from there`
         : kmText(o.descentStartAltKm)],
-      ['Throttle, held', pctText(o.throttle)],
+      ['Descent phases', `braking at full thrust to ${kmText(HIGH_GATE_KM)}, then throttled to the ground`],
       ['Descent range', kmText(o.descentRangeKm)],
       ['Touchdown speed', speedText(o.touchdownSpeedKmS)],
     ]);

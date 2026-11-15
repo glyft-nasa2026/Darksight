@@ -3,8 +3,8 @@
 // grey "Before" scenario; Undo goes back to it. Every number comes from core/ through state.ts.
 //
 // The panel is plain HTML floating over the map (the scene makes the #nudge slot inside its
-// viewport), never drawn in the canvas. It starts folded (most visits don't need it), in the bottom
-// left corner; one button moves it round the corners, top left, top right, bottom left, bottom
+// viewport), never drawn in the canvas. It starts folded (most visits don't need it), in the top
+// left corner (issue #177); one button moves it round the corners, top left, top right, bottom left, bottom
 // right, skipping a corner the map's own controls claim (an element there with data-map-corner).
 import './nudge.css';
 import { destination } from '../../core/geometry';
