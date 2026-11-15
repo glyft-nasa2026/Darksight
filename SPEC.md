@@ -143,7 +143,7 @@ Every decision below has its answer (checked 15 Nov 2026, T26).
 
 | Decision | Who | Importance | Answer |
 |---|---|---|---|
-| Submission deadline and Saturday start time, Malaysia time | Team | blocks the schedule | Submit by Sunday 15 Nov 2026, 23:59 Kuala Lumpur time (UTC+8), so M3 is 18:59 that day. Source: NASA's Project Submission Guide dated 13 Nov 2026, read on 15 Nov in T17's `pitch/checklist.md` (pull request #130). The Saturday start time is no longer needed: work started on Saturday 14 Nov |
+| Submission deadline and Saturday start time, Malaysia time | Team | blocks the schedule | Submit by Sunday 15 Nov 2026, 22:00 Kuala Lumpur time (UTC+8), so M3 is 17:00 that day (Yi Hung, 15 Nov 2026). Don't work to 23:59, the time T17's `pitch/checklist.md` (pull request #130) read from NASA's Project Submission Guide. The Saturday start time is no longer needed: work started on Saturday 14 Nov |
 | Team agrees the cut line (refraction and GPS removed) | All | blocks T08 onward | Agreed on 14 Nov 2026: refraction and GPS removed (`docs/decisions.md`). On 15 Nov landing trajectories moved from Out to If time as F20 and F21; thermal models stay Out (section 2) |
 | Project name | Team | cosmetic | Darksight, at darksight.space (`docs/decisions.md`, 14 Nov 2026) |
 | Repo made public (GitHub refuses the branch rule and Pages on a private repo in a free organisation) | Whoever takes T21, with repository settings access | blocks T21 | Public, with the MIT licence (`gh repo view`, 15 Nov 2026) |

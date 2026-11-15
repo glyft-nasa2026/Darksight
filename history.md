@@ -11,7 +11,8 @@ coordinate overlapping edits.
 - Was: eight rows with a decision, who and importance, and no answer. The load-time row said
   "proposed, not yet agreed".
 - Now each row has an Answer column, taken from `docs/decisions.md`, T17's `pitch/checklist.md`
-  (pull request #130), T22's status and `docs/load-time.md`. The Figma seat row is struck out:
+  (pull request #130), T22's status and `docs/load-time.md`. The deadline is 22:00, from Yi
+  Hung; the checklist's 23:59 (NASA's guide) was written in first and corrected the same day. The Figma seat row is struck out:
   T22 made its pictures with no Figma file.
 - Why: T26 step 5. At the freeze no decision stays open.
 
