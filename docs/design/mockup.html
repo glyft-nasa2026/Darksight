@@ -20,6 +20,7 @@
     ?view=cvd        scenario, Sun and Earth colours under colour-blind simulation
     ?slot=mission    the mission card (T34, proposal), 1232 wide  -> mission.png
     ?slot=mission&view=phone   the same at the phone's width -> mission-phone.png
+    ?slot=report     the mission report's first printed page (T35), A4 in the print colours -> report.png
   Mock-up numbers are made up. Every number on the real site comes from web/src/core/.
 -->
 <html lang="en">
@@ -405,6 +406,31 @@ body.slot #app > #scenarios.show { display: grid; }
 body.slot #app > #about.show { display: flex; }
 body.slot #app > #panel.show { display: grid; }
 body.slot #app > #mission.show { display: grid; }
+body.slot #app > #report.show { display: block; }
+
+/* ---------- report (T35): an A4 page in the print colours (web/src/ui/theme.css, @media print) ---------- */
+#report {
+  --bg: #ffffff; --panel: #ffffff; --panel-2: #eef1f5; --border: #808a97;
+  --text: #14181f; --muted: #4a5361; --accent: #1f5bb5; --ok: #1b7a34; --warn: #8a5a00; --bad: #b42318;
+  color-scheme: light; background: var(--bg); color: var(--text);
+  width: 210mm; min-height: 297mm; padding: 1.6cm 1.4cm 1.8cm; position: relative; font-size: 75%;
+}
+#report .pg-head, #report .pg-foot { position: absolute; left: 1.4cm; right: 1.4cm; font-size: var(--fs-sm); color: var(--muted); }
+#report .pg-head { top: 0.6cm; }
+#report .pg-foot { bottom: 0.6cm; text-align: right; font-family: var(--font-num); }
+#report h1 { font-size: var(--fs-lg); margin-bottom: var(--space-2); }
+#report h2 { font-size: var(--fs-md); font-weight: 600; border-bottom: thin solid var(--border); padding-bottom: var(--space-1); margin: var(--space-4) 0 var(--space-2); }
+#report .rp-badges { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); }
+#report .badge { background: var(--bg); }
+#report .rp-ok { color: var(--ok); border-color: var(--ok); }
+#report dl { display: grid; gap: var(--space-2); margin: 0; }
+#report dt { font-size: var(--fs-sm); color: var(--muted); }
+#report dd { margin: 0; font-family: var(--font-num); }
+#report .under { display: block; font-size: var(--fs-sm); color: var(--muted); }
+#report table { font-size: var(--fs-sm); }
+#report th, #report td { padding: var(--space-1) var(--space-2); vertical-align: top; white-space: nowrap; }
+#report td.wrap { white-space: normal; }
+#report .note { font-size: var(--fs-sm); color: var(--muted); margin-top: var(--space-1); }
 
 /* ---------- extra sheets ---------- */
 .sheet { padding: var(--space-5); display: grid; gap: var(--space-5); width: 1280px; }
@@ -696,6 +722,36 @@ body.slot #app > #mission.show { display: grid; }
     </div>
     <p class="muted ms-model">* Ideal, without gravity and drag losses. Model: patched conics from Earth to the Moon, instant burns, a 100 km circular polar lunar orbit, a gravity-turn powered descent; phase times from Apollo 11; launch window not solved.</p>
   </section>
+
+  <article id="report" aria-label="Mission report, first printed page">
+    <div class="pg-head">Darksight mission report · Shackleton rim · touchdown 2026-11-21 16:04 UTC</div>
+    <h1>Mission report · Shackleton rim</h1>
+    <div class="rp-badges"><span class="badge rp-ok">Ready</span><span class="badge">Planning model · not a flight-dynamics solution</span></div>
+    <dl>
+      <div><dt>Landing site</dt><dd>Shackleton rim · 89.6866° S · 162.8100° W<span class="under">Touchdown 2026-11-21 16:04 UTC</span></dd></div>
+      <div><dt>Launch</dt><dd>Kennedy Space Center · LC-39A, United States · 28.6083° N · 80.6044° W<span class="under">Launch 2026-11-17 09:24 UTC</span></dd></div>
+      <div><dt>Mission length</dt><dd>4 d 7 h</dd></div>
+      <div><dt>Lander</dt><dd>1,908 kg after TLI · 675 kg dry · Isp 320 s · thrust 3,100 N (example lander)</dd></div>
+      <div><dt>Phase lengths</dt><dd>ascent 11 min 39 s · parking orbit 2 h 33 min · coast 3 d 1 h · lunar orbit 1 d 2 h (Apollo 11’s)</dd></div>
+      <div><dt>Report made</dt><dd>2026-11-15 06:56 UTC · data: JPL DE440 and LRO LOLA</dd></div>
+      <div><dt>Share link</dt><dd><a href="#">https://darksight.space/mission.html#land=-89.6866,-162.81,2026-11-21T16:04:00Z</a></dd></div>
+    </dl>
+    <h2>1 · Flight schedule</h2>
+    <table class="table">
+      <thead><tr><th>#</th><th>Phase · where</th><th>Start (UTC) · T+</th><th>Takes</th><th>Δv</th><th>Burn</th><th>Propellant</th><th>Mass after</th></tr></thead>
+      <tbody>
+        <tr><td>01</td><td class="wrap">Launch, to 185 km<span class="under">Kennedy · LC-39A → 185 km orbit, inclined 28.6°</span></td><td>2026-11-17 09:24<span class="under">T+ 00:00:00</span></td><td>11 min 39 s<span class="under">to 2026-11-17 09:35</span></td><td>7.38 km/s*</td><td>launch vehicle</td><td>—</td><td>—</td></tr>
+        <tr><td>03</td><td class="wrap">Translunar injection<span class="under">At 185 km · transfer apogee 487,519 km</span></td><td>2026-11-17 12:08<span class="under">T+ 02:44:16</span></td><td>—</td><td>3.15 km/s</td><td>launch vehicle</td><td>—</td><td>1,908 kg</td></tr>
+        <tr><td>05</td><td class="wrap">Lunar orbit insertion<span class="under">100 km polar lunar orbit · over 26.0903° N · 31.9756° E</span></td><td>2026-11-20 13:08<span class="under">T+ 3 d 03:43:53</span></td><td>—</td><td>0.91 km/s</td><td>8 min 7 s</td><td>481 kg</td><td>1,427 kg</td></tr>
+        <tr><td>09</td><td class="wrap">Powered descent<span class="under">From 74.4 km · 528.0 km to the site</span></td><td>2026-11-21 15:52<span class="under">T+ 4 d 06:28:34</span></td><td>11 min 12 s<span class="under">to 2026-11-21 16:04</span></td><td>1.97 km/s</td><td>11 min 12 s</td><td>663 kg</td><td>761 kg</td></tr>
+        <tr><td>10</td><td class="wrap">Touchdown<span class="under">At the site · 0.7 m/s</span></td><td>2026-11-21 16:04<span class="under">T+ 4 d 06:39:45</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>761 kg</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Rows 02, 04, 06 to 08 left out of the picture. * Ideal, without gravity and drag losses. — means the model gives no number there.</p>
+    <h2>2 · Key events</h2>
+    <p class="note">Then: key events, the coast every 12 h, totals and orbits, the powered descent (chart and a table every 30 s), the landing site at touchdown, the first 30 days on the surface, warnings, model and sources. Headers repeat on every page; no row splits across pages.</p>
+    <div class="pg-foot">Page 1 of 4</div>
+  </article>
 </div>
 
 <div id="extra"></div>
@@ -821,9 +877,9 @@ if (slot) {
   document.body.classList.add('slot');
   const el = document.getElementById(slot);
   // keep the slot at the width it has on the 1280 desktop
-  const widths = { about: 1280, scene: 1280 - 48 - 16 - 384, readout: 384, nudge: 384 };
+  const widths = { report: 0, about: 1280, scene: 1280 - 48 - 16 - 384, readout: 384, nudge: 384 };
   el.classList.add('show');
-  el.style.width = (view === 'phone' ? 390 - 24 : widths[slot] || 1280 - 48) + 'px';
+  if (slot !== 'report') el.style.width = (view === 'phone' ? 390 - 24 : widths[slot] || 1280 - 48) + 'px';
   if (slot === 'about') { el.style.margin = '0'; }
   if (slot === 'scene') { el.style.height = '36rem'; }
   app.style.width = 'auto';

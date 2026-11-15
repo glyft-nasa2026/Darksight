@@ -374,6 +374,7 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
 | `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `approachSeconds(plan)`, `hyperbolaAt`, `hyperbolaTimeToRadius`, `MOON_SOI_KM` (the arrival hyperbola round the Moon, from its sphere of influence to LOI; `missionAt` gives `approach: true` and a `moonPlane` point there, with altitude and speed above the Moon) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent`, `planDescent`, `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`. A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent; times run back from touchdown with Apollo 11's phase lengths |
+| `report.ts` | T35 | `buildReport(plan, context): Report` (the mission report as plain data: every phase with T+ and the point under the craft, the key events, the coast every 12 h, the totals and orbits, the powered descent every 30 s, the landing site's numbers and warnings as the mission card shows them, the first 30 days' periods, the model's limits and sources) · `reportJson(report)` (the JSON download, schema below) · `reportCsv(report)` (the flight schedule, one row per phase) · `reportFileName(report, 'json' | 'csv')` (`darksight-mission-<site id or coordinates>-<touchdown like 2026-11-21T1604Z>.<ext>`) · `descentTrack(plan, stepS)`, `missionEvents(plan)`, `coastTrack(plan, stepH)`, `periods(samples, body)` (up and down runs with `summary()`'s rules) · `PHASE_NAMES`, `EVENT_NAMES`, `MODEL_LIMITS`, `REPORT_SOURCES`, `REPORT_SCHEMA`. Every number from `missionAt` and the plan; the landing site's numbers come in from `ui/mission/conditions.ts` |
 | `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false, checking = false): string` |
 
 **First pass** means T00 writes the function straight from the formulas below, with a few sanity
@@ -583,8 +584,37 @@ with the same page address; its "Back to landing sites" returns to the site's ta
 (a pop-up with a satellite globe of Earth and the pads, `web/src/ui/launch/`); confirming a pad
 opens the second page, `web/simulation.html` (`web/src/simulation/`), in a new tab (the current
 tab if a pop-up blocker stops it), with the same page address, so it plans the same mission through `missionFor()`. That page draws the mission in 3D
-from `missionAt` only and links back to the mission page with the address it has. Vite builds all
-three pages (`vite.config.ts`, `build.rolldownOptions.input`).
+from `missionAt` only and links back to the mission page with the address it has. "Generate full
+launch schedule" on the card opens the fourth page, `web/report.html` (`web/src/reportPage/`,
+`ui/report`), the same way: the mission report (T35), built from the same `missionFor()` plan, with
+print (or save as PDF) and JSON and CSV downloads made in the browser. Only `#report` prints. The
+card and the report take their table cells, landing-site numbers, warnings and "no plan" messages
+from `ui/mission/cells.ts` and `ui/mission/conditions.ts`, so the two show the same numbers. Vite
+builds all four pages (`vite.config.ts`, `build.rolldownOptions.input`).
+
+**The report's JSON (`reportJson`, schema `darksight-mission-report/1`).** Units are in the key
+names (`_ms` metres a second, `_s` seconds, `_km`, `_kg`, `_deg`, `_pct`); times are ISO 8601 with
+`Z` (to the millisecond; `met_s`, `met_start_s` and `duration_s` carry the exact seconds); numbers
+are not rounded; a value the model doesn't give is `null`, never 0. Top level: `schema`,
+`generated_utc`, `data` (`ephemeris`, `terrain`: the files' source lines; `mock`), `share_link`,
+`site` (`id` or null, `name`, `lat_deg`, `lon_deg`), `pad` (`id`, `name`, `pad`, `country`,
+`lat_deg`, `lon_deg`, `checked`), `lander` (`mass_after_tli_kg`, `dry_mass_kg`, `isp_s`,
+`thrust_n`, `example`), `phase_times_s` (`ascent`, `parking_orbit`, `translunar_coast`,
+`lunar_orbit`, `apollo_11`), `launch_utc`, `touchdown_utc`, `duration_s`, `touchdown_reached`,
+`phases[]` (`n`, `id`, `name`, `by`, `start_utc`, `end_utc`, `met_start_s`, `duration_s`,
+`dv_ms`, `burn_s`, `propellant_kg`, `mass_after_kg`, `alt_km`, `body`, `lat_deg`, `lon_deg`),
+`events[]` (`id`, `name`, `utc`, `met_s`, `near`, `alt_km`, `speed_ms`, `propellant_left_kg`,
+`to_touchdown_s`), `coast[]` (the same point keys), `totals` (`launch_vehicle_dv_ms`,
+`lander_dv_ms`, `propellant_loaded_kg`, `propellant_used_kg`, `propellant_left_kg`, `margin_pct`,
+`mass_at_touchdown_kg`), `orbit`, `descent` (`start_utc`, `duration_s`, `dv_ms`, `propellant_kg`,
+`samples[]`: `t_s`, `utc`, `alt_km`, `speed_ms`, `range_to_go_km`, `propellant_left_kg`),
+`site_at_touchdown` (or null: `sun` and `earth` with `alt_deg`, `az_deg`, `above_skyline_deg`,
+the Sun's `disc_visible_pct` and `up`, Earth's `visible`; `next_sun_flip`, `next_earth_flip`;
+`sun_text`, `earth_text`; `summary_30d`; `terrain_skyline`), `surface_periods[]` (`body`, `up`,
+`start_utc`, `end_utc`, `duration_s`), `warnings[]` (`code`, `level`, `text`), `model[]`,
+`sources[]` (`name`, `url`). The CSV has the header row
+`n,phase_id,phase,by,start_utc,end_utc,met_start_s,duration_s,dv_ms,burn_s,propellant_kg,mass_after_kg,alt_km,lat_deg,lon_deg`,
+an empty cell for null, ASCII only.
 
 `#about` is a thin bar across the top: the product name, the Horizons badge and an About button
 that opens the About panel. On desktop `#scenarios` sits beside `#scene` with `#panel` under it,
@@ -631,6 +661,12 @@ changes the values; the names stay.
 | `--fs-sm`, `--fs-md`, `--fs-lg`, `--fs-xl` | Type sizes |
 
 Shared classes: `.card`, `.btn`, `.btn-primary`, `.field`, `.table`, `.badge`, `.muted`.
+
+**On paper (T35).** Under `@media print` the same names get light values (white page, dark text;
+the scenario, Sun and Earth colours stay fixed), so a printed page doesn't waste ink and keeps its
+contrast when the browser drops background colours. `:root.print-colours` holds the same values,
+for a picture drawn for paper while the screen is still dark (the report's descent chart);
+`ui/printColours.test.ts` keeps the two blocks the same.
 
 In the strips, a scenario keeps its own colour for both bars; the Sun bar is solid and the Earth
 bar is the same colour at half strength. `--sun` and `--earth` are for single-scenario charts

@@ -28,6 +28,7 @@ exists, paste its link here: _(link to come)_.
 | `loading.png`, `hero.png` | Brief frames 1 and 2. **Proposals only**: they aren't slots (see "Needs team decision") |
 | `cvd.png` | Scenario, Sun and Earth colours under protanopia, deuteranopia, tritanopia |
 | `mission.png` `mission-phone.png` | **Proposal (T34), pending the team's agreement.** The mission card from brief pages 4 to 7: launch and landing cards, pad and lander inputs, the animation with its live line and controls, the five flight-sequence cards, the telemetry table and the landing site at touchdown. On a phone the animation comes first. Its numbers are `core/mission.ts`'s for one example mission. `scenarios.png` now also shows the "Land here" button and the pressed "Landing site" one |
+| `report.png` | **T35.** The mission report's first printed page: A4, in the print colours (`theme.css` under `@media print`), the page header with the mission's name and the page number at the foot. Title block, then the flight schedule with each phase's "where" under its name and T+ under its start. The brief's page 8 is only a placeholder, so this is the design. On screen the report is the same layout on the dark theme, one column on a phone |
 
 Mock-up numbers are made up. Nobody copies an angle or a time from a picture into code.
 
