@@ -1,4 +1,5 @@
-// T37: the terrain words (ui/terrain.ts), for each grid and for a smooth Moon on either side of 85 S.
+// T37: the terrain words (ui/terrain.ts), for each grid, for a walk that passes a polar map's edge,
+// and for a smooth Moon on either side of 85 S.
 import { describe, expect, it } from 'vitest';
 import type { Skyline } from '../core/types';
 import { cellText, terrainCaption, terrainNote, terrainShort } from './terrain';
@@ -18,6 +19,25 @@ describe('terrain words', () => {
     expect(terrainShort(sky('dem', 240), polar, 'ready')).toBe('Terrain from LOLA, 240 m cells');
     expect(terrainNote(sky('dem', 240), polar, 'loading')).toBe('');
     expect(terrainCaption(sky('dem', 240), polar, 'ready')).toBe('Terrain skyline from LOLA heights, 240 m cells');
+  });
+
+  it('between 80 S and 85 S: the 240 m map, and the coarser cells past its edge are named', () => {
+    const s: Skyline = { ...sky('dem', 240), outer: { lat: -80, cellM: 3790.6 } };
+    const im2 = { lat: -84.7906, lon: 29.1957 };
+    expect(terrainShort(s, im2, 'ready')).toBe('Terrain from LOLA, 240 m cells (3.8 km cells north of 80° S)');
+    expect(terrainNote(s, im2, 'ready')).toBe(terrainShort(s, im2, 'ready'));
+    expect(terrainCaption(s, im2, 'ready')).toBe('Terrain skyline from LOLA heights, 240 m cells (3.8 km cells north of 80° S)');
+  });
+
+  it('north of 80 N: the 1.2 km map is named, with the coarser cells past its edge where the walk can reach them', () => {
+    const near = sky('north', 1200);
+    const site = { lat: 88.42, lon: -116.87 };
+    expect(terrainShort(near, site, 'ready')).toBe('Terrain from LOLA, 1.2 km cells');
+    expect(terrainNote(near, site, 'ready')).toBe('Terrain from LOLA, 1.2 km cells');
+    expect(terrainCaption(near, site, 'ready')).toBe('Terrain skyline from LOLA heights, 1.2 km cells');
+    const band: Skyline = { ...near, outer: { lat: 80, cellM: 3790.6 } };
+    expect(terrainShort(band, { lat: 82, lon: 0 }, 'ready')).toBe('Terrain from LOLA, 1.2 km cells (3.8 km cells south of 80° N)');
+    expect(terrainCaption(band, { lat: 82, lon: 0 }, 'ready')).toBe('Terrain skyline from LOLA heights, 1.2 km cells (3.8 km cells south of 80° N)');
   });
 
   it('coarse terrain says so, with its cell size, everywhere', () => {

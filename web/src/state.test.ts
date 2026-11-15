@@ -42,7 +42,7 @@ function circlingSun(days: number): Ephemeris {
 
 beforeEach(() => {
   restoreFromAddress('', T0);
-  setData({ eph: null, dem: null, sites: [], globe: null });
+  setData({ eph: null, dem: null, sites: [], globe: null, north: null });
 });
 
 describe('start', () => {
@@ -485,6 +485,52 @@ describe('cached accessors', () => {
       restoreFromAddress('', T0);
       expect(getState().globe).toBe(g);
       expect(getState().globeStatus).toBe('ready');
+    });
+
+    // A polar map that reaches 80 degrees, as dem.bin does and north.bin (mirrored) does.
+    const capMap = (): ReturnType<typeof parseDem> => parseDem({
+      size: 64, pixel_m: 10_000, x_min_m: -315_000, y_max_m: 315_000, height_scale: 1, nodata: -32768,
+      min_lat: -80, source: 'made up for a test',
+    }, new ArrayBuffer(64 * 64 * 2));
+    const band: Scenario = { id: 'b', label: 'B', color: '--scn-c', site: { lat: -84.79, lon: 29.2 }, tMs: T0 };
+    const cap: Scenario = { id: 'c', label: 'C', color: '--scn-c', site: { lat: 88.4, lon: -116.9 }, tMs: T0 };
+
+    it('a site between 80 S and 85 S is a smooth Moon until globe.bin arrives, then dem.bin with globe.bin past 80 S', () => {
+      setData({ dem: capMap() });
+      expect(skylineFor(band).terrain).toBe(false);
+      setData({ globe: globeOf(500) });
+      const sky = skylineFor(band);
+      expect([sky.grid, sky.cellM, sky.outer?.lat]).toEqual(['dem', 10_000, -80]);
+      expect(skylineFor(polar).outer).toBeUndefined();
+    });
+
+    it('north.bin handed over with globe.bin gives a site north of 80 N the finer grid; without it, the coarse one', () => {
+      setData({ dem: capMap() });
+      setData({ globe: globeOf(500), north: capMap() });
+      expect(getState().north).not.toBeNull();
+      expect([skylineFor(cap).grid, skylineFor(cap).cellM]).toEqual(['north', 10_000]);
+      expect(skylineFor(north).grid).toBe('globe');
+      setData({ globe: globeOf(500), north: null });
+      expect(skylineFor(cap).grid).toBe('globe');
+    });
+
+    it('north.bin arriving by itself replaces the northern skylines and keeps the polar sites\' cached results', () => {
+      setData({ eph: circlingSun(60), dem: capMap() });
+      setData({ globe: globeOf(500) });
+      const polarSky = skylineFor(polar), capSky = skylineFor(cap);
+      const polarSamples = samplesFor(polar, '30d');
+      expect(capSky.grid).toBe('globe');
+      setData({ north: capMap() });
+      expect(skylineFor(cap).grid).toBe('north');
+      expect(skylineFor(polar)).toBe(polarSky);
+      expect(samplesFor(polar, '30d')).toBe(polarSamples);
+    });
+
+    it('a pasted link keeps the loaded north.bin', () => {
+      const n = capMap();
+      setData({ globe: globeOf(0), north: n });
+      restoreFromAddress('', T0);
+      expect(getState().north).toBe(n);
     });
   });
 

@@ -111,7 +111,7 @@ export type Facts = {
   earthUp: boolean;
   sunFlip: Flip;       // flipFor: next rise or set within 60 days, or null
   earthFlip: Flip;
-  grid: TerrainGrid | null;    // T37: skylineFor(...).grid: 240 m, 3.8 km, or null for a smooth Moon
+  grid: TerrainGrid | null;    // T37: skylineFor(...).grid: 240 m, 1.2 km, 3.8 km, or null for a smooth Moon
 };
 
 export type Tone = 'ok' | 'bad' | 'muted';
@@ -183,18 +183,19 @@ function flipLine(upL: boolean, upG: boolean, fL: Flip, fG: Flip, w: Words): Lin
 
 /** Shown in place of the comparison when the two points' skylines come from different terrain models. */
 export const ACROSS_EDGE =
-  'This step crosses 85° S, where the terrain model changes: one point uses the 240 m polar height '
-  + 'map, the other the 3.8 km whole-Moon map or a smooth Moon. The difference between them is the '
-  + 'model changing, not the ground.';
+  'This step crosses the edge of a height map, where the terrain model changes: one point uses a '
+  + 'polar height map (240 m or 1.2 km cells), the other the 3.8 km whole-Moon map or a smooth Moon. '
+  + 'The difference between them is the model changing, not the ground.';
 
 /**
  * The difference in plain words, the most important first. `note` names the terrain when it
  * isn't the detailed polar map (T37, ui/terrain.ts terrainNote): coarse, or a smooth Moon and why.
  */
 export function compare(live: Facts, ghost: Facts, note = ''): Line[] {
-  // Across the edge of a terrain model the two skylines aren't the same kind of thing: a step
-  // of 1 km north from 85.01 S read as "+11.5 days of sunlight" when the far side was a smooth
-  // Moon, and a 240 m skyline against a 3.8 km one is no fairer. No gain or loss is claimed.
+  // Across the edge of a terrain model (80 S, 80 N, or 85 S while globe.bin is not in) the two
+  // skylines aren't the same kind of thing: a step of 1 km north from 85.01 S read as "+11.5 days
+  // of sunlight" when the far side was a smooth Moon, and a 240 m skyline against a 3.8 km one is
+  // no fairer. No gain or loss is claimed.
   if (live.grid !== ghost.grid) return [{ text: ACROSS_EDGE, tone: 'muted' }];
   const lines: Line[] = [];
   const add = (l: Line | null): void => {
