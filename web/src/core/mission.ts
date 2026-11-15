@@ -39,6 +39,8 @@ export const PARKING_ALT_KM = 185;
 export const LUNAR_ORBIT_ALT_KM = 100;
 /** The lowest descent start, km: periapsis of the descent orbit (the brief and Apollo). */
 export const DESCENT_START_ALT_KM = 15;
+/** The Moon's sphere of influence, km: a (m/M)^(2/5) with a = 384,400 km. Inside it the craft is drawn on its arrival hyperbola. */
+export const MOON_SOI_KM = 66_100;
 
 /** How long each phase takes before the burns, in seconds. */
 export type MissionTimes = { ascentS: number; parkingS: number; coastS: number; lunarOrbitS: number };
@@ -96,6 +98,33 @@ function trueAnomaly(E: number, e: number): number {
 function timeToRadius(mu: number, a: number, e: number, r: number): number {
   const E = Math.acos(clamp1((1 - r / a) / e));
   return (E - e * Math.sin(E)) / Math.sqrt(mu / a ** 3);
+}
+
+/**
+ * Seconds from periapsis to radius r on a hyperbola round a body of gravity mu, with periapsis
+ * rp and speed at infinity vInf (km/s). Patched conics: the arrival at the Moon.
+ */
+export function hyperbolaTimeToRadius(mu: number, rp: number, vInf: number, r: number): number {
+  const a = mu / vInf ** 2;            // |a|
+  const e = 1 + rp / a;
+  const H = Math.acosh(Math.max(1, (r / a + 1) / e));
+  return (e * Math.sinh(H) - H) / Math.sqrt(mu / a ** 3);
+}
+
+/** Position on that hyperbola t seconds from periapsis (negative before it): radius, true anomaly, speed. */
+export function hyperbolaAt(mu: number, rp: number, vInf: number, tS: number): { r: number; nu: number; speedKmS: number } {
+  const a = mu / vInf ** 2;
+  const e = 1 + rp / a;
+  const M = Math.sqrt(mu / a ** 3) * tS;
+  let H = Math.asinh(M / e);
+  for (let i = 0; i < 50; i++) {
+    const step = (e * Math.sinh(H) - H - M) / (e * Math.cosh(H) - 1);
+    H -= step;
+    if (Math.abs(step) < 1e-13) break;
+  }
+  const r = a * (e * Math.cosh(H) - 1);
+  const nu = 2 * Math.atan(Math.sqrt((e + 1) / (e - 1)) * Math.tanh(H / 2));
+  return { r, nu, speedKmS: Math.sqrt(vInf ** 2 + (2 * mu) / r) };
 }
 
 export type Transfer = {
@@ -580,7 +609,8 @@ export type MissionState = {
   speedKmS: number;                        // relative to that body
   propellantLeftKg: number;                // the lander's
   earthPlane: { craft: [number, number]; moon: [number, number] };   // km, Earth at the origin
-  moonPlane: [number, number] | null;      // km, Moon at the origin, the site at (0, R_MOON)
+  moonPlane: [number, number] | null;      // km, Moon at the origin, the site at (0, R_MOON); from SOI entry on
+  approach: boolean;                       // on the arrival hyperbola, inside the Moon's sphere of influence
   ground: { lat: number; lon: number } | null;   // the point under the craft, Moon-fixed
   rangeToGoKm: number | null;              // during and after the powered descent
 };
@@ -641,6 +671,7 @@ export function missionAt(plan: OkPlan, tMs: number): MissionState {
     propellantLeftKg: loaded,
     earthPlane: { craft: [0, 0], moon },
     moonPlane: null,
+    approach: false,
     ground: null,
     rangeToGoKm: null,
   };
@@ -669,6 +700,18 @@ export function missionAt(plan: OkPlan, tMs: number): MissionState {
     }
     state.altKm = r - R_EARTH;
     state.earthPlane.craft = [r * Math.cos(angle), r * Math.sin(angle)];
+    // Inside the Moon's sphere of influence: the arrival hyperbola round the Moon, in the lunar
+    // orbit's plane, its periapsis the LOI point. Altitude and speed are the Moon's from here.
+    const fromLoiS = (t - loi) / 1000;
+    if (t >= tli && -fromLoiS <= approachSeconds(plan)) {
+      const h = hyperbolaAt(MU_MOON, g.rOrbit, plan.orbit.vInfKmS, fromLoiS);
+      const phi = g.thetaDoi - g.nOrbit * ((doi - loi) / 1000) + h.nu;
+      state.near = 'moon';
+      state.approach = true;
+      state.altKm = h.r - R_MOON;
+      state.speedKmS = h.speedKmS;
+      state.moonPlane = [h.r * Math.cos(phi + Math.PI / 2), h.r * Math.sin(phi + Math.PI / 2)];
+    }
     return state;
   }
 
@@ -737,4 +780,9 @@ export function moonFixedInPlane(plan: OkPlan, tMs: number, latDeg: number, lonD
   ];
   const dot = (a: number[], b: readonly number[]): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   return [-r * dot(u, travel), r * dot(u, site), r * dot(u, normal)];
+}
+
+/** Seconds the arrival hyperbola takes from the Moon's sphere of influence to the LOI burn. */
+export function approachSeconds(plan: OkPlan): number {
+  return hyperbolaTimeToRadius(MU_MOON, plan.geometry.rOrbit, plan.orbit.vInfKmS, MOON_SOI_KM);
 }

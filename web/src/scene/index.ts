@@ -16,7 +16,7 @@ import { makeStarField } from './stars';
 import { mount as mountMap, unmount as unmountMap } from '../map';
 import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import {
-  detailBounds, edgeHeight, globeGeometry, NORTH_RELIEF, northGeometry, recolorTerrain, restretchTerrain, setTerrainHole,
+  detailBounds, drawnDemHeight, edgeHeight, globeGeometry, NORTH_RELIEF, northGeometry, recolorTerrain, restretchTerrain, setTerrainHole,
   terrainGeometry, type GridBounds,
 } from './terrain';
 import { colorTexture, GLOBE_RELIEF, globeNormalNear, normalTexture, sharedGlobe, sharedNorth, type GlobeHeights } from './globe';
@@ -446,8 +446,8 @@ export function mount(el: HTMLElement): void {
    * the north cap or the level-of-detail patch, and the bare sphere anywhere else.
    */
   function drawnHeight(site: Site): number {
-    if (dem?.covers(site.lat, site.lon)) return dem.heightAt(site.lat, site.lon);
-    if (northMesh && north?.covers(-site.lat, site.lon)) return north.heightAt(-site.lat, site.lon);
+    if (dem?.covers(site.lat, site.lon)) return drawnDemHeight(dem, site.lat, site.lon);
+    if (northMesh && north?.covers(-site.lat, site.lon)) return drawnDemHeight(north, -site.lat, site.lon);
     return patchMesh ? patchLiftAt(patchMesh.geometry, site.lat, site.lon) * 1000 : 0;
   }
   function clearPins(): void {

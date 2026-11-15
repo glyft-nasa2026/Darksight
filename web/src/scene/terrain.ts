@@ -59,6 +59,27 @@ function capAngle(meta: DemMeta): number {
   return Math.max(0, Math.min((90 - Math.abs(meta.min_lat)) * RAD, gridColat) - overlap);
 }
 
+/** Degrees over which a polar mesh's ground eases down to the sphere toward its edge (issue #114). */
+export const CAP_FADE_DEG = 1;
+
+/**
+ * The share of its height a polar height map's ground is drawn with at `lat` (issue #114): 1
+ * inside, easing to 0 where the globe's opening ends (capAngle), so the mesh meets the sphere,
+ * and the level-of-detail patch, whose edge also lies on the sphere, with no step or crack.
+ * The band is narrower on a grid too small for a whole degree.
+ */
+export function capWeight(meta: DemMeta, lat: number): number {
+  const open = capAngle(meta) / RAD;
+  const t = (open - (90 - Math.abs(lat))) / Math.min(CAP_FADE_DEG, open / 4);
+  if (!(t > 0)) return 0;
+  return t >= 1 ? 1 : t * t * (3 - 2 * t);
+}
+
+/** A polar height map's height at (lat, lon) as the 3D scene draws it, in metres: see capWeight. */
+export function drawnDemHeight(dem: Dem, lat: number, lon: number): number {
+  return dem.heightAt(lat, lon) * capWeight(dem.meta, lat);
+}
+
 function withGlobeUv(geometry: SphereGeometry): SphereGeometry {
   mapGlobeUv(geometry);
   return geometry;
@@ -98,6 +119,7 @@ export function setTerrainHole(geometry: BufferGeometry, hole?: GridBounds): voi
 
 /** A curved, indexed mesh. UVs map back to the full DEM, including for the detail patch.
  * Height, size, spacing and coverage all come from the loader, never a dataset-specific constant.
+ * Colours follow the real heights; the shape eases down to the sphere at the edge (capWeight).
  */
 export function terrainGeometry(
   dem: Dem, low: Color, high: Color, stretch = 1, bounds?: GridBounds, hole?: GridBounds,
@@ -110,9 +132,15 @@ export function terrainGeometry(
   const rows = Math.ceil((b.row1 - b.row0) / stride) + 1;
   const count = cols * rows;
   const positions = new Float32Array(count * 3);
+  /** The ground at its full height, which the normals are taken from (see capWeight). */
+  const lit = new Float32Array(count * 3);
   const uvs = new Float32Array(count * 2);
   const heights = new Float32Array(count);
+  /** Each point's capWeight: heights give the colours and light, heights times weights the shape. */
+  const weights = new Float32Array(count);
   const valid = new Uint8Array(count);
+  const fullHeight = (lat: number, lon: number): number => dem.heightAt(lat, lon);
+  const drawnHeight = (lat: number, lon: number): number => drawnDemHeight(dem, lat, lon);
   let min = Infinity, max = -Infinity;
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -123,8 +151,10 @@ export function terrainGeometry(
       valid[i] = dem.covers(site.lat, site.lon) ? 1 : 0;
       const height = valid[i] ? dem.heightAt(site.lat, site.lon) : 0;
       heights[i] = height;
+      weights[i] = capWeight(dem.meta, site.lat);
       if (valid[i]) { min = Math.min(min, height); max = Math.max(max, height); }
-      sitePosition(site, height, stretch).toArray(positions, i * 3);
+      sitePosition(site, height * weights[i], stretch).toArray(positions, i * 3);
+      sitePosition(site, height, stretch).toArray(lit, i * 3);
       // Stitch the native patch to the coarse edges: their intermediate positions must lie
       // on the same straight edges, rather than leave narrow cracks between curved samples.
       if (bounds && (col === 0 || col === cols - 1 || row === 0 || row === rows - 1)) {
@@ -135,9 +165,11 @@ export function terrainGeometry(
         if (hi > lo) {
           const a = gridSite(dem.meta, alongRow ? lo : c, alongRow ? r : lo);
           const z = gridSite(dem.meta, alongRow ? hi : c, alongRow ? r : hi);
-          sitePosition(a, dem.heightAt(a.lat, a.lon), stretch)
-            .lerp(sitePosition(z, dem.heightAt(z.lat, z.lon), stretch), (v - lo) / (hi - lo))
-            .toArray(positions, i * 3);
+          for (const [out, h] of [[positions, drawnHeight], [lit, fullHeight]] as const) {
+            sitePosition(a, h(a.lat, a.lon), stretch)
+              .lerp(sitePosition(z, h(z.lat, z.lon), stretch), (v - lo) / (hi - lo))
+              .toArray(out, i * 3);
+          }
         }
       }
       uvs[i * 2] = c / last;
@@ -153,15 +185,18 @@ export function terrainGeometry(
     color.toArray(colors, i * 3);
   }
   const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  // Lit from the full heights, so the band easing down to the sphere keeps its craters' shading.
+  geometry.setAttribute('position', new Float32BufferAttribute(lit, 3));
   geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.setAttribute('height', new Float32BufferAttribute(heights, 1));
   geometry.userData.layout = { b, stride, cols, rows, valid } satisfies Layout;
+  geometry.userData.weights = weights;
   geometry.setIndex(new BufferAttribute(new Uint32Array(Math.max(0, (cols - 1) * (rows - 1) * 6)), 1));
   // Normals come from the whole mesh, so they stay smooth along the edge of a hole.
   fillIndex(geometry);
   geometry.computeVertexNormals();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   if (hole) fillIndex(geometry, hole);
   geometry.computeBoundingSphere();
   geometry.userData.heightRange = Number.isFinite(min) ? [min, max] : [0, 1];
@@ -178,9 +213,10 @@ export function restretchTerrain(geometry: BufferGeometry, stretch: number): voi
   const from = geometry.userData.stretch as number;
   if (from === stretch) return;
   const position = geometry.getAttribute('position'), heights = geometry.getAttribute('height');
+  const weights = geometry.userData.weights as Float32Array;
   const centre = moonCentre(), point = new Vector3();
   for (let i = 0; i < position.count; i++) {
-    const h = heights.getX(i) / 1000;
+    const h = heights.getX(i) * weights[i] / 1000;
     point.fromBufferAttribute(position, i).sub(centre)
       .multiplyScalar((MOON_RADIUS_KM + h * stretch) / (MOON_RADIUS_KM + h * from)).add(centre);
     position.setXYZ(i, point.x, point.y, point.z);

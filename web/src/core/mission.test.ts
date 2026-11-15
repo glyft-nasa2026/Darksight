@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   APOLLO_11_TIMES, EXAMPLE_LANDER, LUNAR_ORBIT_ALT_KM, MU_MOON, PARKING_ALT_KM, R_EARTH, R_MOON,
-  burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, moonFixedInPlane, planDescent,
+  burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, moonFixedInPlane, planDescent, approachSeconds, hyperbolaAt, hyperbolaTimeToRadius, MOON_SOI_KM,
   planMission, propellantFor, SEQUENCE, simulateDescent, transferFor, type MissionInput, type OkPlan,
 } from './mission';
 import { padById } from './pads';
@@ -280,5 +280,41 @@ describe('The landing site in the animation’s lunar-orbit frame (issue #105)',
     near(poleEq[2], 0, 1e-6);
     near(poleSouth[1], -R_MOON, 0.1);
     near(poleEq[1], 0, 1e-6);
+  });
+});
+
+describe('Arrival at the Moon: the hyperbola before LOI', () => {
+  const plan = okPlan();
+  const loi = plan.steps.find((s) => s.id === 'loi')!.startMs;
+  const vInf = plan.orbit.vInfKmS;
+
+  it('reaches the sphere of influence at the time it gives, and the periapsis at LOI', () => {
+    const tS = hyperbolaTimeToRadius(MU_MOON, R_ORBIT, vInf, MOON_SOI_KM);
+    near(hyperbolaAt(MU_MOON, R_ORBIT, vInf, -tS).r, MOON_SOI_KM, 1e-3);
+    near(hyperbolaAt(MU_MOON, R_ORBIT, vInf, 0).r, R_ORBIT, 1e-9);
+    // About 15 hours for v∞ 0.83 km/s (14.8 h).
+    expect(tS / 3600).toBeGreaterThan(12);
+    expect(tS / 3600).toBeLessThan(20);
+  });
+
+  it('is fastest at periapsis, and LOI is that speed less the circular speed', () => {
+    const peri = hyperbolaAt(MU_MOON, R_ORBIT, vInf, 0).speedKmS;
+    const loiDv = plan.steps.find((s) => s.id === 'loi')!.dvKmS!;
+    near(peri - Math.sqrt(MU_MOON / R_ORBIT), loiDv, 1e-9);
+    expect(hyperbolaAt(MU_MOON, R_ORBIT, vInf, -3600).speedKmS).toBeLessThan(peri);
+  });
+
+  it('draws the approach only inside the sphere of influence, and meets the 100 km orbit at LOI', () => {
+    const start = loi - approachSeconds(plan) * 1000;
+    expect(missionAt(plan, start - 60e3).approach).toBe(false);
+    expect(missionAt(plan, start - 60e3).moonPlane).toBeNull();
+    const inSoi = missionAt(plan, start + 60e3);
+    expect(inSoi.approach).toBe(true);
+    expect(inSoi.near).toBe('moon');
+    near(Math.hypot(...inSoi.moonPlane!), MOON_SOI_KM, 200);
+    const before = missionAt(plan, loi - 1).moonPlane!;
+    const after = missionAt(plan, loi + 1).moonPlane!;
+    near(Math.hypot(before[0] - after[0], before[1] - after[1]), 0, 0.01);
+    near(missionAt(plan, loi - 1).altKm, LUNAR_ORBIT_ALT_KM, 0.01);
   });
 });
