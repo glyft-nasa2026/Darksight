@@ -13,7 +13,7 @@ import {
 import { PADS, padById } from '../../core/pads';
 import { countdownText } from '../../core/windows';
 import {
-  flipFor, getState, landingScenario, missionFor, neverLitFor, samplesFor, setLander, setPad,
+  flipFor, getState, landingScenario, missionFor, neverLitFor, neverLitPendingFor, samplesFor, setLander, setPad,
   stateToAddress, subscribe, summaryFor,
 } from '../../state';
 import { openPadPicker } from '../launch/picker';
@@ -736,8 +736,9 @@ export function mount(el: HTMLElement): void {
         const sunUp = now.sunFrac > 0;
         out.push(stat('Sun', sunUp ? `Up ${now.sun.alt.toFixed(1)}° · ${pctText(now.sunFrac)} of disc` : 'Below the skyline'));
         out.push(stat('Earth', now.earthUp ? `Up ${now.earth.alt.toFixed(1)}°` : 'Hidden'));
-        out.push(stat('Working period', countdownText('sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc))));
-        out.push(stat('Earth link', countdownText('earth', now.earthUp, flipFor(sc, 'earth'), sc.tMs)));
+        out.push(stat('Working period', countdownText(
+          'sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc), neverLitPendingFor(sc),
+        )));        out.push(stat('Earth link', countdownText('earth', now.earthUp, flipFor(sc, 'earth'), sc.tMs)));
         const sum = summaryFor(sc);
         out.push(stat('Lit, next 30 days', `${sum.litPct.toFixed(0)} %`));
         out.push(stat('Earth contact, 30 days', `${sum.earthPct.toFixed(1)} %`));
