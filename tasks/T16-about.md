@@ -1,6 +1,6 @@
 # T16: About bar, About panel and the Horizons badge
 
-Status: first delivery done (pull request #93); second delivery at M3 (t16-about-b) not started
+Status: first delivery done (pull request #93); second delivery at M3 in review (MarsRon, branch `t16-about-b`): every "Done when" line passes. The panel covers all 68 sources and 70 AI-use files on `main`; T17's are still empty
 
 | | |
 |---|---|
