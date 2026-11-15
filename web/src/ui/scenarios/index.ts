@@ -4,6 +4,7 @@
 // The cards are updated in place, never rebuilt, so a click that follows an edit is not lost.
 import './scenarios.css';
 import type { CuratedSite, Site } from '../../core/types';
+import { makeDateSearch } from './dateSearch';   // T42
 import {
   getState, isLanding, LIVE_ID, MAX_PINNED, pin, select, setLanding, setLiveSite, setLiveTime,
   stateToAddress, subscribe, unpin, type Scenario,
@@ -84,6 +85,7 @@ export function mount(el: HTMLElement): void {
   coords.append(latField.wrap, lonField.wrap);
   const editor = make('div', 'scn-editor');
   editor.append(siteField.wrap, coords, timeField.wrap);
+  editor.append(makeDateSearch());   // T42: "Find a date", under the time box
 
   // --- Cards and buttons ------------------------------------------------------------------
   const list = make('ul', 'scn-list');

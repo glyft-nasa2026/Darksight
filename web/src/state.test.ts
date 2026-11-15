@@ -15,6 +15,9 @@ import { neverLitPendingFor } from './state';
 // T33: also on lines of their own.
 import { existsSync, readFileSync } from 'node:fs';
 import { failedDecades, RETRY_MAX_MS, RETRY_MS, tableGap } from './state';
+// T42: also on lines of their own.
+import { firstWindow, monthsLater } from './core/datesearch';
+import { dateSearchFor } from './state';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -1125,5 +1128,99 @@ describe('T32: a dark site says it is still checking to 2100 (issue #32, row 3)'
     expect(neverLitPendingFor(getState().live)).toBe(false);
     await settle();
     expect(neverLitPendingFor(getState().live)).toBe(false);
+  });
+});
+
+
+describe('T42: date search', () => {
+  const equator = { lat: 0, lon: 0 };
+
+  it('reads "loading" while the table has not loaded', () => {
+    expect(dateSearchFor(getState().live, 'sun', 24, 1)).toEqual({ status: 'loading' });
+  });
+
+  it("gives core's answer for the scenario's own site and time", () => {
+    const eph = circlingSun(200);
+    setData({ eph });
+    setLiveSite(equator);
+    setLiveTime(T0 + 10 * DAY);   // the Sun is down at longitude 0 then
+    const live = getState().live;
+    const r = dateSearchFor(live, 'sun', 24, 1);
+    expect(r).toEqual(firstWindow(eph, live.site, 0, skylineFor(live), live.tMs, monthsLater(live.tMs, 1), 'sun', 24));
+    expect(r.status).toBe('found');
+    expect(dateSearchFor(live, 'sun', 24, 1)).toBe(r);   // kept: a redraw doesn't search again
+  });
+
+  describe('with decades to download', () => {
+    // Three 100-day files, the first one home. The Sun is up at longitude 0 until day 7.4, then
+    // for 14.8 days in every 29.53: from day 22.1, 51.7, 81.2, 110.7 and so on.
+    const DAYS = 100;
+    function rows(fromRow: number, count: number): ArrayBuffer {
+      const buffer = new ArrayBuffer(count * 24);
+      const view = new DataView(buffer);
+      for (let k = 0; k < count; k++) {
+        const lon = (-2 * Math.PI * ((fromRow + k) / 24)) / 29.53;
+        [Math.cos(lon), Math.sin(lon), 0, 384400, 0, 0].forEach((v, c) => view.setFloat32((k * 6 + c) * 4, v, true));
+      }
+      return buffer;
+    }
+    const perFile = DAYS * 24 + 1;
+    const index = indexEphemeris({
+      start: '2027-01-01T00:00:00Z', step_s: 3600, rows: 3 * perFile - 2, frame: 'MOON_ME_DE440_ME421',
+      columns: [], source: 'made up for a test', home: 0,
+      chunks: [
+        { file: 'ephemeris/first.bin', start: '2027-01-01T00:00:00Z', rows: perFile },
+        { file: 'ephemeris/second.bin', start: new Date(T0 + DAYS * DAY).toISOString(), rows: perFile },
+        { file: 'ephemeris/third.bin', start: new Date(T0 + 2 * DAYS * DAY).toISOString(), rows: perFile },
+      ],
+    });
+    let asked: string[] = [];
+    let answer: (url: string) => Promise<Response>;
+    beforeEach(() => {
+      asked = [];
+      answer = async (url) => new Response(url.includes('second') ? rows(perFile - 1, perFile) : rows(2 * perFile - 2, perFile));
+      vi.stubGlobal('fetch', (url: string) => { asked.push(url); return answer(url); });
+      setData({ eph: index.withChunk(0, rows(0, perFile)) });
+      setLiveSite(equator);
+    });
+    afterEach(() => { vi.unstubAllGlobals(); });
+    const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+    const fail404 = (): void => { answer = async () => new Response('', { status: 404 }); };
+
+    it('asks for the decades the search needs and answers once they are in, without holding the page', async () => {
+      setLiveTime(T0 + 10 * DAY);   // the live scenario itself needs only the first file
+      expect(asked).toEqual([]);
+      // A month to search, and 60 days more for the window's end: into the second file.
+      expect(dateSearchFor(getState().live, 'sun', 24, 1)).toEqual({ status: 'loading' });
+      expect(getState().eph).not.toBeNull();            // the rest of the page carries on
+      await settle();
+      expect(asked).toEqual(['/data/ephemeris/second.bin']);
+      const r = dateSearchFor(getState().live, 'sun', 24, 1);
+      expect(r.status).toBe('found');
+      expect(r.status === 'found' && r.startMs).toBeGreaterThan(T0 + 22 * DAY);
+    });
+
+    it('a decade further on that failed stops the search there, and is never read as dark', async () => {
+      fail404();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // From day 90, 5.9 days of sunlight are left; the next 10-day run starts at day 110.7, in
+      // the second file, which does not download.
+      setLiveTime(T0 + 90 * DAY);
+      dateSearchFor(getState().live, 'sun', 240, 1);
+      await settle();
+      const r = dateSearchFor(getState().live, 'sun', 240, 1);
+      expect(r.status).toBe('no-rows');
+      expect(r.status === 'no-rows' && tableGap(r.atMs)).toBe('failed');
+      warn.mockRestore();
+    });
+
+    it("says 'failed' when the scenario's own decade did not download", async () => {
+      fail404();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      setLiveTime(T0 + 120 * DAY);
+      await settle();
+      expect(dateSearchFor(getState().live, 'sun', 24, 1)).toEqual({ status: 'failed', decadeMs: T0 + 120 * DAY });
+      warn.mockRestore();
+    });
   });
 });
