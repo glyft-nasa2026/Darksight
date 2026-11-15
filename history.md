@@ -21,6 +21,28 @@ P5 asked for both.
 - Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
 - Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
 
+## 15 Nov 2026: the curated list may hold 25 sites (T36)
+
+The team agreed on 15 Nov 2026.
+
+### SPEC.md: 4. Features, F12
+
+- Was: "15-20 sites: Apollo, recent landers, south-pole candidates. Each has a source link".
+- Now: "15-25 sites: …, and up to 5 upcoming mission targets (`planned`)".
+- Why: the challenge asks for future CLPS targets, and each current group answers another category
+  it names, so swapping sites out would open a new gap. The 20 had no recorded reason. The cap of
+  5 limits the per-site source and QuickMap checks before the freeze. `tasks/T07-sites.md` keeps
+  "15-20": it records what T07 did.
+
+### tasks/T36-planned-sites.md
+
+- Was: step 1 (the count) open; the targets and the QuickMap check by hand.
+- Now: step 1 done (25). A gazetteer check (`data-prep/check_features.py`, a fixture and a test)
+  proves each target sits on its named feature, and a Playwright contact sheet of QuickMap views
+  makes the person's check quick. The person still signs off: F12 needs a person's check.
+- Why: Yi Hung asked for the script and the automation to be in the ticket, so the work can start
+  in a new session.
+
 ## 15 Nov 2026: a decade that failed to download is tried again (T33, issue #32 row 4)
 
 Issue #32, row 4: after a failed download the readout said the time was outside the table,
