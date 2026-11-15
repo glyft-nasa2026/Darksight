@@ -1,10 +1,10 @@
 // The whole-Moon height grid (contract section 2: globe.bin + globe.json) and the north cap
 // (north.bin + north.json): fetching them, once for every view, as the packed copies the build
-// writes (globe.pack, north.pack) where there are any, and the surface normals that let
-// the Sun's light show the relief. The reader itself is core/globe.ts (T43), re-exported here. No
-// three.js here, so the flat map (web/src/map/), the map layers and the readout can use it as well
-// as the 3D globe. The normals are illustration; the numbers (height and slope layers, the
-// readout's slope line) come from core/.
+// writes (globe.pack, north.pack) where there are any, and the surface normals that let the Sun's
+// light show the relief. The reader itself is core/globe.ts (T43), re-exported here. No three.js
+// here, so the flat map (web/src/map/), the map layers and the readout can use it as well as the
+// 3D globe. The normals are illustration; the numbers (height and slope layers, the readout's
+// slope line) come from core/.
 
 import type { Dem, DemMeta } from '../core/dem';
 import { globeFromHeights, northFromHeights, parseGlobe, parseNorth, type GlobeHeights, type GlobeMeta } from '../core/globe';

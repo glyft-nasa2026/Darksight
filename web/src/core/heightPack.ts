@@ -1,11 +1,11 @@
 // Lossless packing of a height grid (16-bit heights, row by row from the top), so the height maps
 // download at a third to two thirds of their size (contract section 2: `dem.pack`, `globe.pack`,
-// `north.pack`). Ground is smooth, so
-// each height is close to the plane through the three neighbours already known: left + above -
-// above-left. Only the difference from that prediction is stored, zigzagged (0, -1, 1, -2 become
-// 0, 1, 2, 3, so small differences either way are small numbers), as a plane of low bytes for
-// every cell, then a plane of high bytes, which is nearly all zeros. Gzip, outside this file,
-// does the rest. Every height comes back exactly: the arithmetic wraps at 16 bits both ways.
+// `north.pack`). Ground is smooth, so each height is close to the plane through the three
+// neighbours already known: left + above - above-left. Only the difference from that prediction
+// is stored, zigzagged (0, -1, 1, -2 become 0, 1, 2, 3, so small differences either way are small
+// numbers), as a plane of low bytes for every cell, then a plane of high bytes, which is nearly
+// all zeros. Gzip, outside this file, does the rest. Every height comes back exactly: the
+// arithmetic wraps at 16 bits both ways.
 
 function checkSize(length: number, width: number, height: number, what: string): void {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
