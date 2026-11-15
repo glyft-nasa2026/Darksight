@@ -88,7 +88,7 @@ def enter(page):
 # A floor the readout calls hidden must look dark: under this share of the same ground's brightness
 # with no Sun at all (a time outside the table, which the map draws without light or shadow).
 # The same ground cancels its height colour, so only the light is compared. Relative, not a fixed
-# brightness: the shadow level (SHADOW_LIGHT, issue #154) and the theme's colours change.
+# brightness: the ambient light in shadow (AMBIENT_*, issue #154) and the theme's colours change.
 DARK_SHARE = 0.9
 
 
