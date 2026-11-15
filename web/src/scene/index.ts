@@ -24,7 +24,7 @@ import {
   groundAngle, loadTileIndex, loadWindow, PATCH_MOVE_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch,
   viewGround, type TileIndex,
 } from './patch';
-import { sunSpriteScale, sunTexture } from './sun';
+import { discAlpha, glareAlpha, sunDiscScale, sunTexture } from './sun';
 import './scene.css';
 
 const mounts = new WeakMap<HTMLElement, () => void>();
@@ -168,9 +168,15 @@ export function mount(el: HTMLElement): void {
   // A faint fill, so ground in shadow still shows its shape (through the height colours) instead of
   // matching the background; a shadowed crater floor stays dark. Illustrative, like the shadows.
   const ambient = new AmbientLight(); ambient.intensity = 0.3; world.add(ambient);
-  // The Sun's disc in the sky (issue #120), where the light comes from. The Moon hides it by depth.
-  const sunMaterial = new SpriteMaterial({ map: sunTexture(themeColor('--sun')), depthTest: true, depthWrite: false });
-  const sunDisc = new Sprite(sunMaterial); sunDisc.name = 'Sun'; sunDisc.visible = false; world.add(sunDisc);
+  // The Sun in the sky (issue #120), where the light comes from: its disc at true size, and a glare
+  // of fixed size on screen so the few-pixel disc can be found (sun.ts). The Moon hides both by depth.
+  const sunMaterial = new SpriteMaterial({ map: sunTexture(themeColor('--sun'), discAlpha), depthTest: true, depthWrite: false });
+  const glareMaterial = new SpriteMaterial({ map: sunTexture(themeColor('--sun'), glareAlpha), depthTest: true, depthWrite: false });
+  const sunDisc = new Sprite(sunMaterial); sunDisc.name = 'Sun'; sunDisc.visible = false; sunDisc.renderOrder = 2;
+  const sunGlare = new Sprite(glareMaterial); sunGlare.name = 'Sun glare'; sunGlare.visible = false; sunGlare.renderOrder = 1;
+  world.add(sunGlare, sunDisc);
+  /** The glare's width on screen, in CSS pixels, from the theme (updateTheme). */
+  let glarePx = 1;
   const terrainMaterial = new MeshLambertMaterial({ vertexColors: true });
   const detailMaterial = terrainMaterial.clone();
   // The globe is always drawn, with the terrain set into its south cap. Pushed back in depth so
@@ -215,6 +221,12 @@ export function mount(el: HTMLElement): void {
       pin.position.copy(base).addScaledVector(up, r);
     }
   }
+  /** The glare keeps its size on screen at every zoom, like the pins; the disc keeps its true size. */
+  function sizeSun(): void {
+    if (!sunDisc.visible) return;
+    const perPx = 2 * Math.tan(orbitCamera.fov * RAD / 2) * orbitCamera.position.distanceTo(sunGlare.position) / (viewport.clientHeight || 1);
+    sunGlare.scale.setScalar(Math.max(glarePx * perPx, sunDisc.scale.x));
+  }
   function render(): void {
     // In 2D the flat map shows instead: nothing is drawn here, so no shadow map is rendered.
     if (mode === '2d') return;
@@ -224,7 +236,7 @@ export function mount(el: HTMLElement): void {
     orbitCamera.near = Math.min(1000, Math.max(0.005, (fromCentre - MOON_RADIUS_KM - Math.max(relief, northRelief, patchRelief)) / 2));
     orbitCamera.far = fromCentre + MOON_RADIUS_KM + SUN_DRAWN_KM * 1.1;
     orbitCamera.updateProjectionMatrix();
-    sizePins();
+    sizePins(); sizeSun();
     fitShadow();
     renderer.render(world, orbitCamera);
   }
@@ -522,13 +534,14 @@ export function mount(el: HTMLElement): void {
       sun.position.copy(target).addScaledVector(moonDirection(vectors.sun), 2000); sun.intensity = 3;
       sun.castShadow = polar;
       sunDisc.position.copy(target).addScaledVector(moonDirection(vectors.sun), SUN_DRAWN_KM);
-      sunDisc.scale.setScalar(sunSpriteScale(SUN_DRAWN_KM)); sunDisc.visible = true;
+      sunDisc.scale.setScalar(sunDiscScale(SUN_DRAWN_KM)); sunGlare.position.copy(sunDisc.position);
+      sunDisc.visible = sunGlare.visible = true;
       // Seen from the site, not the Moon's centre: Earth is close enough for that to matter.
       const toEarth = moonDirection(vectors.earthKm).add(globe.position).sub(target);
       const distance = toEarth.length();
       earth.position.copy(target).addScaledVector(toEarth.normalize(), EARTH_DRAWN_KM);
       earth.scale.setScalar(2 * EARTH_RADIUS_KM * EARTH_DRAWN_KM / distance); earth.visible = true;
-    } else { sun.intensity = 0; earth.visible = false; sunDisc.visible = false; }
+    } else { sun.intensity = 0; earth.visible = false; sunDisc.visible = sunGlare.visible = false; }
     if (!lost) {
       message.hidden = tabled;
       message.textContent = s.eph ? 'This time is outside the Sun and Earth table' : 'Loading Sun and Earth table…';
@@ -557,7 +570,11 @@ export function mount(el: HTMLElement): void {
     // Until the height map arrives there is no 0 m colour; the middle of the ramp stands in.
     globeMaterial.color.set(themeColor('--terrain-lo')).lerp(new Color(themeColor('--terrain-hi')), 0.5);
     const old = earthMaterial.map; earthMaterial.map = earthTexture(); old?.dispose();
-    const oldSun = sunMaterial.map; sunMaterial.map = sunTexture(themeColor('--sun')); oldSun?.dispose();
+    for (const [material, alpha] of [[sunMaterial, discAlpha], [glareMaterial, glareAlpha]] as const) {
+      const oldSun = material.map; material.map = sunTexture(themeColor('--sun'), alpha); oldSun?.dispose();
+    }
+    // Twice the largest gap each way: big enough to catch the eye, small next to the Moon.
+    glarePx = themeLength(viewport, '--space-5') * 4;
     stars.recolor();
     update(getState());
   }
@@ -617,7 +634,7 @@ export function mount(el: HTMLElement): void {
     slider.removeEventListener('input', onStretch); reset.removeEventListener('click', centre);
     buttons.forEach((b) => b.removeEventListener('click', changeMode)); window.removeEventListener('pagehide', onPageHide);
     orbitControls.dispose(); clearTerrain(); clearPins(); northMesh?.geometry.dispose(); clearPatch(); unmountMap(mapHost);
-    sunMaterial.map?.dispose(); sunMaterial.dispose();
+    sunMaterial.map?.dispose(); sunMaterial.dispose(); glareMaterial.map?.dispose(); glareMaterial.dispose();
     pinGeometry.dispose(); globe.geometry.dispose(); globeMaterial.map?.dispose(); globeMaterial.normalMap?.dispose(); globeMaterial.dispose(); terrainMaterial.dispose(); detailMaterial.dispose();
     earthMaterial.map?.dispose(); earthMaterial.dispose(); sun.dispose(); stars.dispose();
     // Free the WebGL context now: browsers allow only a few, and a remount would leak one.
