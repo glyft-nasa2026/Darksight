@@ -87,7 +87,7 @@ export function mount(el: HTMLElement): void {
 
     slope.textContent = slopeText(slopeInfo(s.dem, heights, sc.site.lat, sc.site.lon));
 
-    // T37: coarse terrain north of 85 S says so; a smooth Moon says why (ui/terrain.ts).
+    // T37: terrain coarser than the 240 m polar map says so; a smooth Moon says why (ui/terrain.ts).
     note.textContent = terrainNote(skylineFor(sc), sc.site, s.globeStatus);
 
     if (!s.eph) {

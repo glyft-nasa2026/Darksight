@@ -117,9 +117,9 @@ function drawTable(cols: Column[]): HTMLTableElement {
       make('span', 'cmp-where', where),
       make('span', 'cmp-when muted', `${utcText(c.sc.tMs)} UTC`),
     );
-    // The readout's words, on every column they apply to (T37, ui/terrain.ts): coarse terrain
-    // north of 85° S says so, and a smooth Moon (a height map not in yet or missing) says why,
-    // since then a crater floor reads as lit. Nothing for the detailed polar terrain.
+    // The readout's words, on every column they apply to (T37, ui/terrain.ts): terrain coarser
+    // than the 240 m polar map says so, and a smooth Moon (a height map not in yet or missing)
+    // says why, since then a crater floor reads as lit. Nothing for the 240 m terrain on its own.
     const ground = terrainNote(skylineFor(c.sc), c.sc.site, getState().globeStatus);
     if (ground) th.append(make('span', 'cmp-ground muted', ground));
     hr.append(th);
@@ -227,9 +227,9 @@ export function mount(el: HTMLElement): void {
   // which changes nothing else here, so each notify redraws until no column is checking (T32).
   type Shown = {
     live: Scenario; pinned: Scenario[]; eph: AppState['eph']; dem: AppState['dem']; sites: AppState['sites'];
-    // T37: when globe.bin arrives or fails, every column north of 85° S gets another skyline,
-    // other numbers and another terrain note, with no change to live or pinned.
-    globe: AppState['globe']; globeStatus: AppState['globeStatus'];
+    // T37: when globe.bin (or north.bin) arrives or fails, every column north of 85° S gets
+    // another skyline, other numbers and another terrain note, with no change to live or pinned.
+    globe: AppState['globe']; globeStatus: AppState['globeStatus']; north: AppState['north'];
     checking: boolean;
   };
   let shown: Shown | null = null;
@@ -264,10 +264,10 @@ export function mount(el: HTMLElement): void {
     // Pinned scenarios never change, but live does on every map click, time entry and drag.
     if (shown && !shown.checking && shown.live === s.live && shown.pinned === s.pinned
       && shown.eph === s.eph && shown.dem === s.dem && shown.sites === s.sites
-      && shown.globe === s.globe && shown.globeStatus === s.globeStatus) return;
+      && shown.globe === s.globe && shown.globeStatus === s.globeStatus && shown.north === s.north) return;
     shown = {
       live: s.live, pinned: s.pinned, eph: s.eph, dem: s.dem, sites: s.sites,
-      globe: s.globe, globeStatus: s.globeStatus, checking: false,
+      globe: s.globe, globeStatus: s.globeStatus, north: s.north, checking: false,
     };
     const id = ++drawId;
 

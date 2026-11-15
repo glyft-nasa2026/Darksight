@@ -11,6 +11,8 @@ import {
   APOLLO_11_TIMES, earthMoonKmAt, EXAMPLE_LANDER, planMission, type Lander, type MissionPlan,
 } from './core/mission';
 import { DEFAULT_PAD_ID, padById } from './core/pads';
+import { withLaunchWindow } from './core/departure';
+import { moonOrbitIcrf } from './core/sky';
 import type { Body, CuratedSite, Flip, Sample, Site, Skyline, Summary } from './core/types';
 import { nextFlip, series, summary, SUN_RADIUS } from './core/windows';
 // T42: a line of its own, so the shared import lines above stay as other branches edit them.
@@ -26,10 +28,14 @@ export type AppState = {
   // eph is null until the table has loaded, and again while a decade that the live or a pinned
   // scenario needs is still downloading, so every module shows "Loading" by itself.
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
-  // T37: globe.bin, the coarse skyline for sites north of 85 S (contract section 3, "Skyline").
+  // T37: globe.bin, the skyline north of 85 S: all of it between 80 S and 80 N, and past the
+  // edge of a polar map for a site between 80 and 85 degrees (contract section 3, "Skyline").
   // 'missing' once it failed or isn't there (the mock data set has none).
   globe: GlobeHeights | null;
   globeStatus: 'loading' | 'ready' | 'missing';
+  // north.bin, the 1.2 km skyline for sites north of 80 N. Null until it arrives (with globe.bin),
+  // and when it failed: those sites then use globe.bin.
+  north: Dem | null;
   // The mission (T34): where it lands (a copy of a scenario's site and time, so it stays put
   // while the scenarios change), from which launch pad, with which lander.
   landing: { site: Site; tMs: number } | null;
@@ -166,7 +172,7 @@ function stateFromAddress(hash: string, nowMs: number): { next: AppState; named:
     range: range === '90d' || range === '365d' ? range : '30d',
     mode: q.get('mode') === '3d' ? '3d' : '2d',
     windowStartMs: live.tMs,
-    eph: null, dem: null, sites: [], globe: null, globeStatus: 'loading',
+    eph: null, dem: null, sites: [], globe: null, globeStatus: 'loading', north: null,
     landing: textToSiteTime(q.get('land')),
     padId: padById(q.get('pad')).id,
     lander: textToLander(q.get('lander')) ?? { ...EXAMPLE_LANDER },
@@ -212,6 +218,7 @@ export function restoreFromAddress(hash: string, nowMs: number = Date.now()): vo
     next.sites = state.sites;
     next.globe = state.globe;
     next.globeStatus = state.globeStatus;
+    next.north = state.north;
   }
   state = next;
   notify(false);
@@ -275,10 +282,12 @@ export function subscribe(fn: (s: AppState) => void): () => void {
 
 /**
  * Called by main.ts as each data file arrives. Not for UI modules. `globe: null` (T37) says
- * globe.bin failed or is missing, so a site north of 85 S stays a smooth Moon.
+ * globe.bin failed or is missing, so a site north of 85 S stays a smooth Moon. `north` is north.bin
+ * (core/globe.ts parseNorth), handed over with `globe`; null when it failed.
  */
 export function setData(patch: {
   eph?: Ephemeris | null; dem?: Dem | null; sites?: CuratedSite[]; globe?: GlobeHeights | null;
+  north?: Dem | null;
 }): void {
   if ('eph' in patch) {
     table = patch.eph ?? null;
@@ -293,8 +302,8 @@ export function setData(patch: {
     state = { ...state, globe: globe ?? null, globeStatus: globe ? 'ready' : 'missing' };
   }
   const example = 'sites' in patch && exampleWanted && addExample();
-  // globe.bin alone changes only the sites north of 85 S (T37).
-  if (Object.keys(patch).every((k) => k === 'globe')) clearNorthCaches();
+  // globe.bin and north.bin change only the sites north of 85 S (T37).
+  if (Object.keys(patch).every((k) => k === 'globe' || k === 'north')) clearNorthCaches();
   else clearCaches();
   notify(example);   // the example goes into the address, like any other change
 }
@@ -628,10 +637,10 @@ function clearCaches(): void {
 }
 
 /**
- * T37: when globe.bin arrives, only sites north of 85 S change (they use it for their skyline and
- * ground). Every cache key starts with siteKey, so its latitude; polar sites keep their skyline,
- * series and never-lit scan, which can be 650,000 hours long. A dropped scan that is still running
- * sees it is no longer in litScans and stops.
+ * T37: when globe.bin or north.bin arrives, only sites north of 85 S change (they need globe.bin
+ * for their skyline and ground). Every cache key starts with siteKey, so its latitude; polar sites
+ * keep their skyline, series and never-lit scan, which can be 650,000 hours long. A dropped scan
+ * that is still running sees it is no longer in litScans and stops.
  */
 function clearNorthCaches(): void {
   missionCache = null;
@@ -652,9 +661,9 @@ function cached<T>(cache: Map<string, T>, key: string, make: () => T): T {
 
 const siteKey = (s: Site): string => `${s.lat},${s.lon},${s.eye_m ?? ''}`;
 
-/** T37: the site's ground height from the same grid as its skyline (dem.bin or globe.bin), else 0. */
+/** T37: the site's ground height from the same grid as its skyline (dem.bin, north.bin or globe.bin), else 0. */
 function groundFor(site: Site): number {
-  return groundAt(state.dem, site, state.globe);
+  return groundAt(state.dem, site, state.globe, state.north);
 }
 
 function hourly(sc: Scenario, startMs: number, range: Range): Sample[] {
@@ -666,7 +675,7 @@ function hourly(sc: Scenario, startMs: number, range: Range): Sample[] {
 }
 
 export function skylineFor(sc: Scenario): Skyline {
-  return cached(skylineCache, siteKey(sc.site), () => skylineAt(state.dem, sc.site, state.globe));
+  return cached(skylineCache, siteKey(sc.site), () => skylineAt(state.dem, sc.site, state.globe, state.north));
 }
 
 /** Hourly from sc.tMs: strips, sky paths. */
@@ -873,12 +882,15 @@ export function missionFor(): MissionResult {
   const earthMoonKm = earthMoonKmAt(eph, arrivalMs);
   if (earthMoonKm === null) return { status: 'loading' };
   const l = state.lander;
-  const key = `${siteKey(land.site)}|${land.tMs}|${state.padId}|${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}|${earthMoonKm}`;
+  // The Moon's real orbit plane at touchdown: with it the launch is set to the time the pad
+  // passes under the departure's plane (core/departure.ts, issue #192). Without (a decade six
+  // hours on not read yet) the departure stays in the Moon's plane.
+  const sky = moonOrbitIcrf(eph, land.tMs);
+  const skyOk = [...sky.toMoon, ...sky.pole].every(Number.isFinite);
+  const key = `${siteKey(land.site)}|${land.tMs}|${state.padId}|${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}|${earthMoonKm}|${skyOk}`;
   if (missionCache?.key !== key) {
-    missionCache = {
-      key,
-      plan: planMission({ site: land.site, touchdownMs: land.tMs, pad: padById(state.padId), lander: l, earthMoonKm }),
-    };
+    const plan = planMission({ site: land.site, touchdownMs: land.tMs, pad: padById(state.padId), lander: l, earthMoonKm });
+    missionCache = { key, plan: plan.ok && skyOk ? withLaunchWindow(plan, sky) : plan };
   }
   return { status: 'ready', plan: missionCache.plan };
 }

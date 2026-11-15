@@ -19,6 +19,7 @@ import { shadeGlobal, shadePolar, subPoint, type PolarShade } from '../core/shad
 import { MOON_RADIUS_KM, type Site } from '../core/types';
 import { sharedNorth } from '../scene/globe';
 import { GLOBE_RELIEF, globeSlopes, sharedGlobe, type GlobeHeights } from '../scene/globeHeights';
+import { drain, runSliced, type SlicedJob, type Slices } from '../slices';
 import { getState, select, selected, setLiveSite, subscribe, type AppState } from '../state';
 import { drawLayers, onLayersChange } from '../ui/layers';
 import { themeColor } from '../ui/plotTheme';
@@ -97,6 +98,8 @@ const GLOBAL_STEPS = [30, 15, 10, 5, 2, 1, 0.5, 0.25, 0.1];
 const POLAR_REACH = 20;
 /** Pixels per side of the fading ring's layer (about 2 km a pixel; the whole-Moon grid is 3.8 km a cell). */
 const RING_PX = 640;
+/** Rows of the ring, and rows of the whole-Moon grid, worked out between two pauses of work done in slices. */
+const RING_ROWS_A_SLICE = 16, HEIGHT_ROWS_A_SLICE = 4;
 
 // The whole-Moon picture is written a pixel (four bytes, RGBA) at a time, as one 32-bit word: the
 // bytes' order inside the word is the machine's.
@@ -174,6 +177,8 @@ export function mount(el: HTMLElement): void {
   let sunPoint: LatLon | null = null, earthPoint: LatLon | null = null;
   // The whole-Moon heights, once fetched; the map is plain grey outside the polar grid until then.
   let globe: GlobeHeights | null = null, slopes: Int8Array | null = null;
+  // The job that works out, in slices, what the first picture from those heights needs (warmSteps).
+  let warming: SlicedJob<void> | null = null;
   let tones: Uint8Array | null = null, tonesKey = '';
   // Which rows of `slopes` and `tones` are worked out: only the rows a picture needs, when it
   // first needs them (issue #118). A polar view needs about a tenth of the grid.
@@ -303,8 +308,7 @@ export function mount(el: HTMLElement): void {
    * still leaves a picture pixel for each screen pixel, and at least DRAG_STEP while the time is
    * dragged. The whole Moon in a few hundred pixels needs a quarter of the grid each way.
    */
-  function globalStep(): number {
-    const cells = globe ? globe.meta.width : GLOBAL_W;
+  function globalStep(cells = globe ? globe.meta.width : GLOBAL_W): number {
     const screenPx = 2 * HALF_WORLD_KM * view.scale * (canvas.width / Math.max(1, view.width));
     let step = 1;
     while (step < MAX_STEP && screenPx * step * 2 <= cells) step *= 2;
@@ -359,34 +363,11 @@ export function mount(el: HTMLElement): void {
     const W = globe ? globe.meta.width : GLOBAL_W, H = globe ? globe.meta.height : GLOBAL_H;
     const key = `${theme.key}|${p}|${demId(dem)}|${demId(grid)}|${globe ? 'heights' : 'plain'}|${vectors ? vectors.sun.join(',') : 'unlit'}`;
     if (ring && ringKey === key) return;
-    const half = ringHalf();
-    // Which whole-Moon cell each ring pixel shows, and how opaque: worked out once per pole and grid.
-    const cellsKey = `${p}|${W}x${H}|${grid.meta.min_lat}`;
-    if (!ringCells || ringCells.key !== cellsKey) {
-      const capDeg = 90 - Math.abs(grid.meta.min_lat), fade = POLAR_REACH - capDeg;
-      const cell = new Int32Array(RING_PX * RING_PX).fill(-1), alpha = new Uint8Array(RING_PX * RING_PX);
-      for (let row = 0; row < RING_PX; row++) {
-        const y = half - ((row + 0.5) * 2 * half) / RING_PX;
-        for (let col = 0; col < RING_PX; col++) {
-          const x = -half + ((col + 0.5) * 2 * half) / RING_PX;
-          const { lat, lon } = polarInverse(x, y, p);
-          const fromPole = 90 - Math.abs(lat);
-          if (fromPole > POLAR_REACH) continue;
-          const k = row * RING_PX + col;
-          const j = Math.min(H - 1, Math.floor(((90 - lat) * H) / 180));
-          const i = Math.min(W - 1, Math.floor(((lon + 180) * W) / 360));
-          cell[k] = j * W + i;
-          alpha[k] = Math.round(255 * Math.min(1, (POLAR_REACH - fromPole) / Math.max(1e-9, fade)));
-        }
-      }
-      ringCells = { key: cellsKey, cell, alpha };
-    }
+    const { cell, alpha } = drain(ringCellsSteps(p, W, H, grid));
     // Only the rows near the pole are painted.
-    const rows = Math.ceil((POLAR_REACH * H) / 180) + 1;
-    const j0 = p === 'north' ? 0 : H - rows;
-    const image = globalPixels(vectors ? vectors.sun : null, j0, p === 'north' ? rows : H, 1, p);
+    const [j0, j1] = ringRows(p, H);
+    const image = globalPixels(vectors ? vectors.sun : null, j0, j1, 1, p);
     const out = new ImageData(RING_PX, RING_PX);
-    const { cell, alpha } = ringCells;
     for (let k = 0; k < cell.length; k++) {
       const c = cell[k] - j0 * W;
       if (cell[k] < 0 || c < 0 || c * 4 >= image.data.length) continue;
@@ -397,6 +378,39 @@ export function mount(el: HTMLElement): void {
     ring.width = ring.height = RING_PX;
     ring.getContext('2d')!.putImageData(out, 0, 0);
     ringKey = key;
+  }
+  /** The rows of a whole-Moon picture `H` rows high that the ring around pole `p` shows: from, and up to. */
+  function ringRows(p: Pole, H: number): [number, number] {
+    const rows = Math.ceil((POLAR_REACH * H) / 180) + 1;
+    return p === 'north' ? [0, rows] : [H - rows, H];
+  }
+  /**
+   * Which cell of a whole-Moon grid of W x H cells each ring pixel shows, and how opaque: worked
+   * out once per pole and grid, and kept. In slices (web/src/slices.ts), a few rows of the ring
+   * at a time.
+   */
+  function* ringCellsSteps(p: Pole, W: number, H: number, grid: Dem): Slices<NonNullable<typeof ringCells>> {
+    const cellsKey = `${p}|${W}x${H}|${grid.meta.min_lat}`;
+    if (ringCells && ringCells.key === cellsKey) return ringCells;
+    const half = ringHalf();
+    const capDeg = 90 - Math.abs(grid.meta.min_lat), fade = POLAR_REACH - capDeg;
+    const cell = new Int32Array(RING_PX * RING_PX).fill(-1), alpha = new Uint8Array(RING_PX * RING_PX);
+    for (let row = 0; row < RING_PX; row++) {
+      const y = half - ((row + 0.5) * 2 * half) / RING_PX;
+      for (let col = 0; col < RING_PX; col++) {
+        const x = -half + ((col + 0.5) * 2 * half) / RING_PX;
+        const { lat, lon } = polarInverse(x, y, p);
+        const fromPole = 90 - Math.abs(lat);
+        if (fromPole > POLAR_REACH) continue;
+        const k = row * RING_PX + col;
+        const j = Math.min(H - 1, Math.floor(((90 - lat) * H) / 180));
+        const i = Math.min(W - 1, Math.floor(((lon + 180) * W) / 360));
+        cell[k] = j * W + i;
+        alpha[k] = Math.round(255 * Math.min(1, (POLAR_REACH - fromPole) / Math.max(1e-9, fade)));
+      }
+      if (row % RING_ROWS_A_SLICE === RING_ROWS_A_SLICE - 1) yield;
+    }
+    return ringCells = { key: cellsKey, cell, alpha };
   }
   /** Half the side of a polar view's square, in map metres: POLAR_REACH degrees from the pole. */
   function ringHalf(): number {
@@ -432,33 +446,64 @@ export function mount(el: HTMLElement): void {
     }
   }
   /**
-   * The whole Moon from its height grid: height colour, times core's day and night, with slopes
-   * facing the Sun brighter and slopes facing away darker so craters and mountains show. Where
-   * the Sun is down, the ambient light (AMBIENT_*) from the top left of the view `frame`.
+   * What paintHeights needs of whole-Moon row `row`, worked out once and kept: its slopes, its
+   * ambient light levels for the view `frame`, and its tones on a ramp over `range`.
    */
-  function paintHeights(out: Uint32Array, g: GlobeHeights, range: number[], span: number, sun: Vec3 | null, day: Float32Array | null, rows: [number, number], step: number, frame: Kind): void {
+  function heightRow(g: GlobeHeights, row: number, range: number[], span: number, frame: Kind): void {
     const { width, height } = g.meta, count = width * height;
-    const w = Math.floor(width / step);
     if (!slopes || !slopeRows) { slopes = new Int8Array(count * 3); slopeRows = new Uint8Array(height); }
     if (!ambient || !ambientRows) { ambient = new Uint8Array(count); ambientRows = new Uint8Array(height); }
     if (ambientFrame !== frame) { ambientRows.fill(0); ambientFrame = frame; }
-    const cols = ambientColumns(width, frame);
     const key = `${range[0]},${range[1]}`;
     if (!tones || !toneRows || tonesKey !== key) {
       tones = new Uint8Array(count); toneRows = new Uint8Array(height);
       tonesKey = key;
     }
-    for (let j = rows[0]; j < rows[1]; j++) {
-      const row = j * step;
-      if (!slopeRows[row]) { globeSlopes(g, GLOBE_RELIEF, row, row + 1, slopes); slopeRows[row] = 1; }
-      if (!ambientRows[row]) { ambientRow(width, height, row, cols, slopes, ambient); ambientRows[row] = 1; }
-      if (toneRows[row]) continue;
-      // Each cell's place on the colour ramp, 0..255: it changes only with the ramp's range.
-      for (let col = 0, k = row * width; col < width; col++, k++) {
-        tones[k] = Math.round(255 * Math.min(1, Math.max(0, (g.cell(row, col) - range[0]) / span)));
-      }
-      toneRows[row] = 1;
+    if (!slopeRows[row]) { globeSlopes(g, GLOBE_RELIEF, row, row + 1, slopes); slopeRows[row] = 1; }
+    if (!ambientRows[row]) { ambientRow(width, height, row, ambientColumns(width, frame), slopes, ambient); ambientRows[row] = 1; }
+    if (toneRows[row]) return;
+    // Each cell's place on the colour ramp, 0..255: it changes only with the ramp's range.
+    for (let col = 0, k = row * width; col < width; col++, k++) {
+      tones[k] = Math.round(255 * Math.min(1, Math.max(0, (g.cell(row, col) - range[0]) / span)));
     }
+    toneRows[row] = 1;
+  }
+  /**
+   * What the map's first picture from the whole-Moon grid `g` needs worked out and kept (the
+   * ring's cells around a polar cap, and heightRow for each row the picture shows), a slice at a
+   * time (web/src/slices.ts). In one piece, when the grid landed, it froze the page for 0.3 s on a
+   * laptop and over a second on a phone. Whatever the view has become by the time it is drawn,
+   * the drawing code works out anything still missing itself, so the picture is the same.
+   */
+  function* warmSteps(g: GlobeHeights): Slices<void> {
+    const W = g.meta.width, H = g.meta.height;
+    const range = dem ? capRange(dem) : g.range;
+    const span = Math.max(1, range[1] - range[0]);
+    const grid = cap();
+    let rows: [number, number], step = 1, frame: Kind = 'global';
+    if (grid) {
+      frame = pole();
+      yield* ringCellsSteps(frame, W, H, grid);
+      rows = ringRows(frame, H);
+    } else {
+      step = globalStep(W);
+      rows = [0, Math.floor(H / step)];
+    }
+    for (let j = Math.max(0, rows[0]); j < Math.min(Math.floor(H / step), rows[1]); j++) {
+      heightRow(g, j * step, range, span, frame);
+      if (j % HEIGHT_ROWS_A_SLICE === HEIGHT_ROWS_A_SLICE - 1) yield;
+    }
+  }
+  /**
+   * The whole Moon from its height grid: height colour, times core's day and night, with slopes
+   * facing the Sun brighter and slopes facing away darker so craters and mountains show. Where
+   * the Sun is down, the ambient light (AMBIENT_*) from the top left of the view `frame`.
+   */
+  function paintHeights(out: Uint32Array, g: GlobeHeights, range: number[], span: number, sun: Vec3 | null, day: Float32Array | null, rows: [number, number], step: number, frame: Kind): void {
+    const { width } = g.meta;
+    const w = Math.floor(width / step);
+    for (let j = rows[0]; j < rows[1]; j++) heightRow(g, j * step, range, span, frame);
+    if (!slopes || !ambient || !tones) return;   // never: heightRow has just made them
     const { lo, hi } = theme;
     const ramp = new Float32Array(256 * 3);
     for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) ramp[i * 3 + c] = lo[c] + ((hi[c] - lo[c]) * i) / 255;
@@ -897,7 +942,15 @@ export function mount(el: HTMLElement): void {
   // Without the files the map stays as it was: plain outside the polar grid.
   sharedGlobe().then((g) => {
     if (disposed) return;
-    globe = g; baseDirty = true; invalidate();
+    // The map draws from the grid once what its first picture needs has been worked out in slices
+    // (warmSteps); if that fails, the drawing code works it out itself, as it did before.
+    const begin = (): void => {
+      warming = null;
+      if (disposed) return;
+      globe = g; baseDirty = true; invalidate();
+    };
+    warming = runSliced(warmSteps(g));
+    warming.done.then(begin, begin);
   }).catch(() => undefined);
   // The north cap, for the north polar view (issue #112). Without its files a site near the north
   // pole stays on the whole-Moon map.
@@ -909,6 +962,7 @@ export function mount(el: HTMLElement): void {
   function dispose(): void {
     if (disposed) return;
     disposed = true; cancelAnimationFrame(frame); clearTimeout(settle); unsubscribe(); observer.disconnect(); themeObserver.disconnect();
+    warming?.cancel(); warming = null;
     canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move);
     canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', cancel);
     canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', key);

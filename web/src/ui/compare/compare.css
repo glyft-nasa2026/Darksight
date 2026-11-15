@@ -20,60 +20,90 @@
   vertical-align: top;
 }
 
-.cmp-col {
-  border-top: var(--space-1) solid var(--scn-color);
+/* T23 (docs/design/compare.png): each column head is "● A · Shackleton rim" in the text colour,
+   with its time and terrain under it; the scenario's colour is the dot, with no bar on top.
+   `th.cmp-col` so it outranks theme.css's small muted `.table th`. */
+.cmp-table th.cmp-col {
+  color: var(--text);
+  font-size: var(--fs-md);
 }
 
-.cmp-col > .cmp-where,
 .cmp-col > .cmp-when,
 .cmp-col > .cmp-ground {
   display: block;
+  font-size: var(--fs-sm);
+}
+
+.cmp-where::before {
+  content: " · ";
+  content: " · " / ", ";
 }
 
 .cmp-dot {
   display: inline-block;
   width: var(--space-3);
   height: var(--space-3);
-  margin-right: var(--space-1);
+  margin-right: var(--space-2);
   border-radius: 50%;
   background: var(--scn-color);
+  vertical-align: baseline;
 }
 
-.cmp-label {
-  font-family: var(--font);
-  font-weight: 600;
-}
-
-.cmp-where {
-  font-family: var(--font);
-  font-weight: normal;
-}
-
-.cmp-when,
-.cmp-ground {
-  font-size: var(--fs-sm);
-  font-weight: normal;
-}
-
+/* Row names in the table's own mono type, muted, as the picture. */
 .cmp-row {
-  font-family: var(--font);
-  font-weight: normal;
-  color: var(--muted);
   white-space: nowrap;
 }
 
+/* The best value in a row: --ok with a dot (docs/design.md, "Rules the pictures follow"). The
+   dot is decoration: screen readers get the hidden "(best)" instead, so the second line gives it
+   empty alternative text where the browser supports that. */
 .cmp-best {
   color: var(--ok);
-  font-weight: 600;
 }
 
-.cmp-sub {
-  font-size: var(--fs-md);
+.cmp-best::after {
+  content: " ●";
+  content: " ●" / "";
+  font-size: var(--fs-sm);
+}
+
+/* The row names stay in view while the table scrolls sideways (on a phone, or with three pins in
+   a narrow window). The card's own colour behind them hides the values passing under. */
+.cmp-table thead th:first-child,
+.cmp-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
 }
 
 .cmp-strips {
   width: 100%;
   min-width: 0;
+}
+
+/* Phone: as the picture's phone frame, values keep to one line and the table scrolls inside the
+   card instead of squeezing each value onto three lines; the row names may wrap. The site name
+   moves under the letter, so a column is no wider than its values. */
+@media (max-width: 800px) {
+  .cmp-table th,
+  .cmp-table td {
+    padding: var(--space-2);
+    white-space: nowrap;
+  }
+
+  .cmp-table tbody th {
+    white-space: normal;
+    min-width: calc(var(--space-5) * 5);
+  }
+
+  .cmp-col > .cmp-where {
+    display: block;
+  }
+
+  .cmp-where::before {
+    content: none;
+  }
 }
 
 .cmp-note {

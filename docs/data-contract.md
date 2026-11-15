@@ -142,9 +142,10 @@ the flat map (whole-Moon view, the fading ring around a polar view, and the nort
 Since T43 (decision of 15 Nov 2026, SPEC section 6) they are also a source of numbers, the
 exception to "pictures only": the height and slope map layers, and the readout's slope line, take
 heights from them where `dem.bin` does not reach, through `core/globe.ts` (section 3). Since T37
-(decision of 15 Nov 2026, option C), `globe.bin` is also the coarse terrain skyline, and the
-site's ground height, for every site north of 85 S (section 3, "Skyline"); `north.bin` is not
-used for the skyline. No other number comes from them. They download once, after `dem.bin`
+(decisions of 15 Nov 2026), `globe.bin` is also the coarse terrain skyline, and the site's ground
+height, for every site between 80 S and 80 N, and the ground past a polar map's edge for a site
+between 80 and 85 degrees; `north.bin` is the skyline and the ground height for sites north of
+80 N (section 3, "Skyline"). No other number comes from them. They download once, after `dem.bin`
 (issue #96), for every view that uses them (`sharedGlobe()` and `sharedNorth()` in
 `web/src/scene/globeHeights.ts`), and `state.ts` receives the same `globe.bin` (section 4); the
 globe is a plain sphere until they arrive or when they are missing (the mock data set has none).
@@ -449,12 +450,16 @@ alone.
 ```ts
 export type Site = { lat: number; lon: number; eye_m?: number };   // eye_m default 2
 export type AltAz = { alt: number; az: number };
-export type TerrainGrid = 'dem' | 'globe';   // T37: dem.bin (240 m) or globe.bin (3.8 km)
+// T37: the height map a site's skyline starts from: dem.bin (240 m), north.bin (1.2 km) or globe.bin (3.8 km)
+export type TerrainGrid = 'dem' | 'north' | 'globe';
 export type Skyline = {
   elev: Float32Array;                // 360 values, index = azimuth
   terrain: boolean;                  // false: a smooth Moon (all zeros)
-  grid: TerrainGrid | null;          // T37: which height map the walk used; null when terrain is false
-  cellM: number | null;              // T37: that grid's cell size, metres (240, about 3790); null when terrain is false
+  grid: TerrainGrid | null;          // T37: which height map the walk starts from; null when terrain is false
+  cellM: number | null;              // T37: that grid's cell size, metres (240, 1200, about 3790); null when terrain is false
+  // Set when the walk can pass a polar map's edge (a site between 80 and 85 degrees from the
+  // equator): beyond latitude `lat` (-80 or 80) it read globe.bin, cells of `cellM` metres.
+  outer?: { lat: number; cellM: number };
 };
 export type Sample = {
   tMs: number;
@@ -480,7 +485,7 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` (`dem.pack` first, else `dem.bin`) · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `demFromHeights(meta, values: Int16Array): Dem` · `unpackDemFile(meta, file): Promise<Int16Array \| null>` (`dem.pack`'s bytes to stored values; null when they are not gzip; `unpackHeightFile` for this grid) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.cell(row, col): number` (one stored cell, metres; row 0 at the top as in the file; no data is 0) · `dem.hasData(row, col): boolean` (T41: false on a `nodata` cell or outside the grid) · `dem.meta` |
 | `heightPack.ts` | dem.pack, globe-pack | `packHeights(values: Int16Array, width, height): Uint8Array` · `unpackHeights(packed, width, height): Int16Array` · `unpackHeightRows(packed, width, height, out, rowStart, rowEnd)` (rows in order from row 0). The lossless packing of section 2's `dem.pack`, `globe.pack` and `north.pack`, before gzip; the build packs, the loaders unpack · `unpackHeightFile(file, width, height, name): Promise<Int16Array \| null>` (a packed file as downloaded to stored values, a slice of rows at a time with pauses between; null when the bytes are not gzip, throws naming the file when they are another grid's) |
 | `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` · `sunAltAzAtSite(eph, site): (tMs) => AltAz` (issue #32: `sunAltAz` for one site at many times, the site's axes worked out once; the same numbers bit for bit) |
-| `horizon.ts` | T00 flat skyline, then T05, T37 | `skylineAt(dem: Dem | null, site: Site, globe: GlobeHeights | null = null): Skyline` · `skylineGrid(dem, site, globe): TerrainGrid \| null` (which height map a site's skyline uses, section "Skyline") · `groundAt(dem, site, globe): number` (the site's ground height from that same grid, metres; 0 when it has none) · `skylineElev(s: Skyline, az: number): number` (interpolated) · `SKYLINE_MIN_LAT` (-85) |
+| `horizon.ts` | T00 flat skyline, then T05, T37 | `skylineAt(dem: Dem | null, site: Site, globe: GlobeHeights | null = null, north: Dem | null = null): Skyline` (`north` is `north.bin` as `parseNorth` reads it) · `skylineGrid(dem, site, globe, north = null): TerrainGrid \| null` (which height map a site's skyline starts from, section "Skyline") · `groundAt(dem, site, globe, north = null): number` (the site's ground height from that same grid, metres; 0 when it has none) · `skylineElev(s: Skyline, az: number): number` (interpolated) · `SKYLINE_MIN_LAT` (-85) |
 | `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
 | `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height, out?: Float32Array): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each; written into `out` and returned when `out` is long enough) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
 | `sky.ts` | issue #80 | `Mat3` (three rows; `apply(m, v)` takes a vector from the first frame to the second) · `moonFromIcrf(tMs)` (ICRF to the Moon-fixed frame: the IAU WGCCRE lunar model, Archinal et al. 2011; within 0.02 degrees of DE440's mean-Earth frame) · `earthFromIcrf(tMs)` (ICRF to Earth-fixed: IAU 1976 precession and 1982 sidereal time, UTC for UT1, no nutation) · `moonFromEarthIcrf(earthKm, tMs)` · `moonOrbitIcrf(eph, tMs): { toMoon, pole }` · `alignFrames(fromX, fromZ, toX, toZ)` · `apply`, `applyInverse`, `multiply`, `angleBetween`. Turns the star map only; Sun and Earth angles still come from `geometry.ts` |
@@ -489,9 +494,9 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `layers.ts` | T14, T43 | `LAYER_KEYS` (`sun`, `earth`, `psr`, `height`, `slope`) and `LayerKey` · `readLayersMeta(json): LayersMeta` and `readSmoothMeta(json): SmoothMeta` (throw on a bad file) · `parseLayer(meta, pole, name, buffer): Layer` (`valueAt(lat, lon)`: bilinear, null outside the grid or equatorward of its `min_lat`; `covers`, `cell`) · `parseSmooth(meta, name, buffer): SmoothLayer` (`valueAt`: bilinear, longitude wraps) · `gridPoint(grid, lat, lon)`, `gridLatLon(grid, row, col)` (the grid's `pole`, south by default) · **`layerAt(key, lat, lon, inputs): LayerPoint \| null`**, the one function for a layer's value and source anywhere on the Moon (section 2, "Which source applies where"): `{ value, source: { id, cellM } }`, value 0..1 for `sun`, `earth`, `psr`, metres for `height`, degrees for `slope`; `cellM` is the size of the cells the value comes from, for slope the distance it is measured over (null for the smooth never-lit layer). Null only where the file the point needs is not in `inputs` (`{ layers, polar, smooth, dem, north, globe }`, each as far as loaded) · `layerValueAt(key, lat, lon, inputs): number` (the same value, NaN for null, nothing allocated: the layer pictures call it for every pixel) · `seamLats(key, inputs)` (the latitudes where that layer's sources meet) · `heightRange(inputs)` (lowest and highest height of the loaded height sources, for one colour ramp everywhere). No network: `web/src/ui/layers/` fetches the files |
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
-| `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `approachSeconds(plan)`, `hyperbolaAt`, `hyperbolaTimeToRadius`, `MOON_SOI_KM` (the arrival hyperbola round the Moon, from its sphere of influence to LOI; `missionAt` gives `approach: true` and a `moonPlane` point there, with altitude and speed above the Moon) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `lunarFrameInEarthPlane(plan)` (that frame's three axes in the transfer plane's frame, the Moon's longitude 0 towards Earth; the simulation page turns the Moon and its orbits with it so the arrival carries on from the transfer; issue #192) · `arrivalOrbit(site, vInf, rOrbit, vInfKmS)` (the lunar orbit's plane through the site holding the arrival direction, and the LOI point in it; `planMission` moves the wait in lunar orbit, `orbit.lunarOrbitS`, by under half a lap from the given one so LOI is there; issue #192) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent` (T34's gravity turn, kept as a checked case), `simulateGuidedDescent` (the descent planDescent flies: braking at full thrust from 15 km to the `HIGH_GATE_KM` 2 km high gate, then a slanting approach to the `LOW_GATE_KM` 150 m low gate (issue #192), then throttled straight down; issue #181), `planDescent` (always from 15 km; no plan when the thrust can't lift the lander in the Moon's gravity), `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`, `ASCENT_LOSSES_KMS` (1.75 km/s of gravity and drag losses added to the launch Δv; issue #181). A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular lunar orbit in the plane the arrival leads into (`orbit.lunarOrbitIncDeg`), a guided powered descent in Apollo's phases; times run back from touchdown with Apollo 11's phase lengths |
+| `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `approachSeconds(plan)`, `hyperbolaAt`, `hyperbolaTimeToRadius`, `MOON_SOI_KM` (the arrival hyperbola round the Moon, from its sphere of influence to LOI; `missionAt` gives `approach: true` and a `moonPlane` point there, with altitude and speed above the Moon) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `lunarFrameInEarthPlane(plan)` (that frame's three axes in the transfer plane's frame, the Moon's longitude 0 towards Earth; the simulation page turns the Moon and its orbits with it so the arrival carries on from the transfer; issue #192) · `ascentDvFor(incDeg)` (the ascent's Δv into a parking orbit of that inclination: Earth's turning helps by its equatorial speed times cos(inc); issue #192) · `plan.earth` (set by `departure.ts` `withLaunchWindow`) · `arrivalOrbit(site, vInf, rOrbit, vInfKmS)` (the lunar orbit's plane through the site holding the arrival direction, and the LOI point in it; `planMission` moves the wait in lunar orbit, `orbit.lunarOrbitS`, by under half a lap from the given one so LOI is there; issue #192) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent` (T34's gravity turn, kept as a checked case), `simulateGuidedDescent` (the descent planDescent flies: braking at full thrust from 15 km to the `HIGH_GATE_KM` 2 km high gate, then a slanting approach to the `LOW_GATE_KM` 150 m low gate (issue #192), then throttled straight down; issue #181), `planDescent` (always from 15 km; no plan when the thrust can't lift the lander in the Moon's gravity), `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`, `ASCENT_LOSSES_KMS` (1.75 km/s of gravity and drag losses added to the launch Δv; issue #181). A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular lunar orbit in the plane the arrival leads into (`orbit.lunarOrbitIncDeg`), a guided powered descent in Apollo's phases; times run back from touchdown with Apollo 11's phase lengths |
 | `lambert.ts` | issue #192 | `lambert(r1, r2, tofS, mu, normal): { v1, v2 } \| null` (the two-body orbit from r1 to r2 in tofS seconds, under one revolution, moving the way `normal` points; null for no such elliptic orbit) · `propagate(r0, v0, tS, mu)` (two-body position after tS seconds). Universal variables (Curtis, algorithms 3.3 and 5.2). The simulation page draws the coast from TLI to the arrival with them |
-| `departure.ts` | issue #192 | `departureFor(plan, earthPole): Departure` (the parking orbit, TLI and the coast in 3D in `missionAt`'s frame: the plane inclined `orbit.parkingIncDeg` to Earth's equator that holds the point where the craft enters the Moon's sphere of influence, and the coast as the one orbit from TLI to it; in the Moon's plane when `earthPole` is null) · `departureAt(plan, dep, tMs)` (the craft's position from launch to that entry, or null after it) · `inclinedPlane(toward, pole, incDeg, prefer)`. The simulation page draws the departure with them; the numbers stay `missionAt`'s |
+| `departure.ts` | issue #192 | `withLaunchWindow(plan, sky): OkPlan` (the plan with its launch moved to when the pad, carried round by Earth's turning, is under a parking orbit that leads to the arrival: from half a lap to `PARKING_MAX_LAPS` laps of parking before TLI, the least inclined such orbit; the launch time, the parking stay, `orbit.parkingIncDeg` and the ascent's Δv change, and `plan.earth` keeps the ICRF-to-plan turn; the plan as it was when no time works) · `launchWindow(plan, icrfToPlane)` · `icrfToPlaneFor(plan, sky)` · `earthAxesAt(icrfToPlane, tMs)` (Earth's axes in the plan's frame, from `sky.ts` `earthFromIcrf`) · `onEarthAt` · `groundUnder` · `departureFor(plan): Departure` (the parking orbit, TLI and the coast in 3D in `missionAt`'s frame: through the pad at liftoff and the point where the craft enters the Moon's sphere of influence with `plan.earth`, in the Moon's plane without; the coast the one orbit from TLI to that point) · `departureAt(plan, dep, tMs)` (the craft's position from launch to that entry, or null after it) · `earthGroundAt(plan, dep, tMs)` (the latitude and longitude on Earth under the craft, or null without `plan.earth`). `state.ts` `missionFor` applies the window; the simulation page draws Earth, the departure and the place under the craft with these |
 | `report.ts` | T35 | `buildReport(plan, context): Report` (the mission report as plain data: every phase with T+ and the point under the craft, the key events, the coast every 12 h, the totals and orbits, the powered descent every 30 s, the landing site's numbers and warnings as the mission card shows them, the first 30 days' periods, the model's limits and sources) · `reportJson(report)` (the JSON download, schema below) · `reportCsv(report)` (the flight schedule, one row per phase) · `reportFileName(report, 'json' | 'csv')` (`darksight-mission-<site id or coordinates>-<touchdown like 2026-11-21T1604Z>.<ext>`) · `descentTrack(plan, stepS)`, `missionEvents(plan)`, `coastTrack(plan, stepH)`, `periods(samples, body)` (up and down runs with `summary()`'s rules) · `PHASE_NAMES`, `EVENT_NAMES`, `MODEL_LIMITS`, `REPORT_SOURCES`, `REPORT_SCHEMA`. Every number from `missionAt` and the plan; the landing site's numbers come in from `ui/mission/conditions.ts` |
 | `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false, checking = false): string` · `durationText(ms): string` (`3 d 4 h`, or `5 h 20 min` under one day; T42) |
 | `datesearch.ts` | T42 | `firstWindow(eph, site, groundM, skyline, startMs, endMs, need: Need, minHours): DateSearch` (`Need` is `'both' \| 'sun' \| 'earth'`; the first window at or after `startMs`, starting before `endMs`, in which the Sun (any of its disc showing), Earth, or both at once stay up for at least `minHours`. `{ status: 'found', startMs, endMs }`, `endMs` null when it lasts more than `END_LOOK_DAYS` (60) days; `{ status: 'none', checkedToMs }` (the search's end, or the end of the table first); `{ status: 'no-rows', atMs }` where a decade is not in memory or before 1900, never read as dark. Hourly samples from `series()`, each edge halved to under a minute as `nextFlip()` does; a start after `startMs` is rounded up to the whole minute) · `monthsLater(tMs, months)` (calendar months in UTC; a day the month lacks becomes its last day) · `END_LOOK_DAYS` |
@@ -546,20 +551,26 @@ elev  = atan2(r1 cos(gamma) - r0, r1 sin(gamma))
 skyline[az] = largest elev along that azimuth
 ```
 
-**Which height map (T37, option C, decision of 15 Nov 2026).** One grid for the whole walk, chosen
-by the site's latitude, never mixed along a walk:
+**Which height map (T37, decisions of 15 Nov 2026).** The finest one that has the site. `grid`
+names it, and `cellM` is its cell, which sets the walk's steps:
 
-| Site | Grid (`grid`) | Cell (`cellM`) | Heights | When that grid is not loaded |
+| Site | Grid (`grid`) | Cell (`cellM`) | Heights along the walk | When a grid it needs is not loaded |
 |---|---|---|---|---|
 | At or south of 85 S (`lat <= -85`) | `dem.bin` (`'dem'`) | `pixel_m`: 240 m | `dem.heightAt` | Flat, `terrain = false`. Never `globe.bin`: a polar site is not downgraded to coarse terrain |
-| North of 85 S, anywhere on the Moon | `globe.bin` (`'globe'`) | `rowSpacingM`: about 3790 m | `globe.heightBilinear` | Flat, `terrain = false` |
+| Between 85 S and 80 S, where `dem.covers` the site | `dem.bin` (`'dem'`) | 240 m | `dem.heightAt` where `dem.covers` the point, `globe.heightBilinear` past the edge at 80 S. `outer = { lat: -80, cellM: about 3790 }` | No `globe.bin`: flat, `terrain = false`. No `dem.bin`: `globe.bin` for the whole walk |
+| North of 80 N, where `north.covers(-lat, lon)` | `north.bin` (`'north'`) | `pixel_m`: 1200 m | `north.heightAt(-lat, lon)` where it covers the point, `globe.heightBilinear` past the edge at 80 N. `outer = { lat: 80, cellM: about 3790 }` south of 85 N, none from 85 N to the pole | No `globe.bin`: flat, `terrain = false`. No `north.bin`: `globe.bin` for the whole walk |
+| Every other site | `globe.bin` (`'globe'`) | `rowSpacingM`: about 3790 m | `globe.heightBilinear` | Flat, `terrain = false` |
 
-85 S is where the 150 km walk still ends inside `dem.bin` (it reaches 80 S). The walk, its step
-and its formulas are the same on both grids; on `globe.bin` the step starts at half a cell (about
-1.9 km), so it catches crater walls and massifs, not a 1 km ridge. `ground(site)` comes from the
-same grid as the walk (`groundAt`), so the site and its skyline are measured from one surface; 0
-when the site has no grid. `terrain = false`, `grid = null`, `cellM = null` and all zeros when the
-site's grid is not loaded (the mock data set has no `globe.bin`).
+Within 5 degrees of a pole the 150 km walk (4.95 degrees) ends inside the polar map, which reaches
+80 degrees; `outer` is set only for the sites whose walk can pass that edge. A site at or south of
+85 S reads `dem.bin` alone and does not wait for `globe.bin`; every other site needs `globe.bin`
+loaded. Within 45 m of 80 degrees on the four axes of a polar map's square, `covers` is false and
+the site uses `globe.bin`. The walk, its step and its formulas are the same on every grid; on
+`globe.bin` the step starts at half a cell (about 1.9 km), so it catches crater walls and massifs,
+not a 1 km ridge. `ground(site)` comes from the grid that `grid` names (`groundAt`), so the site
+and the start of its skyline are measured from one surface; 0 when the site has no grid.
+`terrain = false`, `grid = null`, `cellM = null` and all zeros when a grid the site needs is not
+loaded (the mock data set has no `globe.bin`).
 
 ### Visibility (T06)
 
@@ -587,8 +598,9 @@ export type AppState = {
   selectedId: string; range: Range; mode: '2d' | '3d';
   windowStartMs: number;                 // left edge of the timeline for the live scenario
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
-  globe: GlobeHeights | null;                    // T37: globe.bin, the coarse skyline north of 85 S
+  globe: GlobeHeights | null;                    // T37: globe.bin, which every site north of 85 S needs
   globeStatus: 'loading' | 'ready' | 'missing';  // T37: 'missing' once it failed or isn't there (mock)
+  north: Dem | null;                             // T37: north.bin (parseNorth), the skyline north of 80 N; null until it arrives, or if it failed
   landing: { site: Site; tMs: number } | null;   // T34: a copy of a scenario's site and time
   padId: string; lander: Lander;                 // T34: core/pads.ts id, core/mission.ts Lander
   battery: Battery;    // T40: core/battery.ts; in the address as bat=capacityWh,panelW,useW when changed
@@ -605,7 +617,7 @@ selected(): Scenario                     // the live or pinned scenario named by
 setData(patch: { eph?, dem?, sites?, globe? })  // the pages' main.ts only, as each file arrives; globe: null = missing
 
 // computed once and cached here, so modules don't repeat the work
-skylineFor(sc: Scenario): Skyline                     // T37: dem.bin at or south of 85 S, globe.bin elsewhere
+skylineFor(sc: Scenario): Skyline                     // T37: dem.bin south of 80 S, north.bin north of 80 N, globe.bin elsewhere
 samplesFor(sc: Scenario, range: Range): Sample[]     // hourly from sc.tMs: strips, sky paths
 timelineFor(sc: Scenario, range: Range): Sample[]    // hourly from the window start: timeline
 summaryFor(sc: Scenario): Summary                     // over 30 days from sc.tMs
@@ -617,6 +629,7 @@ failedDecades(): number[]                             // T33: start of each fail
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
 missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'failed'; decadeMs: number }
   | { status: 'ready'; plan: MissionPlan }            // 'failed' (T33): a decade it needs did not download
+                                                      // issue #192: the plan with its launch window (core/departure.ts withLaunchWindow)
 dateSearchFor(sc, need, minHours, months): DateSearch | { status: 'loading' } | { status: 'failed'; decadeMs }
                                                       // T42: core's firstWindow from sc's site and time
 ```
@@ -693,18 +706,22 @@ the look for the window's end (the longer of `minHours` and 60 days), without ho
 the decade holding the scenario's time did not download; a failed decade further on stops the
 search there (`'no-rows'`). The last answer is kept, so the scenario panel asks on every redraw.
 
-**Coarse terrain (T37).** `skylineFor` uses section 3's rule: `dem.bin` at or south of 85 S,
-`globe.bin` elsewhere, and the site's ground height for every number comes from the same grid
-(`groundAt`). The pages' `main.ts` hand `state.ts` the `globe.bin` that `sharedGlobe()` downloads
-after the height map: `setData({ globe })`, or `setData({ globe: null })` when it fails or is
-missing (`globeStatus` becomes `'missing'`; it is `'loading'` until then). Its arrival clears the
-cached results only for sites north of 85 S: a polar site's skyline, series and never-lit scan
-stay, because they never use it. Until it arrives a site north of 85 S has a smooth Moon, and the
-page says the coarse terrain is still loading. Every place that names the terrain takes its words
-from `ui/terrain.ts` (`terrainNote`, `terrainCaption`, `terrainShort`), so the readout, sky
-panorama, nudge and report agree: "Terrain from LOLA, 240 m cells" for `'dem'`; "Coarse terrain:
-LOLA whole-Moon height map, 3.8 km cells" for `'globe'`; a smooth Moon otherwise, saying whether
-`globe.bin` is still loading or missing.
+**Which terrain (T37).** `skylineFor` uses section 3's rule: `dem.bin` south of 80 S, `north.bin`
+north of 80 N, `globe.bin` elsewhere and past a polar map's edge, and the site's ground height for
+every number comes from the grid the skyline starts from (`groundAt`). The pages' `main.ts` hand
+`state.ts` the `globe.bin` and `north.bin` that `sharedGlobe()` and `sharedNorth()` download after
+the height map, in one change: `setData({ globe, north })` (`north: null` when `north.bin` failed:
+northern sites then use `globe.bin`), or `setData({ globe: null })` when `globe.bin` fails or is
+missing (`globeStatus` becomes `'missing'`; it is `'loading'` until then). Their arrival clears
+the cached results only for sites north of 85 S: a polar site's skyline, series and never-lit scan
+stay, because they never use either. Until `globe.bin` arrives a site north of 85 S has a smooth
+Moon, and the page says the whole-Moon height map is still loading. Every place that names the
+terrain takes its words from `ui/terrain.ts` (`terrainNote`, `terrainCaption`, `terrainShort`), so
+the readout, sky panorama, nudge and report agree: "Terrain from LOLA, 240 m cells" for `'dem'`
+and "Terrain from LOLA, 1.2 km cells" for `'north'`, each followed by "(3.8 km cells north of
+80° S)" or "(3.8 km cells south of 80° N)" when `outer` is set; "Coarse terrain: LOLA whole-Moon
+height map, 3.8 km cells" for `'globe'`; a smooth Moon otherwise, saying whether `globe.bin` is
+still loading or missing. The readout, Compare and nudge show no note for `'dem'` without `outer`.
 
 **While data is loading** (`eph` is null), the accessors return empty arrays, `null` flips, a
 flat skyline and zeros. Modules show "Loading" and must not crash.

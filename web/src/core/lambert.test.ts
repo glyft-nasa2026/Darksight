@@ -21,6 +21,33 @@ describe('propagate', () => {
     close(propagate(r0, v0, PERIOD, MU_EARTH), r0, 0.01);
   });
 
+  it('stays on a long, thin lunar transfer ellipse at every moment, as Kepler\'s equation puts it (issue #192)', () => {
+    // Perigee 185 km up, apogee 520,000 km (e about 0.975, as a TLI the departure solves for
+    // aims): the plain Newton solve ran away from 11 hours on. Kepler's equation solved here by
+    // bisection, which cannot run away, at 3,001 moments over three days, from both ends.
+    const ra = 520_000;
+    const a = (R + ra) / 2;
+    const e = (ra - R) / (ra + R);
+    const b = a * Math.sqrt(1 - e * e);
+    const n = Math.sqrt(MU_EARTH / a ** 3);
+    const vp = Math.sqrt(MU_EARTH * (2 / R - 1 / a));
+    let worst = 0;
+    for (let i = 0; i <= 3000; i++) {
+      const t = (i / 3000) * 3 * 86_400;
+      const M = n * t;
+      let lo = 0, hi = 2 * Math.PI * Math.ceil(M / (2 * Math.PI) + 1);
+      for (let k = 0; k < 200; k++) { const E = (lo + hi) / 2; if (E - e * Math.sin(E) < M) lo = E; else hi = E; }
+      const E = (lo + hi) / 2;
+      const want: V3 = [a * (Math.cos(E) - e), b * Math.sin(E), 0];
+      const got = propagate([R, 0, 0], [0, vp, 0], t, MU_EARTH);
+      worst = Math.max(worst, Math.hypot(got[0] - want[0], got[1] - want[1], got[2] - want[2]));
+    }
+    expect(worst).toBeLessThan(1);
+    // Backwards from apogee too.
+    const half = Math.PI / n;
+    close(propagate([-ra, 0, 0], [0, -Math.sqrt(MU_EARTH * (2 / ra - 1 / a)), 0], -half, MU_EARTH), [R, 0, 0], 1);
+  });
+
   it('reaches the apogee of a Hohmann ellipse in half its period', () => {
     const ra = 380_000;
     const a = (R + ra) / 2;

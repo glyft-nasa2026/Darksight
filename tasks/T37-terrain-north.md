@@ -1,6 +1,6 @@
 # T37: Terrain skyline north of 85 S
 
-Status: done (Fabian, then MarsRon; pull request #193, merged as `7c463d9`; Compare, the timeline and the report page follow `globe.bin` when it arrives, #207). Option C: `dem.bin` (240 m) at or south of 85 S, `globe.bin` (3.8 km) elsewhere. Every "Done when" line passed on `5ffa690` before the merge (`npm test` 779 passed, `npm run build` passed, CI `test-and-build` and `preview` passed; height map in at 6.97 s on Fast 4G, `docs/load-time.md` section 9). `npx playwright test`: 18 of 20; the two `landing-wide.spec.ts` fails also fail on `main`. The browser checks were done by MarsRon before the merge
+Status: done (Fabian, then MarsRon; pull request #193, merged as `7c463d9`; Compare, the timeline and the report page follow `globe.bin` when it arrives, #207). Option C, amended in the third delivery (pull request #211): `dem.bin` (240 m) south of 80 S, `north.bin` (1.2 km) north of 80 N, `globe.bin` (3.8 km) elsewhere and past a polar map's edge. Every "Done when" line passed on `5ffa690` before the merge (`npm test` 779 passed, `npm run build` passed, CI `test-and-build` and `preview` passed; height map in at 6.97 s on Fast 4G, `docs/load-time.md` section 9). `npx playwright test`: 18 of 20; the two `landing-wide.spec.ts` fails also fail on `main`. The browser checks were done by MarsRon before the merge
 
 | | |
 |---|---|
@@ -108,6 +108,39 @@ Rechecked on 15 Nov 2026 on `main` at 6b76957 with real data (pull request #207)
   *costs time*: IM-2 and Chandrayaan-4 lie inside `dem.bin` and could use it.
 - The walk steps half a cell (1.9 km), so it reads up to 0.9° under a 250 m walk of the same grid
   at single azimuths (0.14° on average at the worst site). *cosmetic*
+
+### Third delivery (pull request #211, 15 Nov 2026): the finest height map that has the site
+
+Yi Hung asked for the two open items above to be fixed. The goal, options and steps above describe
+the first delivery and are left as written.
+
+| Site | Before | Now |
+|---|---|---|
+| At or south of 85 S | `dem.bin`, 240 m | unchanged |
+| 80 S to 85 S (IM-1, IM-2, Chandrayaan-4) | `globe.bin` for the whole walk | `dem.bin` as far as it has heights, `globe.bin` past its edge at 80 S |
+| North of 80 N | `globe.bin` | `north.bin`, 1.2 km, with `globe.bin` past its edge at 80 N |
+| Everywhere else | `globe.bin`, 3.8 km | unchanged |
+
+Share of 2026 with the Sun in view, engine against the LOLA sunlight layer, 60 points each:
+
+| Latitudes | Median gap before, now | Spots more than 20 points apart before, now |
+|---|---|---|
+| 80.5 S to 84.5 S | 5, 1 | 6, 0 |
+| 87 N to 89.5 N | 14, 5 | 22, 2 |
+| 80.5 N to 86 N | 8, 4 | 6, 1 |
+| 85.5 S to 89.5 S | 1, 1 | 0, 0 |
+
+Curated sites, Sun in view over 2026: IM-2 50.6 % before, 48.2 % now; Chandrayaan-4 48.7 %, 45.3 %;
+IM-1 52.3 %, 41.6 %.
+
+Checks: the new skyline equals an independent one (own reading of the files, own geometry) to
+0.0000 degrees at ten sites; a mixed skyline takes 51 to 79 ms and a north one 24 to 42 ms;
+`dem.bin` and `north.bin` are 1 m apart from `globe.bin` on average 0.2 degrees inside each edge
+(median 24 to 36 m); six deliberate breaks of `horizon.ts` each fail 1 to 21 tests.
+
+Still open, *cosmetic*: within 45 m of 80 degrees on the four axes of a polar map's square the
+site uses `globe.bin`. Near the north pole 2 of 60 sampled spots stay more than 20 points from the
+sunlight layer (1.2 km cells against the layer's 480 m).
 
 ## Prompt to paste into Claude Code
 

@@ -41,7 +41,7 @@ const LABELS: Record<Scale, string> = {
   near: 'EARTH · ASCENT AND PARKING ORBIT · A PICTURE OF THE MODEL',
   earth: 'EARTH AND MOON · PLANE OF THE TRANSFER · MOON DRAWN LARGER THAN SCALE',
   moon: 'MOON · PLANE OF THE LUNAR ORBIT · THE SITE AT THE TOP',
-  descent: 'POWERED DESCENT · ALTITUDE AGAINST DISTANCE TO THE SITE · HEIGHT EXAGGERATED',
+  descent: 'POWERED DESCENT · ALTITUDE AGAINST DISTANCE TO THE SITE · HEIGHT EXAGGERATED · DISTANCE ON A SQUARE-ROOT SCALE',
 };
 
 function make<K extends keyof HTMLElementTagNameMap>(
@@ -187,17 +187,22 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     const raw = track(plan, pdi, td, 300, (s) => (s.rangeToGoKm === null ? null : [-s.rangeToGoKm, s.altKm]));
     const range = plan.orbit.descentRangeKm;
     const top = plan.orbit.descentStartAltKm;
-    const x0 = -range * 1.04;
-    const x1 = range * 0.06;
+    // The distance on a square-root scale: on an even one the heights are stretched about 25
+    // times and the last few km (the approach, 2 km down over about 8 km) draw as a cliff.
+    // This gives the last km room, so the approach shows as the slope it is (issue #192).
+    const sq = (x: number): number => Math.sign(x) * Math.sqrt(Math.abs(x));
+    const u0 = sq(-range) * 1.04;
+    const u1 = sq(range) * 0.05;
     const y0 = -top * 0.12;
     const y1 = top * 1.15;
-    map = ([x, y]) => [((x - x0) / (x1 - x0)) * W, H - ((y - y0) / (y1 - y0)) * H];
+    map = ([x, y]) => [((sq(x) - u0) / (u1 - u0)) * W, H - ((y - y0) / (y1 - y0)) * H];
     pts = raw;
-    const [gx0, gy] = map([x0, 0]);
-    const [gx1] = map([x1, 0]);
+    const [gx0, gy] = map([-range * 1.08, 0]);
+    const [gx1] = map([range * 0.0025, 0]);
     root.append(svg('line', 'ms-ground', { x1: gx0, y1: gy, x2: gx1, y2: gy }));
-    // Distance ticks every 100 km and the start altitude, as the timeline's axes do.
-    for (let d = 0; d <= range; d += 100) {
+    // Distance ticks, closer near the site, and the start altitude.
+    const ticks = [0, 10, 50, ...Array.from({ length: Math.floor(range / 100) }, (_, i) => (i + 1) * 100)];
+    for (const d of ticks) {
       const [tx] = map([-d, 0]);
       root.append(svg('line', 'ms-gridl', { x1: tx, y1: gy, x2: tx, y2: gy + 6 }));
       const label = svg('text', 'ms-tick', { x: tx, y: gy + 22, 'text-anchor': 'middle' });
@@ -213,7 +218,7 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     const site = svg('circle', 'ms-site ms-marker', { cx: sx, cy: sy, r: 7 });
     site.style.setProperty('--ms-site', `var(${siteColor})`);
     root.append(site);
-    const along = W / (x1 - x0);   // units per km of distance to the site
+    const along = sx - map([-1, 0])[0];   // units per km over the last km before the site
     anchors = () => ({ site: { p: [sx, sy], s: along } });
     place = (st) => (st.rangeToGoKm === null ? null : map([-st.rangeToGoKm, st.altKm]));
   }

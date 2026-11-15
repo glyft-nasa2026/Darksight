@@ -51,6 +51,10 @@ const values = (s: Skyline): number[] => Array.from(s.elev);
 // The real file's grid shape (contract section 2), flat. Shared by the flat and timing tests.
 const FULL = { size: 2534, pixel_m: 240, x_min_m: -304080, y_max_m: 304080 };
 const flatFull = makeDem(FULL);
+// north.bin's shape (contract section 2), as core/globe.ts parseNorth hands it over: a height map
+// of mirrored latitudes, so min_lat is -80 and it is asked for (-lat, lon).
+const NORTH = { size: 509, pixel_m: 1200, x_min_m: -304800, y_max_m: 304800 };
+const flatNorth = makeDem(NORTH);
 
 describe('skylineAt: flat skyline cases', () => {
   it('is flat, with terrain false, when there is no height map', () => {
@@ -203,7 +207,7 @@ describe('skylineAt: at the exact south pole', () => {
   });
 });
 
-// --- T37, option C: globe.bin north of 85 S ----------------------------------------------------
+// --- T37: globe.bin north of 85 S, and the polar maps as far as they have heights -----------------
 
 /** Great-circle distance between two points, metres. */
 function gcDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -233,15 +237,43 @@ const flatGlobe = makeGlobe(GW, GH);
 const CELL = flatGlobe.rowSpacingM;
 
 describe('skylineAt on globe.bin (T37): which grid a site uses', () => {
-  it('uses dem.bin at or south of 85 S, even with globe.bin loaded, and globe.bin just north of it', () => {
+  it('uses dem.bin alone at or south of 85 S, even with globe.bin loaded', () => {
     const at85 = skylineAt(flatFull, { lat: -85, lon: 0 }, flatGlobe);
-    expect([at85.grid, at85.cellM]).toEqual(['dem', 240]);
+    expect([at85.grid, at85.cellM, at85.outer]).toEqual(['dem', 240, undefined]);
     const pole = skylineAt(flatFull, { lat: -89.67, lon: 129.78 }, flatGlobe);
-    expect(pole.grid).toBe('dem');
-    const north = skylineAt(flatFull, { lat: -84.99, lon: 0 }, flatGlobe);
-    expect(north.grid).toBe('globe');
-    expect(north.terrain).toBe(true);
-    expect(north.cellM).toBeCloseTo(3790.6, 0);
+    expect([pole.grid, pole.outer]).toEqual(['dem', undefined]);
+  });
+
+  it('between 80 S and 85 S: dem.bin where it has the site, with globe.bin named for the ground past 80 S', () => {
+    const band = skylineAt(flatFull, { lat: -84.99, lon: 0 }, flatGlobe);
+    expect([band.grid, band.terrain, band.cellM]).toEqual(['dem', true, 240]);
+    expect(band.outer?.lat).toBe(-80);
+    expect(band.outer?.cellM).toBeCloseTo(3790.6, 0);
+    // It waits for globe.bin: its walk can pass the edge of dem.bin, where dem.bin reads 0.
+    const waiting = skylineAt(flatFull, { lat: -84.99, lon: 0 }, null);
+    expect([waiting.grid, waiting.terrain]).toEqual([null, false]);
+    // Without dem.bin it is the whole-Moon grid, as every site north of 80 S is.
+    expect(skylineAt(null, { lat: -84.99, lon: 0 }, flatGlobe).grid).toBe('globe');
+    const outside = skylineAt(flatFull, { lat: -79.9, lon: 0 }, flatGlobe);
+    expect([outside.grid, outside.outer]).toEqual(['globe', undefined]);
+    expect(outside.cellM).toBeCloseTo(3790.6, 0);
+  });
+
+  it('north of 80 N: north.bin where it has the site, alone within 5 degrees of the pole', () => {
+    const near = skylineAt(flatFull, { lat: 86, lon: 40 }, flatGlobe, flatNorth);
+    expect([near.grid, near.terrain, near.cellM, near.outer]).toEqual(['north', true, 1200, undefined]);
+    const at85 = skylineAt(flatFull, { lat: 85, lon: 40 }, flatGlobe, flatNorth);
+    expect([at85.grid, at85.outer]).toEqual(['north', undefined]);
+    const band = skylineAt(flatFull, { lat: 82, lon: -100 }, flatGlobe, flatNorth);
+    expect([band.grid, band.cellM, band.outer?.lat]).toEqual(['north', 1200, 80]);
+    expect(band.outer?.cellM).toBeCloseTo(3790.6, 0);
+    // Without north.bin a northern site keeps globe.bin; without globe.bin it has no terrain.
+    expect(skylineAt(flatFull, { lat: 86, lon: 40 }, flatGlobe, null).grid).toBe('globe');
+    expect(skylineAt(flatFull, { lat: 86, lon: 40 }, null, flatNorth).grid).toBeNull();
+    expect(skylineAt(flatFull, { lat: 79.9, lon: 40 }, flatGlobe, flatNorth).grid).toBe('globe');
+    // The north cap never stands in for a southern site, nor dem.bin for a northern one.
+    expect(skylineAt(null, { lat: -82, lon: 0 }, flatGlobe, flatNorth).grid).toBe('globe');
+    expect(skylineAt(flatFull, { lat: 82, lon: 0 }, flatGlobe, null).grid).toBe('globe');
   });
 
   it('never downgrades a polar site: with no dem.bin it stays flat, globe.bin or not', () => {
@@ -258,12 +290,72 @@ describe('skylineAt on globe.bin (T37): which grid a site uses', () => {
     const deep = makeDem(FULL, () => -2000);
     expect(skylineGrid(deep, { lat: -86, lon: 0 }, tall)).toBe('dem');
     expect(groundAt(deep, { lat: -86, lon: 0 }, tall)).toBeCloseTo(-2000, 6);
-    // Inside dem.bin's square but north of 85 S: the globe's height, as its skyline uses.
-    expect(skylineGrid(deep, { lat: -82, lon: 0 }, tall)).toBe('globe');
-    expect(groundAt(deep, { lat: -82, lon: 0 }, tall)).toBeCloseTo(1000, 6);
+    // Inside dem.bin but north of 85 S: dem.bin's height, as its skyline starts from.
+    expect(skylineGrid(deep, { lat: -82, lon: 0 }, tall)).toBe('dem');
+    expect(groundAt(deep, { lat: -82, lon: 0 }, tall)).toBeCloseTo(-2000, 6);
     expect(groundAt(deep, { lat: -82, lon: 0 }, null)).toBe(0);
+    expect(groundAt(null, { lat: -82, lon: 0 }, tall)).toBeCloseTo(1000, 6);
     expect(groundAt(null, { lat: -88, lon: 0 }, tall)).toBe(0);
-    expect(skylineGrid(deep, { lat: Number.NaN, lon: 0 }, tall)).toBeNull();
+    // North of 80 N: north.bin's height when it is loaded, the globe's when it is not.
+    const cap = makeDem(NORTH, () => 500);
+    expect(skylineGrid(deep, { lat: 83, lon: 10 }, tall, cap)).toBe('north');
+    expect(groundAt(deep, { lat: 83, lon: 10 }, tall, cap)).toBeCloseTo(500, 6);
+    expect(groundAt(deep, { lat: 83, lon: 10 }, tall, null)).toBeCloseTo(1000, 6);
+    expect(groundAt(deep, { lat: 83, lon: 10 }, null, cap)).toBe(0);
+    for (const site of [{ lat: -86, lon: 0 }, { lat: -82, lon: 0 }, { lat: 83, lon: 10 }, { lat: 88, lon: 10 }, { lat: 10, lon: 10 }]) {
+      expect(skylineAt(deep, site, tall, cap).grid).toBe(skylineGrid(deep, site, tall, cap));
+    }
+    expect(skylineGrid(deep, { lat: Number.NaN, lon: 0 }, tall, cap)).toBeNull();
+  });
+});
+
+describe('skylineAt (T37): a walk that passes the edge of a polar map', () => {
+  // The polar map is flat at 0 m; the whole-Moon grid says 3,000 m everywhere, inside the polar
+  // map too. So a 3,000 m step shows exactly where the walk stops reading the polar map.
+  const plateau = makeGlobe(360, 180, () => 3000);
+  const dists = walkDistances(240);
+  const dip = Math.max(...dists.map((d) => elevOf(0, DEFAULT_EYE_M, d, 0)));
+  /** The contract's formula along one meridian: 0 m out to `edgeM`, 3,000 m beyond it. */
+  const stepAt = (cellM: number, edgeM: number): number =>
+    Math.max(...walkDistances(cellM).map((d) => elevOf(0, DEFAULT_EYE_M, d, d > edgeM ? 3000 : 0)));
+  const degM = (R * Math.PI) / 180;   // one degree of latitude, metres
+
+  it('from 81 S: looking north the ground past 80 S is the whole-Moon grid; looking south it is dem.bin', () => {
+    const s = skylineAt(flatFull, { lat: -81, lon: 20 }, plateau);
+    expect(s.grid).toBe('dem');
+    const want = stepAt(240, degM);
+    console.log(`81 S, flat dem.bin under a 3,000 m globe.bin: north ${s.elev[0].toFixed(3)} deg (formula ${want.toFixed(3)}), ` +
+      `south ${s.elev[180].toFixed(4)} deg (flat ground ${dip.toFixed(4)})`);
+    expect(want).toBeGreaterThan(5);
+    expect(s.elev[0]).toBeCloseTo(want, 3);
+    expect(s.elev[180]).toBeCloseTo(dip, 4);
+  });
+
+  it('from 84 S the step is further off and lower; from 85 S it is out of reach', () => {
+    const s84 = skylineAt(flatFull, { lat: -84, lon: -70 }, plateau);
+    expect(s84.elev[0]).toBeCloseTo(stepAt(240, 4 * degM), 3);
+    expect(s84.elev[0]).toBeLessThan(skylineAt(flatFull, { lat: -81, lon: -70 }, plateau).elev[0]);
+    for (const e of values(skylineAt(flatFull, { lat: -85, lon: -70 }, plateau))) expect(e).toBeCloseTo(dip, 4);
+  });
+
+  it('from 81 N on north.bin: looking south the ground past 80 N is the whole-Moon grid; looking north it is north.bin', () => {
+    const s = skylineAt(flatFull, { lat: 81, lon: 20 }, plateau, flatNorth);
+    expect(s.grid).toBe('north');
+    const flat = Math.max(...walkDistances(1200).map((d) => elevOf(0, DEFAULT_EYE_M, d, 0)));
+    expect(s.elev[180]).toBeCloseTo(stepAt(1200, degM), 3);
+    expect(s.elev[0]).toBeCloseTo(flat, 4);
+    for (const e of values(skylineAt(flatFull, { lat: 86, lon: 20 }, plateau, flatNorth))) expect(e).toBeCloseTo(flat, 4);
+  });
+
+  it('a polar map\'s own heights are read inside it: a ridge on north.bin shows, the whole-Moon grid does not', () => {
+    // 2,000 m on the cap's far half (y below 0 in its plane), flat on the near half.
+    const ridged = makeDem(NORTH, (_x, y) => (y < -30_000 ? 2000 : 0));
+    const s = skylineAt(null, { lat: 89.9, lon: 0 }, plateau, ridged);
+    expect(s.grid).toBe('north');
+    const v = values(s);
+    expect(Math.max(...v)).toBeGreaterThan(2);
+    expect(Math.max(...v)).toBeLessThan(4.5);          // 2,000 m from 27 km or more: never the 3,000 m globe
+    expect(Math.min(...v)).toBeLessThan(0.01);         // the flat half
   });
 });
 

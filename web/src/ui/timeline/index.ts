@@ -195,9 +195,9 @@ export function mount(el: HTMLElement): void {
     const startMs = samples[0].tMs;
     const endMs = samples[samples.length - 1].tMs;
     windowMs = [startMs, endMs];
-    // Either height map arriving changes the skyline, so the lines (T37: globe.bin, north of 85° S).
+    // A height map arriving changes the skyline, so the lines (T37: globe.bin and north.bin, north of 85° S).
     const key = `${sc.id}|${sc.site.lat},${sc.site.lon},${sc.site.eye_m ?? ''}|${startMs}|${endMs}|` +
-      `${st.dem ? 1 : 0}${st.globe ? 1 : 0}`;
+      `${st.dem ? 1 : 0}${st.globe ? 1 : 0}${st.north ? 1 : 0}`;
     if (key !== dataKey || !model) {
       dataKey = key;
       model = timelineModel(samples, (t, body) => flipFor({ ...sc, tMs: t }, body));
