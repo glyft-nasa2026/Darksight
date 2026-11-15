@@ -107,8 +107,8 @@ describe('slopeAt', () => {
     expect(slopeAt(dem, north.lat, north.lon)).toBeNull();
   });
 
-  it('measures over the grid spacing and ramps to 30 degrees', () => {
-    expect(slopeBaselineM(grid(meta(0, 0, 5, 240, -80), () => 0))).toBe(240);
+  it('measures over two cells of the grid and ramps to 30 degrees', () => {
+    expect(slopeBaselineM(grid(meta(0, 0, 5, 240, -80), () => 0))).toBe(480);
     expect(SLOPE_RAMP_MAX_DEG).toBe(30);
   });
 });
@@ -176,12 +176,12 @@ describe('globeSlopeAt (T43)', () => {
     }
   });
 
-  it('is level on level ground, null at the poles, and measured over the row spacing', () => {
+  it('is level on level ground, null at the poles, and measured over two rows', () => {
     const g = globe(() => 500);
     expect(globeSlopeAt(g, 12.3, 45.6)).toBe(0);
     expect(globeSlopeAt(g, 89.9, 0)).toBeNull();
     expect(globeCellGradient(g, 0, 10)).toBeNull();
     expect(globeCellGradient(g, H - 1, 10)).toBeNull();
-    expect(globeSlopeBaselineM(g)).toBeCloseTo((Math.PI * R_M) / H, 6);
+    expect(globeSlopeBaselineM(g)).toBeCloseTo((2 * Math.PI * R_M) / H, 6);
   });
 });

@@ -105,6 +105,17 @@ export function makeDateSearch(): HTMLElement {
     if (button.textContent !== label) button.textContent = label;
   };
 
+  // The line on screen answers the choices it was searched with: a changed menu clears it (and
+  // a search still waiting for its decades), so it never sits beside menus that say otherwise.
+  for (const m of [needBox, hoursBox, monthsBox]) {
+    m.addEventListener('change', () => {
+      pending = null;
+      shownAt = null;
+      line.textContent = '';
+      render();
+    });
+  }
+
   subscribe(render);
   render();
   return box;

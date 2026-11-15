@@ -1,6 +1,6 @@
 # T16: About bar, About panel and the Horizons badge
 
-Status: first delivery done (pull request #93); second delivery at M3 (t16-about-b) not started
+Status: first delivery done (pull request #93); second delivery at M3 done, in review (MarsRon, branch `t16-about-b`, pull request #201): every "Done when" line passes after merging `main`. The panel covers all 68 sources and 70 AI-use files on `main`; T17's are still empty. MarsRon read the new text on the preview and tried the panel on a phone
 
 | | |
 |---|---|
@@ -31,6 +31,11 @@ Spec feature F13, built and written by one person.
 - [ ] The panel opens and closes on desktop and at 390 px wide.
 - [ ] `npm test` and `npm run build` pass.
 - [ ] Second delivery, at M3: the panel covers every file in `docs/sources/` and `docs/ai-use/` on `main`, and `npm test` and `npm run build` pass.
+
+## After the merge
+
+- 15 Nov 2026, audit before submission (pull request #189). The panel called validation.json's 0.000001 degrees "our angles". That figure is the data pipeline's (Skyfield against Horizons). The page's own code differs from the same 18 Horizons cases by up to 0.000675 degrees: the table holds the Sun's direction from the Moon's centre, so its parallax across the Moon's radius is left out. The panel now says which figure is which, and `web/src/core/horizons.test.ts` holds the page's code to the 0.001 degrees the panel states.
+- *cosmetic*: the badge in the bar still shows the pipeline's figure with no word that it is the pipeline's.
 
 ## Prompt to paste into Claude Code
 

@@ -35,11 +35,11 @@ describe('pctText', () => {
 
 describe('slopeText (T41, T43)', () => {
   it('rounds the slope to whole degrees and names what it is measured over', () => {
-    expect(slopeText({ kind: 'ok', deg: 7.3, baselineM: 240 })).toBe('Ground slope 7° (over 240 m)');
-    expect(slopeText({ kind: 'ok', deg: 29.6, baselineM: 240 })).toBe('Ground slope 30° (over 240 m)');
+    expect(slopeText({ kind: 'ok', deg: 7.3, baselineM: 480 })).toBe('Ground slope 7° (over 480 m)');
+    expect(slopeText({ kind: 'ok', deg: 29.6, baselineM: 480 })).toBe('Ground slope 30° (over 480 m)');
     expect(slopeText({ kind: 'ok', deg: 0.2, baselineM: 960 })).toBe('Ground slope under 1° (over 960 m)');
-    expect(slopeText({ kind: 'ok', deg: 2.4, baselineM: 3790.4 })).toBe('Ground slope 2° (over 3.8 km)');
-    expect(slopeText({ kind: 'ok', deg: 5, baselineM: 1200 })).toBe('Ground slope 5° (over 1.2 km)');
+    expect(slopeText({ kind: 'ok', deg: 2.4, baselineM: 7580.8 })).toBe('Ground slope 2° (over 7.6 km)');
+    expect(slopeText({ kind: 'ok', deg: 5, baselineM: 2400 })).toBe('Ground slope 5° (over 2.4 km)');
   });
 
   it('says why there is no slope', () => {

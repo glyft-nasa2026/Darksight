@@ -16,9 +16,14 @@ import { badgeSentence, badgeText, formatDeg, readValidation, type HorizonsCheck
 const WHAT_IT_SHOWS = [
   'Darksight compares lunar landing sites and dates side by side: when each one has sunlight ' +
     '(power) and a line of sight to Earth (radio), measured against the real terrain skyline.',
-  'Pick a site on the map, from the curated list or by typing its latitude and longitude, pick a ' +
-    'time, and pin up to three scenarios to compare. Every number comes from the same calculation ' +
-    'in the browser, from a table of Sun and Earth positions and a height map of the south pole.',
+  'Pick a site anywhere on the Moon, on the map, from the curated list or by typing its latitude ' +
+    'and longitude, pick a time, and pin up to three scenarios to compare. Every number comes from ' +
+    'the same calculation in the browser, from a table of Sun and Earth positions and LOLA height ' +
+    'maps: a fine one near the south pole and a coarser one for the whole Moon.',
+  'Map layers show sunlight, Earth in view, permanent shadow, height and slope over the whole Moon. ' +
+    '"Find a date" looks for the first window with enough sunlight and Earth in view, and the ' +
+    'Timeline tab plays the time forward with the battery\'s charge. "Open mission" plans a flight ' +
+    'from a launch pad to the chosen site and time, as an animation and a printable report.',
 ];
 
 // "Why the Moon is different" (T39) is in explain.ts, where a test keeps it short.
@@ -41,9 +46,11 @@ const LIBRATION = [
 
 const KNOWN_LIMITS = [
   // SPEC.md section 8, plus where the terrain applies (section 6).
-  'Real terrain applies south of 85° S, from the LOLA height map, looking out to 150 km. ' +
-    'Anywhere else the Moon is treated as smooth, and the page says so.',
-  'The height map is 240 m per cell. Rocks and small craters near the lander aren\'t seen.',
+  'Real terrain applies everywhere, looking out to 150 km. South of 85° S it comes from the LOLA ' +
+    'south-pole height map, 240 m per cell. Anywhere else it comes from LOLA\'s whole-Moon height ' +
+    'map, 3.8 km per cell: crater walls and massifs show, a ridge under a few km across doesn\'t. ' +
+    'The page says which applies, and treats the Moon as smooth while a height map is loading.',
+  'The height map is 240 m per cell near the south pole. Rocks and small craters near the lander aren\'t seen.',
   'The skyline looks out to 150 km. A very tall peak further away is missed.',
   'The Sun\'s visible fraction is by height of the disc, not by area.',
   'Earth is treated as a point for "visible or hidden".',
@@ -200,11 +207,16 @@ function buildDialog(): Panel {
     setCheck(c) {
       if (c.state === 'real') {
         const passed = !(c.maxDiffDeg > c.toleranceDeg);
-        checkP.textContent = `${badgeSentence(c)} Our angles were compared with NASA JPL's Horizons ` +
-          `system for ${c.cases} cases (Sun and Earth, several sites and times), ` +
+        // The figure in validation.json is the data pipeline's (contract section 2: `ours` is the
+        // Python calculation). The page's own code is held to PAGE_VS_HORIZONS_DEG on the same
+        // cases by core/horizons.test.ts: keep the two in step.
+        checkP.textContent = `${badgeSentence(c)} That is our data pipeline (Skyfield with JPL's DE440 ` +
+          `file) compared with NASA JPL's Horizons system for ${c.cases} cases (Sun and Earth, several ` +
+          `sites and times), ` +
           `${Number.isFinite(c.toleranceDeg) ? `against a tolerance of ${formatDeg(c.toleranceDeg)} degrees` : ''}` +
           `${passed ? '' : ' — over the tolerance'}. Checked ${c.checkedAt.replace('T', ' ').replace(/:\d\dZ$/, ' UTC')}. ` +
-          'A test runs the same comparison on the code in this page on every change.';
+          'The code in this page matches Horizons on the same cases to within 0.001 degrees, and a ' +
+          'test checks that on every change.';
       } else {
         checkP.textContent = badgeSentence(c);
       }

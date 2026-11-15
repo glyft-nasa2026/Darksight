@@ -138,13 +138,16 @@ top, the stored value minus a prediction (`left + above - above-left`; `left` on
 
 Heights of the Moon north of the south-pole height map. They draw pictures: the 3D globe, and
 the flat map (whole-Moon view, the fading ring around a polar view, and the north polar view).
-Since T43 (decision of 15 Nov 2026, SPEC section 6) they are also a source of numbers, the one
+Since T43 (decision of 15 Nov 2026, SPEC section 6) they are also a source of numbers, the
 exception to "pictures only": the height and slope map layers, and the readout's slope line, take
-heights from them where `dem.bin` does not reach, through `core/globe.ts` (section 3). No other
-number comes from them. They download once, after `dem.bin` (issue #96), for every view that
-uses them (`sharedGlobe()` and `sharedNorth()` in `web/src/scene/globeHeights.ts`); the globe is
-a plain sphere until they arrive or when they are missing (the mock data set has none). Both come
-from the same LOLA gridded data record as `dem.bin`.
+heights from them where `dem.bin` does not reach, through `core/globe.ts` (section 3). Since T37
+(decision of 15 Nov 2026, option C), `globe.bin` is also the coarse terrain skyline, and the
+site's ground height, for every site north of 85 S (section 3, "Skyline"); `north.bin` is not
+used for the skyline. No other number comes from them. They download once, after `dem.bin`
+(issue #96), for every view that uses them (`sharedGlobe()` and `sharedNorth()` in
+`web/src/scene/globeHeights.ts`), and `state.ts` receives the same `globe.bin` (section 4); the
+globe is a plain sphere until they arrive or when they are missing (the mock data set has none).
+Both come from the same LOLA gridded data record as `dem.bin`.
 
 `globe.json`:
 
@@ -438,7 +441,13 @@ alone.
 ```ts
 export type Site = { lat: number; lon: number; eye_m?: number };   // eye_m default 2
 export type AltAz = { alt: number; az: number };
-export type Skyline = { elev: Float32Array; terrain: boolean };    // 360 values, index = azimuth
+export type TerrainGrid = 'dem' | 'globe';   // T37: dem.bin (240 m) or globe.bin (3.8 km)
+export type Skyline = {
+  elev: Float32Array;                // 360 values, index = azimuth
+  terrain: boolean;                  // false: a smooth Moon (all zeros)
+  grid: TerrainGrid | null;          // T37: which height map the walk used; null when terrain is false
+  cellM: number | null;              // T37: that grid's cell size, metres (240, about 3790); null when terrain is false
+};
 export type Sample = {
   tMs: number;
   sun: AltAz; earth: AltAz;
@@ -463,11 +472,11 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` (`dem.pack` first, else `dem.bin`) · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `demFromHeights(meta, values: Int16Array): Dem` · `unpackDemFile(meta, file): Promise<Int16Array \| null>` (`dem.pack`'s bytes to stored values; null when they are not gzip) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.cell(row, col): number` (one stored cell, metres; row 0 at the top as in the file; no data is 0) · `dem.hasData(row, col): boolean` (T41: false on a `nodata` cell or outside the grid) · `dem.meta` |
 | `heightPack.ts` | dem.pack | `packHeights(values: Int16Array, width, height): Uint8Array` · `unpackHeights(packed, width, height): Int16Array` · `unpackHeightRows(packed, width, height, out, rowStart, rowEnd)` (rows in order from row 0). The lossless packing of section 2's `dem.pack`, before gzip; the build packs, the loader unpacks |
 | `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` · `sunAltAzAtSite(eph, site): (tMs) => AltAz` (issue #32: `sunAltAz` for one site at many times, the site's axes worked out once; the same numbers bit for bit) |
-| `horizon.ts` | T00 flat skyline, then T05 | `skylineAt(dem: Dem | null, site: Site): Skyline` · `skylineElev(s: Skyline, az: number): number` (interpolated) |
+| `horizon.ts` | T00 flat skyline, then T05, T37 | `skylineAt(dem: Dem | null, site: Site, globe: GlobeHeights | null = null): Skyline` · `skylineGrid(dem, site, globe): TerrainGrid \| null` (which height map a site's skyline uses, section "Skyline") · `groundAt(dem, site, globe): number` (the site's ground height from that same grid, metres; 0 when it has none) · `skylineElev(s: Skyline, az: number): number` (interpolated) · `SKYLINE_MIN_LAT` (-85) |
 | `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
 | `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height, out?: Float32Array): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each; written into `out` and returned when `out` is long enough) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
 | `sky.ts` | issue #80 | `Mat3` (three rows; `apply(m, v)` takes a vector from the first frame to the second) · `moonFromIcrf(tMs)` (ICRF to the Moon-fixed frame: the IAU WGCCRE lunar model, Archinal et al. 2011; within 0.02 degrees of DE440's mean-Earth frame) · `earthFromIcrf(tMs)` (ICRF to Earth-fixed: IAU 1976 precession and 1982 sidereal time, UTC for UT1, no nutation) · `moonFromEarthIcrf(earthKm, tMs)` · `moonOrbitIcrf(eph, tMs): { toMoon, pole }` · `alignFrames(fromX, fromZ, toX, toZ)` · `apply`, `applyInverse`, `multiply`, `angleBetween`. Turns the star map only; Sun and Earth angles still come from `geometry.ts` |
-| `slope.ts` | T41, T43 | `slopeAt(dem, lat, lon): number \| null` (ground slope in degrees from level; null off the height map, north of its `min_lat`, or where a cell it needs is `nodata`) · `cellSlope(dem, row, col)` and `cellGradient(dem, row, col)` (one stored cell; null on the grid's edge or next to `nodata`) · `slopeBaselineM(dem)` (what it is measured over: `pixel_m`, 240 m on the real map) · `SLOPE_RAMP_MAX_DEG` (30: the Slope layer's ramp ends there). Central differences on the grid, `dz/dx = (z[c+1] - z[c-1]) / (2 pixel_m / k)` and the same along rows, with the projection's scale `k = 1 + (r / 2R)^2` (conformal, so one `k` for both directions); slope = `atan(hypot(dz/dx, dz/dy))`. At a point, the gradient is interpolated bilinearly from the four cells around it. A baseline slope: a boulder or a 10 m crater does not show. T43, the whole Moon on `globe.bin`: `globeSlopeAt(globe, lat, lon): number \| null` · `globeCellGradient(globe, row, col)` · `globeSlopeBaselineM(globe)` (the row spacing, `pi R / height`: 3.8 km). Central differences on the latitude-longitude grid, `dz/dy = (z[j-1] - z[j+1]) / (2 R dphi)` and `dz/dx = (z[i+s] - z[i-s]) / (2 s R cos(phi) dlambda)`, stepping `s = max(1, floor(1 / cos phi))` columns so the east-west step is never longer than the north-south one: the baseline named is the longer of the two. Null on the first and last row; bilinear between cells at a point, as `slopeAt` |
+| `slope.ts` | T41, T43 | `slopeAt(dem, lat, lon): number \| null` (ground slope in degrees from level; null off the height map, north of its `min_lat`, or where a cell it needs is `nodata`) · `cellSlope(dem, row, col)` and `cellGradient(dem, row, col)` (one stored cell; null on the grid's edge or next to `nodata`) · `slopeBaselineM(dem)` (what it is measured over: the cells either side, twice `pixel_m`, 480 m on the real map) · `SLOPE_RAMP_MAX_DEG` (30: the Slope layer's ramp ends there). Central differences on the grid, `dz/dx = (z[c+1] - z[c-1]) / (2 pixel_m / k)` and the same along rows, with the projection's scale `k = 1 + (r / 2R)^2` (conformal, so one `k` for both directions); slope = `atan(hypot(dz/dx, dz/dy))`. At a point, the gradient is interpolated bilinearly from the four cells around it. A baseline slope: a boulder or a 10 m crater does not show. T43, the whole Moon on `globe.bin`: `globeSlopeAt(globe, lat, lon): number \| null` · `globeCellGradient(globe, row, col)` · `globeSlopeBaselineM(globe)` (two rows, `2 pi R / height`: 7.6 km). Central differences on the latitude-longitude grid, `dz/dy = (z[j-1] - z[j+1]) / (2 R dphi)` and `dz/dx = (z[i+s] - z[i-s]) / (2 s R cos(phi) dlambda)`, stepping `s = max(1, floor(1 / cos phi))` columns so the east-west step is never longer than the north-south one: the baseline named is the longer of the two. Null on the first and last row; bilinear between cells at a point, as `slopeAt` |
 | `globe.ts` | T43 | The reader for `globe.bin` and `north.bin` (section 2), moved here from `web/src/scene/` (issue #66, #112), which re-exports it: `parseGlobe(meta, buffer): GlobeHeights` (`meta`, `range` (lowest and highest cell, metres), `cell(row, col)` (columns wrap, rows stop at the poles), `heightAt(lat, lon)` (the cell holding the point: the pictures use it), `heightBilinear(lat, lon)` (between the four cell centres round the point: numbers use it), `rowSpacingM` (`pi R / height`)) · `parseNorth(meta, buffer): Dem` (`north.bin` as a height map of mirrored latitudes: ask it for `(-lat, lon)`). No network: `sharedGlobe()` and `sharedNorth()` in `web/src/scene/globeHeights.ts` fetch the files. T37 uses the same reader |
 | `layers.ts` | T14, T43 | `LAYER_KEYS` (`sun`, `earth`, `psr`, `height`, `slope`) and `LayerKey` · `readLayersMeta(json): LayersMeta` and `readSmoothMeta(json): SmoothMeta` (throw on a bad file) · `parseLayer(meta, pole, name, buffer): Layer` (`valueAt(lat, lon)`: bilinear, null outside the grid or equatorward of its `min_lat`; `covers`, `cell`) · `parseSmooth(meta, name, buffer): SmoothLayer` (`valueAt`: bilinear, longitude wraps) · `gridPoint(grid, lat, lon)`, `gridLatLon(grid, row, col)` (the grid's `pole`, south by default) · **`layerAt(key, lat, lon, inputs): LayerPoint \| null`**, the one function for a layer's value and source anywhere on the Moon (section 2, "Which source applies where"): `{ value, source: { id, cellM } }`, value 0..1 for `sun`, `earth`, `psr`, metres for `height`, degrees for `slope`; `cellM` is the size of the cells the value comes from, for slope the distance it is measured over (null for the smooth never-lit layer). Null only where the file the point needs is not in `inputs` (`{ layers, polar, smooth, dem, north, globe }`, each as far as loaded) · `layerValueAt(key, lat, lon, inputs): number` (the same value, NaN for null, nothing allocated: the layer pictures call it for every pixel) · `seamLats(key, inputs)` (the latitudes where that layer's sources meet) · `heightRange(inputs)` (lowest and highest height of the loaded height sources, for one colour ramp everywhere). No network: `web/src/ui/layers/` fetches the files |
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
@@ -527,7 +536,20 @@ elev  = atan2(r1 cos(gamma) - r0, r1 sin(gamma))
 skyline[az] = largest elev along that azimuth
 ```
 
-`terrain = false` and all zeros when `dem` is null or the site is north of 85 S.
+**Which height map (T37, option C, decision of 15 Nov 2026).** One grid for the whole walk, chosen
+by the site's latitude, never mixed along a walk:
+
+| Site | Grid (`grid`) | Cell (`cellM`) | Heights | When that grid is not loaded |
+|---|---|---|---|---|
+| At or south of 85 S (`lat <= -85`) | `dem.bin` (`'dem'`) | `pixel_m`: 240 m | `dem.heightAt` | Flat, `terrain = false`. Never `globe.bin`: a polar site is not downgraded to coarse terrain |
+| North of 85 S, anywhere on the Moon | `globe.bin` (`'globe'`) | `rowSpacingM`: about 3790 m | `globe.heightBilinear` | Flat, `terrain = false` |
+
+85 S is where the 150 km walk still ends inside `dem.bin` (it reaches 80 S). The walk, its step
+and its formulas are the same on both grids; on `globe.bin` the step starts at half a cell (about
+1.9 km), so it catches crater walls and massifs, not a 1 km ridge. `ground(site)` comes from the
+same grid as the walk (`groundAt`), so the site and its skyline are measured from one surface; 0
+when the site has no grid. `terrain = false`, `grid = null`, `cellM = null` and all zeros when the
+site's grid is not loaded (the mock data set has no `globe.bin`).
 
 ### Visibility (T06)
 
@@ -555,6 +577,8 @@ export type AppState = {
   selectedId: string; range: Range; mode: '2d' | '3d';
   windowStartMs: number;                 // left edge of the timeline for the live scenario
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
+  globe: GlobeHeights | null;                    // T37: globe.bin, the coarse skyline north of 85 S
+  globeStatus: 'loading' | 'ready' | 'missing';  // T37: 'missing' once it failed or isn't there (mock)
   landing: { site: Site; tMs: number } | null;   // T34: a copy of a scenario's site and time
   padId: string; lander: Lander;                 // T34: core/pads.ts id, core/mission.ts Lander
   battery: Battery;    // T40: core/battery.ts; in the address as bat=capacityWh,panelW,useW when changed
@@ -568,8 +592,10 @@ setLanding(sc: Scenario | null) · setPad(id) · setLander(l)            // T34
 setBattery(b: Battery)                                                 // T40
 selected(): Scenario                     // the live or pinned scenario named by selectedId
 
+setData(patch: { eph?, dem?, sites?, globe? })  // the pages' main.ts only, as each file arrives; globe: null = missing
+
 // computed once and cached here, so modules don't repeat the work
-skylineFor(sc: Scenario): Skyline
+skylineFor(sc: Scenario): Skyline                     // T37: dem.bin at or south of 85 S, globe.bin elsewhere
 samplesFor(sc: Scenario, range: Range): Sample[]     // hourly from sc.tMs: strips, sky paths
 timelineFor(sc: Scenario, range: Range): Sample[]    // hourly from the window start: timeline
 summaryFor(sc: Scenario): Summary                     // over 30 days from sc.tMs
@@ -657,6 +683,19 @@ the look for the window's end (the longer of `minHours` and 60 days), without ho
 the decade holding the scenario's time did not download; a failed decade further on stops the
 search there (`'no-rows'`). The last answer is kept, so the scenario panel asks on every redraw.
 
+**Coarse terrain (T37).** `skylineFor` uses section 3's rule: `dem.bin` at or south of 85 S,
+`globe.bin` elsewhere, and the site's ground height for every number comes from the same grid
+(`groundAt`). The pages' `main.ts` hand `state.ts` the `globe.bin` that `sharedGlobe()` downloads
+after the height map: `setData({ globe })`, or `setData({ globe: null })` when it fails or is
+missing (`globeStatus` becomes `'missing'`; it is `'loading'` until then). Its arrival clears the
+cached results only for sites north of 85 S: a polar site's skyline, series and never-lit scan
+stay, because they never use it. Until it arrives a site north of 85 S has a smooth Moon, and the
+page says the coarse terrain is still loading. Every place that names the terrain takes its words
+from `ui/terrain.ts` (`terrainNote`, `terrainCaption`, `terrainShort`), so the readout, sky
+panorama, nudge and report agree: "Terrain from LOLA, 240 m cells" for `'dem'`; "Coarse terrain:
+LOLA whole-Moon height map, 3.8 km cells" for `'globe'`; a smooth Moon otherwise, saying whether
+`globe.bin` is still loading or missing.
+
 **While data is loading** (`eph` is null), the accessors return empty arrays, `null` flips, a
 flat skyline and zeros. Modules show "Loading" and must not crash.
 
@@ -725,7 +764,8 @@ are not rounded; a value the model doesn't give is `null`, never 0. Top level: `
 `samples[]`: `t_s`, `utc`, `alt_km`, `speed_ms`, `range_to_go_km`, `propellant_left_kg`),
 `site_at_touchdown` (or null: `sun` and `earth` with `alt_deg`, `az_deg`, `above_skyline_deg`,
 the Sun's `disc_visible_pct` and `up`, Earth's `visible`; `next_sun_flip`, `next_earth_flip`;
-`sun_text`, `earth_text`; `summary_30d`; `terrain_skyline`), `surface_periods[]` (`body`, `up`,
+`sun_text`, `earth_text`; `summary_30d`; `terrain_skyline`; `terrain_cell_m` (T37: 240 for
+`dem.bin`, about 3790 for `globe.bin`, null for a smooth Moon)), `surface_periods[]` (`body`, `up`,
 `start_utc`, `end_utc`, `duration_s`), `warnings[]` (`code`, `level`, `text`), `model[]`,
 `sources[]` (`name`, `url`). The CSV has the header row
 `n,phase_id,phase,by,start_utc,end_utc,met_start_s,duration_s,dv_ms,burn_s,propellant_kg,mass_after_kg,alt_km,lat_deg,lon_deg`,

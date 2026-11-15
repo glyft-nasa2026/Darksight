@@ -5,7 +5,7 @@
 // Every number comes from core/report.ts (built from the plan and missionAt) or from
 // ui/mission/conditions.ts, the card's own landing-site numbers. This file lays them out.
 import './report.css';
-import { BRIEF_PAD_COUNT, PADS, padById } from '../../core/pads';
+import { PADS, padById } from '../../core/pads';
 import { LAUNCH_DV_NOTE,
   buildReport, descentTrack, EVENT_NAMES, reportCsv, reportFileName, reportJson,
   type LandingConditions, type Report, type ReportWarning,
@@ -188,7 +188,8 @@ export function mount(el: HTMLElement): void {
 
     const curated = s.sites.find((c) => Math.abs(c.lat - sc.site.lat) < 1e-6 && Math.abs(c.lon - sc.site.lon) < 1e-6);
     const pad = padById(s.padId);
-    const padChecked = PADS.findIndex((x) => x.id === pad.id) < BRIEF_PAD_COUNT;
+    // Every pad in PADS is checked against its source page (docs/sources/T34.md, 15 Nov 2026).
+    const padChecked = PADS.some((x) => x.id === pad.id);
     const warnings = missionWarnings(plan, cond);
     const data = { ephemeris: s.eph?.meta.source ?? null, terrain: s.dem?.meta.source ?? null };
     if ([data.ephemeris, data.terrain].some((x) => x !== null && /mock/i.test(x))) {
@@ -330,7 +331,7 @@ export function mount(el: HTMLElement): void {
       ['Longest light, 30 days', durationText(c.summary.longestLit_h * 3600)],
       ['Longest dark, 30 days', durationText(c.summary.longestDark_h * 3600)],
       ['Longest without Earth, 30 days', durationText(c.summary.longestEarthGap_h * 3600)],
-      ['Skyline', c.terrain ? 'Real terrain (LOLA)' : 'Smooth Moon, no terrain'],
+      ['Skyline', c.terrainText],
     ]);
 
     // 8. First 30 days on the surface

@@ -16,8 +16,8 @@
 // as the site moves. A cell on the grid's edge, or one whose own value or a neighbour's is
 // `nodata`, has no slope (null), and so has any point that needs it.
 //
-// This is a slope over the grid's spacing (240 m on the real map): a boulder or a 10 m crater does
-// not show in it. Heights are above the R sphere, so "level" is the sphere's local horizontal; the
+// A central difference takes the heights one cell either side, so this is a slope over twice the
+// grid's spacing (480 m on the real map): a boulder or a 10 m crater does not show in it. Heights are above the R sphere, so "level" is the sphere's local horizontal; the
 // sphere's own curvature over 480 m is under 0.02 degrees and needs no correction.
 //
 // T43: the same slope on the whole-Moon grid (globe.bin, 0.125 degrees a cell), where the polar
@@ -28,8 +28,8 @@
 //
 // A row is R dphi = 3.8 km of ground everywhere; a column only R cos(phi) dlambda, which shrinks
 // toward the poles. Stepping s = max(1, floor(1 / cos phi)) columns keeps the east-west step
-// between half and all of the north-south one, so the slope is measured over the row spacing at
-// most: that is the baseline the readout names. The first and last rows (at the poles) have no
+// between half and all of the north-south one, so the slope is measured over two rows (7.6 km)
+// at most: that is the baseline the readout names. The first and last rows (at the poles) have no
 // slope; the polar height maps cover them anyway.
 
 import { projectToGrid, type Dem } from './dem';
@@ -42,9 +42,12 @@ const DEG = 180 / Math.PI;
 /** The Slope map layer's colour ramp runs from level (0) to this many degrees and steeper. */
 export const SLOPE_RAMP_MAX_DEG = 30;
 
-/** The distance between neighbouring heights the slope is measured over, metres (dem.json's pixel_m). */
+/**
+ * The ground the slope is measured over, metres: the heights one cell either side of the point,
+ * so twice dem.json's pixel_m (480 m on the real map).
+ */
 export function slopeBaselineM(dem: Dem): number {
-  return dem.meta.pixel_m;
+  return 2 * dem.meta.pixel_m;
 }
 
 /** Ground metres per map metre is 1 / k; k for the cell (row, col). */
@@ -106,9 +109,9 @@ export function slopeAt(dem: Dem, lat: number, lon: number): number | null {
   return Math.atan(Math.hypot(gx, gy)) * DEG;
 }
 
-/** T43: the distance a globe.bin slope is measured over, metres: the row spacing, the longer of its two steps. */
+/** T43: the ground a globe.bin slope is measured over, metres: two rows (7.6 km), the longer of its two steps. */
 export function globeSlopeBaselineM(globe: GlobeHeights): number {
-  return globe.rowSpacingM;
+  return 2 * globe.rowSpacingM;
 }
 
 /** Columns a globe.bin slope steps east and west at a row: at least 1, and never more ground than a row. */

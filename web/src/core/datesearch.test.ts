@@ -71,7 +71,7 @@ const wobble = table(120, { sunLon: circling, earthLon: (d) => 7 * Math.sin((2 *
 /** Sun and Earth both held over longitude 0. */
 const still = table(120, { sunLon: () => 0, earthLon: () => 0 });
 
-const flat: Skyline = { elev: new Float32Array(360), terrain: false };
+const flat: Skyline = { elev: new Float32Array(360), terrain: false, grid: null, cellM: null };
 const equator: Site = { lat: 0, lon: 0 };
 const farSide: Site = { lat: 0, lon: 180 };
 /** On the limb as seen from Earth: Earth sits on the horizon, up half the time with the wobble. */

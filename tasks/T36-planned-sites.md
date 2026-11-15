@@ -94,6 +94,11 @@ No new package: Python reads the gazetteer's KMZ with the standard library (`zip
 target south of 85 S gets the terrain skyline; anywhere else it gets the smooth Moon (T37 covers
 that). `tasks/T07-sites.md` still says "15-20": it records what T07 did.
 
+## After the merge
+
+- 15 Nov 2026, audit before submission (pull request #189). All four coordinates match their cited papers digit for digit, with the two 0-360 conversions right. `blue-ghost-2`'s source link opened an abstract page with no coordinate; it now opens the paper's PDF, which reads "(23.813 S, 182.258 E)".
+- *cosmetic*: six of the seven "Done when" boxes are still unticked although the status says done. Line 2 asks for the mission owner's page; all four sources are payload-team papers.
+
 ## Prompt to paste into Claude Code
 
 ```text
