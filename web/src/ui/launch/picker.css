@@ -1,0 +1,41 @@
+/* The launch-site picker (T34). Only ui/theme.css variables. */
+.lp-dialog {
+  width: min(calc(var(--space-5) * 44), calc(100% - var(--space-4)));
+  max-height: calc(100% - var(--space-4));
+  padding: var(--space-4);
+  color: var(--text);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.lp-dialog:not([open]) { display: none; }
+.lp-dialog::backdrop { background: var(--bg); opacity: 0.8; }
+.lp-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.lp-head h2 { margin: 0; font-size: var(--fs-lg); font-weight: 500; }
+.lp-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-3); min-height: 0; }
+.lp-globe-box { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.lp-globe {
+  aspect-ratio: 1; width: 100%; background: var(--bg);
+  border: thin solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: grab;
+}
+.lp-globe:active { cursor: grabbing; }
+.lp-globe canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.lp-hint { margin: 0; font-size: var(--fs-sm); }
+.lp-list { display: flex; flex-direction: column; gap: var(--space-1); overflow-y: auto; max-height: calc(var(--space-5) * 20); }
+.lp-item {
+  display: grid; gap: var(--space-1); text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  background: var(--panel-2); border: thin solid var(--border); border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+}
+.lp-item b { font-weight: 500; }
+.lp-sub { font-size: var(--fs-sm); color: var(--muted); }
+.lp-item[aria-selected='true'] { border-color: var(--accent); box-shadow: inset var(--space-1) 0 0 var(--accent); }
+.lp-item:focus-visible { outline: medium solid var(--accent); }
+.lp-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.lp-chosen { display: grid; gap: var(--space-1); }
+.lp-chosen b { font-weight: 500; }
+.lp-buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+@media (max-width: 800px) {
+  .lp-body { grid-template-columns: minmax(0, 1fr); }
+  .lp-list { max-height: calc(var(--space-5) * 9); }
+  .lp-dialog { padding: var(--space-3); }
+}

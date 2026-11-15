@@ -1,0 +1,60 @@
+/* The launch simulation page (T34). Only ui/theme.css variables; the phone breakpoint is the one pixel value. */
+.sim {
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-3); padding: var(--space-3);
+  min-height: 100vh; min-height: 100dvh; box-sizing: border-box;
+}
+.sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.sim-title { margin: 0; font-size: var(--fs-lg); font-weight: 500; flex: 1; min-width: 0; }
+.sim-back { text-decoration: none; }
+.sim-stage {
+  position: relative; min-height: calc(var(--space-5) * 16);
+  background: var(--bg); border: thin solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+.sim-canvas { position: absolute; inset: 0; }
+.sim-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.sim-canvas canvas:active { cursor: grabbing; }
+.sim-scale {
+  position: absolute; left: var(--space-3); top: var(--space-2); pointer-events: none;
+  font-family: var(--font-num); font-size: var(--fs-sm); color: var(--muted); letter-spacing: 0.06em;
+  background: var(--panel); border-radius: var(--radius); padding: var(--space-1) var(--space-2);
+}
+.sim-trip {
+  position: absolute; right: var(--space-3); top: var(--space-3); pointer-events: none;
+  display: grid; gap: var(--space-2); width: min(calc(var(--space-5) * 12), calc(100% - var(--space-5)));
+}
+.sim-info {
+  display: grid; gap: var(--space-1); background: var(--panel); opacity: 0.92;
+  border: thin solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3);
+}
+.sim-info b { font-weight: 500; display: flex; align-items: center; gap: var(--space-2); }
+.sim-dot { width: var(--space-3); height: var(--space-3); border-radius: 50%; background: var(--sim-site); flex: none; }
+.sim-message { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: var(--space-5); margin: 0; }
+.sim-message[hidden], .sim-hud[hidden] { display: none; }
+.sim-hud { display: flex; flex-direction: column; gap: var(--space-3); }
+.sim-k { font-family: var(--font-num); font-size: var(--fs-sm); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.sim-when, .sim-live { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
+.sim-live { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); color: var(--muted); }
+.sim-live b { color: var(--text); font-weight: 400; }
+.sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.sim-seg { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.sim-small { font-size: var(--fs-sm); padding: var(--space-1) var(--space-3); }
+.sim-scrub { flex: 1; min-width: calc(var(--space-5) * 6); accent-color: var(--accent); }
+.sim-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); }
+.sim-step {
+  display: grid; gap: var(--space-1); font: inherit; color: var(--text); text-align: left; cursor: pointer;
+  background: var(--panel-2); border: thin solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3);
+}
+.sim-step b { font-weight: 500; }
+.sim-step.sim-done { opacity: 0.7; }
+.sim-step[aria-current='step'] { border-color: var(--accent); }
+.sim-note { margin: 0; font-size: var(--fs-sm); }
+
+@media (max-width: 800px) {
+  .sim { padding: var(--space-2); gap: var(--space-2); }
+  .sim-stage { min-height: calc(var(--space-5) * 14); }
+  .sim-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sim-trip { position: static; width: auto; padding: var(--space-2); }
+  .sim-stage { display: flex; flex-direction: column; }
+  .sim-canvas { position: relative; flex: 1; min-height: calc(var(--space-5) * 12); }
+}

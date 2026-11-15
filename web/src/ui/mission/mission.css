@@ -63,3 +63,4 @@
   /* Too narrow to lay the label over the picture: it goes above it. */
   .ms-view-label { position: static; display: block; padding: var(--space-2) var(--space-3) 0; }
 }
+.ms-proceed { margin-top: var(--space-2); }

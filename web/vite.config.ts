@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 // base './' makes every asset address relative, so the same build works on GitHub Pages under
@@ -12,6 +13,13 @@ export default defineConfig({
   build: {
     // Plotly alone is about 4.5 MB; the default 500 kB warning would fire on every build.
     chunkSizeWarningLimit: 6000,
+    // Two pages: the site, and the launch simulation that "Proceed" opens (T34).
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        simulation: fileURLToPath(new URL('./simulation.html', import.meta.url)),
+      },
+    },
   },
   test: {
     environment: 'node',
