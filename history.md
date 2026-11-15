@@ -4,6 +4,37 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: second audit pass (Compare row names, the slope's distance, three status lines)
+
+Yi Hung asked for all three after the audit in pull request #189 listed them.
+
+### SPEC.md: F6 Compare table
+
+- Was: rows "Sunset in" and "Earthset in" ("Sun now, sunset in, Earth now, Earthset in").
+- Now: "Next sunrise or sunset" and "Next Earthrise or Earthset".
+- Why: the cells under "Sunset in" read "Sunrise in 3 d 5 h", "No sunset in the next 60 days" or
+  "Permanently shadowed (until 2100)" as often as a sunset, so the row's name contradicted them.
+
+### SPEC.md: F3 Readout; docs/data-contract.md: 3. `slope.ts`; tasks/T41-slope.md; tasks/T43-layers-whole-moon.md
+
+- Was: "Ground slope 7° (over 240 m)", "(over 1.2 km)" on `north.bin`, "(over 3.8 km)" on
+  `globe.bin`; `slopeBaselineM` gave `pixel_m` and `globeSlopeBaselineM` the row spacing.
+- Now: "(over 480 m)", "(over 2.4 km)" and "(over 7.6 km)": both functions give twice the
+  spacing. The slope's value is unchanged.
+- Why: the slope is a central difference, `(z[c+1] - z[c-1]) / (2 pixel_m)`. The two heights it
+  compares are two cells apart, so that is the distance it is measured over; the label named half
+  of it.
+
+### tasks/T40-timeline-play.md: `Status:` (T42 and T43: pull requests #197 and #198)
+
+- Was: T40 "in progress (P5, branch `t40-timeline-play`, draft pull request #164)"; T42 "done, in
+  review (MarsRon, branch `t42-date-search`, pull request #167)"; T43 "done, waiting for review
+  (MarsRon, branch t43-layers-whole-moon, PR #172)".
+- Now each says done and merged: #164, #167 and #172. T40 changed here, and adds what has been
+  checked since, because its "Done when" boxes were never ticked. MarsRon changed T42 and T43
+  in pull requests #197 and #198 the same hour.
+- Why: each line was written before its pull request merged and not updated after.
+
 ## 15 Nov 2026: the terrain skyline over the whole Moon (T37, option C)
 
 ### docs/decisions.md: 14 Nov, "Real terrain for any point south of 85 S"
