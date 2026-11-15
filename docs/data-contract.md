@@ -266,6 +266,52 @@ checks in T24 and the demo use them by id.
 browser's own maths is checked against the same Horizons numbers by the `horizons.json` fixture
 below. In the mock file, `checked_at` is `null` and `cases` is empty.
 
+### `layers/layers.json` + `layers/sun.bin`, `layers/earth.bin`, `layers/psr.bin` (made by T14, `data-prep/make_layers.py`)
+
+Map layers for the south-polar 2D map (spec F14), from the LOLA team's polar illumination maps
+(`AVGVISIB_65S_240M_201608`, `..._EARTH`, `LPSR_65S_240M_201608`, release 2016; Mazarico et al.
+2011, Icarus 211, 1066-1081). They illustrate; no number in the readout or the tables comes from
+them, and they can differ from our own calculation (see "What the values mean").
+
+```json
+{
+  "size": 1267,
+  "pixel_m": 480,
+  "x_min_m": -303960,
+  "y_max_m": 303960,
+  "value_scale": 0.004,
+  "max_byte": 250,
+  "layers": {
+    "sun":   { "file": "layers/sun.bin",   "product": "AVGVISIB_65S_240M_201608",       "meaning": "..." },
+    "earth": { "file": "layers/earth.bin", "product": "AVGVISIB_65S_240M_201608_EARTH", "meaning": "..." },
+    "psr":   { "file": "layers/psr.bin",   "product": "LPSR_65S_240M_201608",           "meaning": "..." }
+  },
+  "source": "...", "product_page": "https://pgda.gsfc.nasa.gov/products/69", "citation": "..."
+}
+```
+
+Grid: the projection of `dem.bin`, at twice its cell size. Cell (row 0, col 0) is centred at
+(`x_min_m`, `y_max_m`); col = (x - x_min_m) / pixel_m, row = (y_max_m - y) / pixel_m. A 480 m cell
+is the mean of two by two `dem.bin` cells, so its centre sits half a `dem.bin` cell in from the
+height map's: the grid covers the height map minus a 120 m border. Code reads the grid from the
+file, never hard-codes it.
+
+Each `.bin`: one unsigned byte a cell, `size * size` bytes, row by row from the top row. Value =
+byte * `value_scale`, 0..1 (byte 0..250). No missing data: the source covers 65 S to the pole.
+
+What the values mean:
+- `sun`: share of hourly steps over 18.6 years in which any part of the Sun's disc is visible.
+- `earth`: the same for any part of Earth's disc (our readout treats Earth as a point).
+- `psr`: share of the cell that is permanently shadowed over those 18.6 years (not "until 2100").
+
+All three are for a point on the surface (our readout uses a 2 m eye height). About 1.6 MB each,
+fetched only when a layer is switched on.
+
+`web/src/core/layers.ts` reads them: `readLayersMeta(json): LayersMeta` (throws on a bad file) ·
+`parseLayer(meta, name, buffer): Layer` with `layer.valueAt(lat, lon): number | null` (bilinear;
+null outside the grid), `layer.covers(lat, lon)`, `layer.cell(row, col)` · `gridPoint(meta, lat,
+lon)` and `gridLatLon(meta, row, col)`. No network: `web/src/ui/layers/` fetches the files.
+
 ### Fixtures: `web/src/core/__fixtures__/horizons.json` (made by T03)
 
 The same cases, Horizons values only. A test owned by T03 runs `ephemeris.ts` and `geometry.ts`
@@ -505,6 +551,17 @@ in one of the viewport's four corners (`data-corner="tl" | "tr" | "bl" | "br"`, 
 start). Any map control the scene puts inside the viewport marks its corner with
 `data-map-corner="tl"` (and so on); the nudge then skips that corner for the next free one,
 clockwise. The scene's toolbar sits above the viewport and claims no corner.
+
+The map-layer controls (T14, `web/src/ui/layers/`) are not in `index.html` either. The scene
+creates `<section class="scene-layers">` under its map caption, outside the viewport, so nothing
+floats over the map, and calls `mount(el)` on it. The controls show in 2D mode only and say when
+the map shows the whole Moon or the north pole rather than the south pole. The layers are drawn
+by the 2D map (`web/src/map/`): in its draw step, after the terrain and before the grid and pins,
+on the south-polar map only (`kind === 'south'`; the LOLA maps used here cover the south pole
+only), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
+stereographic metres (section 2) into canvas pixels, and it redraws whenever `onLayersChange()`
+fires (data arriving, a switch, an opacity change, each frame of a fade). Both come from
+`web/src/ui/layers/index.ts`, which also holds the one store of layer settings (`layerStore`).
 
 ## 6. Look: `web/src/ui/theme.css` (T00 creates, T19 designs)
 
