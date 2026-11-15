@@ -16,9 +16,14 @@ import { badgeSentence, badgeText, formatDeg, readValidation, type HorizonsCheck
 const WHAT_IT_SHOWS = [
   'Darksight compares lunar landing sites and dates side by side: when each one has sunlight ' +
     '(power) and a line of sight to Earth (radio), measured against the real terrain skyline.',
-  'Pick a site on the map, from the curated list or by typing its latitude and longitude, pick a ' +
-    'time, and pin up to three scenarios to compare. Every number comes from the same calculation ' +
-    'in the browser, from a table of Sun and Earth positions and a height map of the south pole.',
+  'Pick a site anywhere on the Moon, on the map, from the curated list or by typing its latitude ' +
+    'and longitude, pick a time, and pin up to three scenarios to compare. Every number comes from ' +
+    'the same calculation in the browser, from a table of Sun and Earth positions and LOLA height ' +
+    'maps: a fine one near the south pole and a coarser one for the whole Moon.',
+  'Map layers show sunlight, Earth in view, permanent shadow, height and slope over the whole Moon. ' +
+    '"Find a date" looks for the first window with enough sunlight and Earth in view, and the ' +
+    'Timeline tab plays the time forward with the battery\'s charge. "Open mission" plans a flight ' +
+    'from a launch pad to the chosen site and time, as an animation and a printable report.',
 ];
 
 // "Why the Moon is different" (T39) is in explain.ts, where a test keeps it short.
