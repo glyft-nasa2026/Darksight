@@ -49,8 +49,15 @@
   align-items: start;
 }
 
+/* T23: "Sun" and "Earth" as in docs/design/readout.png: bold, sentence case, in the text colour,
+   not theme.css's small upper-case h3 label. */
 .ro-head {
+  font-family: var(--font);
   font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -58,8 +65,8 @@
 
 .ro-head::before {
   content: '';
-  width: var(--space-2);
-  height: var(--space-2);
+  width: var(--space-3);
+  height: var(--space-3);
   border-radius: 50%;
 }
 
@@ -69,6 +76,13 @@
 
 .ro-earth .ro-head::before {
   background: var(--earth);
+}
+
+/* T23: name and value rows with no lines between them and no inset, as in the picture. */
+.ro-table th,
+.ro-table td {
+  padding: var(--space-1) 0;
+  border-bottom: none;
 }
 
 .ro-table th {
@@ -81,9 +95,20 @@
   text-align: right;
 }
 
+/* T23: the countdown in the accent colour with fixed-width digits ("Sunset in 3 d 04 h"). */
 .ro-countdown {
   margin-top: var(--space-1);
-  font-weight: 600;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* T23: on a phone Sun and Earth stack, so a line divides them, as in the picture. */
+@media (max-width: 800px) {
+  .ro-earth {
+    border-top: thin solid var(--border);
+    padding-top: var(--space-3);
+  }
 }
 
 .ro-error {
