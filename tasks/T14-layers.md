@@ -1,6 +1,6 @@
 # T14: Map layers
 
-Status: not started
+Status: done (pull request #135): LOLA Sun, Earth and permanent-shadow maps plus the height layer on the south-polar 2D map, with on/off, transparency and fading. Extra scope: two small hooks in web/src/map/index.ts and web/src/scene/index.ts, and the contract entries.
 
 | | |
 |---|---|
@@ -28,9 +28,9 @@ Spec feature F14: overlays for lit %, Earth-visible %, never lit and height, wit
 
 ## Done when
 
-- [ ] Each layer toggles and fades.
-- [ ] The never-lit layer covers Shackleton's floor.
-- [ ] `npm test` and `npm run build` pass.
+- [x] Each layer toggles and fades.
+- [x] The never-lit layer covers Shackleton's floor.
+- [x] `npm test` and `npm run build` pass.
 
 ## Prompt to paste into Claude Code
 

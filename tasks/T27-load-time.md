@@ -1,6 +1,6 @@
 # T27: Load time on the real data
 
-Status: ready for review, phone still to measure (Leon, branch t27-load-time, pull request #83). Laptop numbers measured on commit 961b65c and written to docs/load-time.md: two budgets failed (numbers 6.46 s, height map 29.2 s), the freeze passes (486 ms). Follow-ups: issues #95 and #96. Second delivery (branch t27-load-time-b): height map measured again after #109, 16.44 s, pass; numbers still fail (#95). Next: the phone measurement
+Status: in progress, not done: "Done when" line 3 fails; lines 1, 2 and 4 pass. Merged: the laptop numbers, measured on commit 961b65c (Leon, #83); the height map measured again after #109 (#122: 16.44 s, pass); the phone column (#131: Realme 6, 15 Nov). Line 3 fails for two of the three budget fails: the Sun and Earth numbers (6.46 s on Fast 4G against 3 s; issue #95 is open, with no fix and no team acceptance), and the phone's Shackleton floor freeze (1.02 s; #132 fixed it, the phone measured 311 to 534 ms after it, and it was accepted as is in issue #32 (Leon), but `docs/load-time.md` has no second row for it, and section 5's laptop row still says the phone isn't measured). Not a budget line: the 1.1 s freeze when `globe.bin` arrives (issue #118). Next delivery on `t27-load-time-d`.
 
 | | |
 |---|---|

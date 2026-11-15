@@ -25,6 +25,8 @@ import {
   groundAngle, loadTileIndex, loadWindow, PATCH_MOVE_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch,
   viewGround, type TileIndex,
 } from './patch';
+import { discAlpha, glareAlpha, sunDiscScale, sunTexture } from './sun';
+import { mount as mountLayers } from '../ui/layers';
 import './scene.css';
 
 const mounts = new WeakMap<HTMLElement, () => void>();
@@ -33,6 +35,8 @@ const RAD = Math.PI / 180;
 const EARTH_RADIUS_KM = 6371;
 /** The Earth sprite is drawn this far from the site, scaled to its true apparent size. */
 const EARTH_DRAWN_KM = 20_000;
+/** The Sun sprite is drawn a little beyond the Earth's, so the Earth passes in front of it. */
+const SUN_DRAWN_KM = EARTH_DRAWN_KM * 1.05;
 /**
  * The starting view of a site off the south-pole height map takes in about this much ground each
  * way, in km: most of the level-of-detail patch round it (patch.ts, about 180 km each way).
@@ -84,6 +88,10 @@ export function mount(el: HTMLElement): void {
         <button class="btn" type="button" data-mode="3d">3D orbit</button>
       </div>
       <button class="btn scene-reset" type="button">Centre selected site</button>
+      <div class="scene-modes scene-drag" role="group" aria-label="What a drag turns in 3D">
+        <button class="btn" type="button" data-drag="site" title="Drag to orbit the selected site, never below its horizon">Orbit site</button>
+        <button class="btn" type="button" data-drag="globe" title="Drag to turn the whole Moon like a ball, north up">Turn Moon</button>
+      </div>
       <label class="scene-stretch">Vertical stretch
         <input type="range" min="1" max="5" step="1" value="1" aria-label="Vertical stretch">
         <output>1×</output>
@@ -91,7 +99,8 @@ export function mount(el: HTMLElement): void {
     </div>
     <div class="scene-viewport"><p class="scene-message muted" role="status">Loading Sun and Earth table…</p><section id="nudge" aria-label="Nudge"></section></div>
     <p class="scene-help muted">Click to pick a site · drag to pan · scroll to zoom</p>
-    <p class="scene-caption muted">Lighting illustrates the terrain; use the readout for visibility.</p>`;
+    <p class="scene-caption muted">Lighting illustrates the terrain; use the readout for visibility.</p>
+    <section class="scene-layers" aria-label="Map layers"></section>`;
   const viewport = el.querySelector<HTMLDivElement>('.scene-viewport')!;
   const message = el.querySelector<HTMLParagraphElement>('.scene-message')!;
   const help = el.querySelector<HTMLParagraphElement>('.scene-help')!;
@@ -100,10 +109,14 @@ export function mount(el: HTMLElement): void {
   const output = el.querySelector<HTMLOutputElement>('output')!;
   const reset = el.querySelector<HTMLButtonElement>('.scene-reset')!;
   const buttons = [...el.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+  const dragButtons = [...el.querySelectorAll<HTMLButtonElement>('[data-drag]')];
+  const dragGroup = el.querySelector<HTMLDivElement>('.scene-drag')!;
   // The 2D map is a flat canvas of its own (web/src/map/, T31), shown in place of the 3D canvas in
   // 2D mode. It needs no WebGL, so it works even where the 3D scene can't.
   const mapHost = document.createElement('div');
   viewport.prepend(mapHost); mountMap(mapHost);
+  // T14 map layers: controls under the map caption (not over the map); the map draws the layers.
+  mountLayers(el.querySelector<HTMLElement>('.scene-layers')!);
   const centreMap = (): void => { mapHost.dispatchEvent(new Event('map:centre')); };
   let renderer: WebGLRenderer;
   try { renderer = new WebGLRenderer({ antialias: true }); }
@@ -115,6 +128,7 @@ export function mount(el: HTMLElement): void {
       b.disabled = !is2d; b.classList.toggle('btn-primary', is2d); b.setAttribute('aria-pressed', String(is2d));
     }
     slider.disabled = true;
+    dragGroup.hidden = true;
     help.textContent = 'The 3D view needs WebGL, which this browser has switched off · Click to pick a site · drag to pan · scroll to zoom';
     caption.textContent = 'Lighting is illustrative; use the readout for visibility';
     message.hidden = true;
@@ -133,6 +147,10 @@ export function mount(el: HTMLElement): void {
   let frame = 0, disposed = false, lost = false, framed = false;
   let mode: AppState['mode'] = getState().mode;
   let polar = false, stretch = 1, drawnStretch = 1, pinPx = 1;
+  // What a drag does in 3D: orbit the selected site (as since issue #77), or turn the whole Moon
+  // like a ball about its centre, north up (the choice SPEC section 10 left open).
+  let drag: 'site' | 'globe' = 'site';
+  let facedKey = '';   // the site the globe view last turned to face
   let dem: Dem | null = null, coarse: Mesh | null = null, detail: Mesh | null = null;
   let bounds: GridBounds | undefined;
   let siteKey = '', coarseKey = '', detailKey = '', pinKey = '', themeKey = '', globeKey = '';
@@ -166,6 +184,15 @@ export function mount(el: HTMLElement): void {
   // A faint fill, so ground in shadow still shows its shape (through the height colours) instead of
   // matching the background; a shadowed crater floor stays dark. Illustrative, like the shadows.
   const ambient = new AmbientLight(); ambient.intensity = 0.3; world.add(ambient);
+  // The Sun in the sky (issue #120), where the light comes from: its disc at true size, and a glare
+  // of fixed size on screen so the few-pixel disc can be found (sun.ts). The Moon hides both by depth.
+  const sunMaterial = new SpriteMaterial({ map: sunTexture(themeColor('--sun'), discAlpha), depthTest: true, depthWrite: false });
+  const glareMaterial = new SpriteMaterial({ map: sunTexture(themeColor('--sun'), glareAlpha), depthTest: true, depthWrite: false });
+  const sunDisc = new Sprite(sunMaterial); sunDisc.name = 'Sun'; sunDisc.visible = false; sunDisc.renderOrder = 2;
+  const sunGlare = new Sprite(glareMaterial); sunGlare.name = 'Sun glare'; sunGlare.visible = false; sunGlare.renderOrder = 1;
+  world.add(sunGlare, sunDisc);
+  /** The glare's width on screen, in CSS pixels, from the theme (updateTheme). */
+  let glarePx = 1;
   const terrainMaterial = new MeshLambertMaterial({ vertexColors: true });
   const detailMaterial = terrainMaterial.clone();
   // The globe is always drawn, with the terrain set into its south cap. Pushed back in depth so
@@ -203,9 +230,11 @@ export function mount(el: HTMLElement): void {
     const controls = new OrbitControls(orbitCamera, canvas);
     controls.addEventListener('change', invalidate);
     controls.addEventListener('change', followView);
-    controls.minDistance = 0.2;
+    controls.minDistance = drag === 'globe' ? MOON_RADIUS_KM * 1.05 : 0.2;
     controls.maxDistance = MOON_RADIUS_KM * 6;
-    controls.maxPolarAngle = Math.PI * 0.49;
+    // Orbiting the site: never below its horizon. Turning the Moon: all the way round, pole to pole.
+    controls.maxPolarAngle = drag === 'globe' ? Math.PI : Math.PI * 0.49;
+    controls.enablePan = drag !== 'globe';
     controls.enabled = mode === '3d';
     return controls;
   }
@@ -221,6 +250,12 @@ export function mount(el: HTMLElement): void {
       pin.position.copy(base).addScaledVector(up, r);
     }
   }
+  /** The glare keeps its size on screen at every zoom, like the pins; the disc keeps its true size. */
+  function sizeSun(): void {
+    if (!sunDisc.visible) return;
+    const perPx = 2 * Math.tan(orbitCamera.fov * RAD / 2) * orbitCamera.position.distanceTo(sunGlare.position) / (viewport.clientHeight || 1);
+    sunGlare.scale.setScalar(Math.max(glarePx * perPx, sunDisc.scale.x));
+  }
   function render(): void {
     // In 2D the flat map shows instead: nothing is drawn here, so no shadow map is rendered.
     if (mode === '2d') { placePoleLabels(); return; }
@@ -228,9 +263,9 @@ export function mount(el: HTMLElement): void {
     // range tight around what can be seen, or near surfaces fight and far ones vanish.
     const fromCentre = orbitCamera.position.distanceTo(globe.position);
     orbitCamera.near = Math.min(1000, Math.max(0.005, (fromCentre - MOON_RADIUS_KM - Math.max(relief, northRelief, patchRelief)) / 2));
-    orbitCamera.far = fromCentre + MOON_RADIUS_KM + EARTH_DRAWN_KM * 1.1;
+    orbitCamera.far = fromCentre + MOON_RADIUS_KM + SUN_DRAWN_KM * 1.1;
     orbitCamera.updateProjectionMatrix();
-    sizePins();
+    sizePins(); sizeSun();
     fitShadow();
     renderer.render(world, orbitCamera);
     placePoleLabels();
@@ -278,8 +313,44 @@ export function mount(el: HTMLElement): void {
     const aspect = width / height;
     orbitCamera.aspect = aspect; orbitCamera.updateProjectionMatrix(); invalidate();
   }
+  /**
+   * The globe view: the camera on the Moon's centre with north up, far enough out to see the
+   * whole Moon, looking at the selected site (faceSite) or from where it already is.
+   */
+  function globeView(faceSite: boolean): void {
+    const middle = moonCentre();
+    const north = siteUp({ lat: 90, lon: 0 });
+    const site = selected().site;
+    let dir = faceSite ? siteUp(site) : orbitCamera.position.clone().sub(middle).normalize();
+    // Straight over a pole the view would have no "up": lean off it a little, toward longitude 0.
+    if (Math.abs(dir.dot(north)) > 0.97) {
+      const across = siteUp({ lat: 0, lon: site.lon }).addScaledVector(north, -siteUp({ lat: 0, lon: site.lon }).dot(north)).normalize();
+      dir = dir.clone().addScaledVector(across, 0.35).normalize();
+    }
+    const dist = Math.max(orbitCamera.position.distanceTo(middle), MOON_RADIUS_KM * 2.6);
+    orbitControls.dispose();
+    orbitControls = makeOrbitControls(north);
+    orbitControls.target.copy(middle);
+    orbitCamera.position.copy(middle).addScaledVector(dir, Math.min(dist, MOON_RADIUS_KM * 4));
+    orbitCamera.lookAt(middle); orbitControls.update();
+    facedKey = `${site.lat},${site.lon}`;
+    invalidate();
+  }
+  /** Switches what a drag does, and frames the view for it. */
+  function setDrag(next: 'site' | 'globe'): void {
+    if (next === drag) return;
+    drag = next;
+    for (const b of dragButtons) {
+      const on = b.dataset.drag === drag;
+      b.classList.toggle('btn-primary', on); b.setAttribute('aria-pressed', String(on));
+    }
+    if (drag === 'globe') globeView(true);
+    else centre();
+    update(getState());
+  }
   /** Resets the orbit camera, and the flat map, to their starting view of the selected site. */
   function centre(): void {
+    if (drag === 'globe') { globeView(true); centreMap(); resize(); return; }
     // The patch goes back to the site with the view, not 200 ms later through followView.
     clearTimeout(patchTimer); patchCentre = selected().site; updatePatch();
     const up = siteUp(selected().site);
@@ -301,6 +372,12 @@ export function mount(el: HTMLElement): void {
   }
   /** Brings the selected site back to the middle of the orbit view, keeping zoom and viewing angle. The map follows by itself. */
   function follow(): void {
+    if (drag === 'globe') {
+      // Turning the Moon: a new site turns the Moon to face it; anything else leaves the view be.
+      const site = selected().site;
+      if (`${site.lat},${site.lon}` !== facedKey) globeView(true);
+      return;
+    }
     const offset = orbitCamera.position.clone().sub(orbitControls.target);
     // Off the height map the next site may be far round the Moon: the orbit's axis turns to its
     // vertical, and the camera keeps its place in the site's own frame. On the height map, sites
@@ -538,12 +615,15 @@ export function mount(el: HTMLElement): void {
       const vectors = s.eph.vectorsAt(sc.tMs);
       sun.position.copy(target).addScaledVector(moonDirection(vectors.sun), 2000); sun.intensity = 3;
       sun.castShadow = polar;
+      sunDisc.position.copy(target).addScaledVector(moonDirection(vectors.sun), SUN_DRAWN_KM);
+      sunDisc.scale.setScalar(sunDiscScale(SUN_DRAWN_KM)); sunGlare.position.copy(sunDisc.position);
+      sunDisc.visible = sunGlare.visible = true;
       // Seen from the site, not the Moon's centre: Earth is close enough for that to matter.
       const toEarth = moonDirection(vectors.earthKm).add(globe.position).sub(target);
       const distance = toEarth.length();
       earth.position.copy(target).addScaledVector(toEarth.normalize(), EARTH_DRAWN_KM);
       earth.scale.setScalar(2 * EARTH_RADIUS_KM * EARTH_DRAWN_KM / distance); earth.visible = true;
-    } else { sun.intensity = 0; earth.visible = false; }
+    } else { sun.intensity = 0; earth.visible = false; sunDisc.visible = sunGlare.visible = false; }
     if (!lost) {
       message.hidden = tabled;
       message.textContent = s.eph ? 'This time is outside the Sun and Earth table' : 'Loading Sun and Earth table…';
@@ -559,7 +639,9 @@ export function mount(el: HTMLElement): void {
       stretch > 1 && dem ? 'Heights exaggerated; shadows are illustrative' : 'Lighting is illustrative; use the readout for visibility',
     ].filter(Boolean).join(' · ');
     help.textContent = mode === '2d' ? 'Click to pick a site · drag to pan · scroll to zoom'
-      : 'Click to pick a site · drag to orbit · right-drag to pan · scroll to zoom';
+      : drag === 'globe' ? 'Click to pick a site · drag to turn the Moon · scroll to zoom'
+        : 'Click to pick a site · drag to orbit · right-drag to pan · scroll to zoom';
+    dragGroup.hidden = mode === '2d';
     invalidate();
   }
   function updateTheme(): void {
@@ -573,6 +655,11 @@ export function mount(el: HTMLElement): void {
     // Until the height map arrives there is no 0 m colour; the middle of the ramp stands in.
     globeMaterial.color.set(themeColor('--terrain-lo')).lerp(new Color(themeColor('--terrain-hi')), 0.5);
     const old = earthMaterial.map; earthMaterial.map = earthTexture(); old?.dispose();
+    for (const [material, alpha] of [[sunMaterial, discAlpha], [glareMaterial, glareAlpha]] as const) {
+      const oldSun = material.map; material.map = sunTexture(themeColor('--sun'), alpha); oldSun?.dispose();
+    }
+    // Twice the largest gap each way: big enough to catch the eye, small next to the Moon.
+    glarePx = themeLength(viewport, '--space-5') * 4;
     stars.recolor();
     update(getState());
   }
@@ -609,6 +696,12 @@ export function mount(el: HTMLElement): void {
   canvas.addEventListener('webglcontextlost', onLost); canvas.addEventListener('webglcontextrestored', onRestored);
   const changeMode = (event: Event): void => setMode((event.currentTarget as HTMLButtonElement).dataset.mode as AppState['mode']);
   buttons.forEach((b) => b.addEventListener('click', changeMode));
+  const changeDrag = (event: Event): void => setDrag((event.currentTarget as HTMLButtonElement).dataset.drag as 'site' | 'globe');
+  dragButtons.forEach((b) => b.addEventListener('click', changeDrag));
+  for (const b of dragButtons) {
+    const on = b.dataset.drag === drag;
+    b.classList.toggle('btn-primary', on); b.setAttribute('aria-pressed', String(on));
+  }
   // The camera follows the site up or down with the stretch; it isn't reset.
   const onStretch = (): void => { stretch = Number(slider.value); output.value = `${stretch}×`; update(getState()); };
   slider.addEventListener('input', onStretch); reset.addEventListener('click', centre);
@@ -630,8 +723,9 @@ export function mount(el: HTMLElement): void {
     canvas.removeEventListener('pointerup', pick); canvas.removeEventListener('pointercancel', cancel);
     canvas.removeEventListener('webglcontextlost', onLost); canvas.removeEventListener('webglcontextrestored', onRestored);
     slider.removeEventListener('input', onStretch); reset.removeEventListener('click', centre);
-    buttons.forEach((b) => b.removeEventListener('click', changeMode)); window.removeEventListener('pagehide', onPageHide);
+    buttons.forEach((b) => b.removeEventListener('click', changeMode)); dragButtons.forEach((b) => b.removeEventListener('click', changeDrag)); window.removeEventListener('pagehide', onPageHide);
     orbitControls.dispose(); clearTerrain(); clearPins(); northMesh?.geometry.dispose(); clearPatch(); unmountMap(mapHost);
+    sunMaterial.map?.dispose(); sunMaterial.dispose(); glareMaterial.map?.dispose(); glareMaterial.dispose();
     pinGeometry.dispose(); globe.geometry.dispose(); globeMaterial.map?.dispose(); globeMaterial.normalMap?.dispose(); globeMaterial.dispose(); terrainMaterial.dispose(); detailMaterial.dispose();
     earthMaterial.map?.dispose(); earthMaterial.dispose(); sun.dispose(); stars.dispose();
     poles.geometry.dispose(); poles.material.dispose(); poleLabels.forEach((label) => label.remove());

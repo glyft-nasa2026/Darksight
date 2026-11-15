@@ -1,6 +1,6 @@
 # T19: Theme, layout, chart style
 
-Status: done (pull request #23); `t19-ui-design-b` (pull request #94, in review) puts Scenarios beside the map with the Solar panel straight under it, the Readout straight under the map, and Sun and Earth side by side in a wide Readout. Palette from docs/design.md, --dark #0e1116, #panel placed beside scenarios, chart animation opt-in. "Done when" line 2 (contrast on the built site) passes since `t19-ui-design-c` (pull request #116): `web/e2e/contrast.spec.ts` checks it in CI
+Status: done (pull request #23). `t19-ui-design-b` (#94) put Scenarios beside the map with the Solar panel straight under it, the Readout straight under the map, and Sun and Earth side by side in a wide Readout. "Done when" line 2 (contrast on the built site) passes since `t19-ui-design-c` (#116): `web/e2e/contrast.spec.ts` checks it in CI. Line 5 describes the layout before #61 and #94: the nudge panel now sits over the map, and `#panel` is under `#scenarios` at 1280 px and after `#readout` at 390 px. Palette from docs/design.md, --dark #0e1116, chart animation opt-in.
 
 | | |
 |---|---|

@@ -485,10 +485,10 @@ with sync_playwright() as p:
     page.wait_for_timeout(350)
     assert 'South-pole terrain' in page.locator('.scene-caption').inner_text()
     passed('resolution independence', '634 × 634 at 960 m and 2534 × 2534 at 240 m render through the same code')
-    # Issue #65: the height map's outer cells' edges, half a cell beyond its stored corners.
-    grid = {'top': fine_meta['y_max_m'] + fine_meta['pixel_m']/2,
-            'mid_x': fine_meta['x_min_m'] + (fine_meta['size'] - 1) * fine_meta['pixel_m'] / 2,
-            'mid_y': fine_meta['y_max_m'] - (fine_meta['size'] - 1) * fine_meta['pixel_m'] / 2}
+    # Issues #65 and #112: the polar view's square, centred on the pole and reaching 20 degrees
+    # from it (the height map, then the whole-Moon picture fading out from 80 to 70 degrees S).
+    half = 2 * R * math.tan(math.radians(10))
+    grid = {'top': half, 'mid_x': 0, 'mid_y': 0, 'whole': 2 * half}
     # A drag stops at the map's edge. Dragged far down at the starting zoom, the view stops with the
     # map's top edge at the canvas's top, so a click 60 px below the top lands 60 px inside the map,
     # straight above the site; without the limit it would land beyond the map.
@@ -497,7 +497,7 @@ with sync_playwright() as p:
         b = map_canvas.bounding_box()
         before = page.evaluate("async () => (await import('/src/state.ts')).getState().live.site")
         x = b['x'] + b['width']/2 + 150
-        for _ in range(3):
+        for _ in range(8):   # far enough to reach the top edge, 613 km from the pole
             page.mouse.move(x, b['y'] + 30); page.mouse.down()
             page.mouse.move(x, b['y'] + 410, steps=10); page.mouse.up()
         page.wait_for_timeout(300)
@@ -511,10 +511,10 @@ with sync_playwright() as p:
         assert error_px < 2, (before, got, error_px)
         page.evaluate(f"async () => (await import('/src/state.ts')).setLiveSite({json.dumps(before)})")
         page.wait_for_timeout(200)
-        return {'dragged_px': 3 * 380, 'clicked': got, 'click_error_px': round(error_px, 2)}
+        return {'dragged_px': 8 * 380, 'clicked': got, 'click_error_px': round(error_px, 2)}
     passed('2D pan limit', pan_limit())
-    # Zoomed right out, the polar map stops where the whole height map just fits the canvas, and
-    # so sits in its middle. A click a quarter of the canvas right of the middle lands where that
+    # Zoomed right out, the polar map stops where its whole square just fits the canvas, and
+    # so sits in its middle. A click an eighth of the canvas right of the middle lands where that
     # scale says; any further zoom-out would put it much further away.
     def zoom_out_limit(wheel):
         page.wait_for_timeout(500)   # after a viewport change, the charts above the map settle first
@@ -528,8 +528,10 @@ with sync_playwright() as p:
             page.wait_for_timeout(300)
             assert map_canvas.bounding_box() == b, 'the wheel scrolled the page instead of zooming the map'
         before = page.evaluate("async () => (await import('/src/state.ts')).getState().live.site")
-        scale = min(b['width'], b['height']) / (fine_meta['size'] * fine_meta['pixel_m'])   # px per metre
-        offset_px = min(b['width'], b['height']) / 4
+        scale = min(b['width'], b['height']) / grid['whole']   # px per metre
+        # An eighth of the canvas: about 150 km from the pole, on the height map. A quarter lands
+        # just past 80 degrees S, in the fading ring (issue #112), and opens the whole-Moon map.
+        offset_px = min(b['width'], b['height']) / 8
         page.mouse.click(b['x']+b['width']/2+offset_px, b['y']+b['height']/2)
         got = page.evaluate("async () => (await import('/src/state.ts')).getState().live.site")
         ex, ey = grid['mid_x'] + offset_px / scale, grid['mid_y']

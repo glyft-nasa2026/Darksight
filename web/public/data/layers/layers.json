@@ -1,0 +1,28 @@
+{
+  "size": 1267,
+  "pixel_m": 480,
+  "x_min_m": -303960,
+  "y_max_m": 303960,
+  "value_scale": 0.004,
+  "max_byte": 250,
+  "layers": {
+    "sun": {
+      "file": "layers/sun.bin",
+      "product": "AVGVISIB_65S_240M_201608",
+      "meaning": "share of hourly steps over 18.6 years with any part of the Sun's disc visible"
+    },
+    "earth": {
+      "file": "layers/earth.bin",
+      "product": "AVGVISIB_65S_240M_201608_EARTH",
+      "meaning": "share of hourly steps over 18.6 years with any part of Earth's disc visible"
+    },
+    "psr": {
+      "file": "layers/psr.bin",
+      "product": "LPSR_65S_240M_201608",
+      "meaning": "share of the cell that is permanently shadowed"
+    }
+  },
+  "source": "LRO LOLA polar illumination products, release 2016 (E. Mazarico, NASA GSFC), PDS Geosciences Node extras: https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/extras/illumination/release_2016/img/",
+  "product_page": "https://pgda.gsfc.nasa.gov/products/69",
+  "citation": "Mazarico, E., Neumann, G. A., Smith, D. E., Zuber, M. T., Torrence, M. H. (2011), Illumination conditions of the lunar polar regions using LOLA topography, Icarus 211, 1066-1081, doi:10.1016/j.icarus.2010.10.030"
+}
