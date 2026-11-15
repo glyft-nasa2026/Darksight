@@ -11,6 +11,8 @@ import {
   APOLLO_11_TIMES, earthMoonKmAt, EXAMPLE_LANDER, planMission, type Lander, type MissionPlan,
 } from './core/mission';
 import { DEFAULT_PAD_ID, padById } from './core/pads';
+import { withLaunchWindow } from './core/departure';
+import { moonOrbitIcrf } from './core/sky';
 import type { Body, CuratedSite, Flip, Sample, Site, Skyline, Summary } from './core/types';
 import { nextFlip, series, summary, SUN_RADIUS } from './core/windows';
 // T42: a line of its own, so the shared import lines above stay as other branches edit them.
@@ -880,12 +882,15 @@ export function missionFor(): MissionResult {
   const earthMoonKm = earthMoonKmAt(eph, arrivalMs);
   if (earthMoonKm === null) return { status: 'loading' };
   const l = state.lander;
-  const key = `${siteKey(land.site)}|${land.tMs}|${state.padId}|${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}|${earthMoonKm}`;
+  // The Moon's real orbit plane at touchdown: with it the launch is set to the time the pad
+  // passes under the departure's plane (core/departure.ts, issue #192). Without (a decade six
+  // hours on not read yet) the departure stays in the Moon's plane.
+  const sky = moonOrbitIcrf(eph, land.tMs);
+  const skyOk = [...sky.toMoon, ...sky.pole].every(Number.isFinite);
+  const key = `${siteKey(land.site)}|${land.tMs}|${state.padId}|${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}|${earthMoonKm}|${skyOk}`;
   if (missionCache?.key !== key) {
-    missionCache = {
-      key,
-      plan: planMission({ site: land.site, touchdownMs: land.tMs, pad: padById(state.padId), lander: l, earthMoonKm }),
-    };
+    const plan = planMission({ site: land.site, touchdownMs: land.tMs, pad: padById(state.padId), lander: l, earthMoonKm });
+    missionCache = { key, plan: plan.ok && skyOk ? withLaunchWindow(plan, sky) : plan };
   }
   return { status: 'ready', plan: missionCache.plan };
 }

@@ -1,8 +1,10 @@
 // The 3D picture on the launch simulation page (T34). It draws only positions that
 // core/mission.ts's missionAt returns, in the plane of the transfer: Earth at the origin, the
 // Moon on its circle, the lunar orbit round the Moon with the landing site on it. Bodies are to
-// scale; the craft, the pad and the site are markers. Earth's turn is a picture: it is set so
-// the pad lies under the craft at launch. The Moon is drawn north up, with a latitude and
+// scale; the craft, the pad and the site are markers. With the Sun and Earth table Earth sits on
+// its real axis, tilted to the Moon's orbit, and turns as it really does; the launch time is set
+// so the pad is where the departure starts (core/departure.ts). Without it, Earth is only turned
+// so the pad is under the craft at launch. The Moon is drawn north up, with a latitude and
 // longitude grid, and the landing site placed from core (moonFixedInPlane), so each site lands
 // where it is on the Moon. The scene illustrates; every number is on the page.
 import * as THREE from 'three';
@@ -13,10 +15,10 @@ import {
 import type { Pad } from '../core/pads';
 import { disposeScene, earthDirection, makeEarth, prefersReducedMotion, themeLength } from '../ui/launch/earth';
 import { themeColor } from '../ui/plotTheme';
-import { alignFrames, apply } from '../core/sky';
+import { alignFrames } from '../core/sky';
 import type { Vec3 } from '../core/ephemeris';
 import { makeStarField } from '../scene/stars';
-import { departureAt, departureFor } from '../core/departure';
+import { departureAt, departureFor, earthAxesAt } from '../core/departure';
 
 export type Scale = 'near' | 'earth' | 'moon' | 'descent';
 
@@ -33,6 +35,8 @@ const KM = 1 / 1000;   // scene units per km
 const P = ([x, y]: [number, number]): THREE.Vector3 => new THREE.Vector3(x * KM, 0, -y * KM);
 /** The same with the plane's normal (z) as the scene's up. */
 const P3 = ([x, y, z]: [number, number, number]): THREE.Vector3 => new THREE.Vector3(x * KM, z * KM, -y * KM);
+/** A direction in a mission frame (x, y, z) in the scene, unscaled: P3's axes. */
+const axisOf = ([x, y, z]: [number, number, number]): THREE.Vector3 => new THREE.Vector3(x, z, -y);
 
 // A change of scale glides: a short one in about 1.5 s, Earth orbit out to the Earth-Moon
 // view (20 times wider) in about 3.2 s. The pan keeps pace with the zoom (see draw), so the
@@ -44,7 +48,7 @@ const GLIDE_MAX_MS = 3600;
 const ease = (f: number): number => f * f * f * (f * (6 * f - 15) + 10);
 const isMoonScale = (s: Scale): boolean => s === 'moon' || s === 'descent';
 const VIEW_DIRECTION: Record<Scale, THREE.Vector3> = {
-  near: new THREE.Vector3(0.25, 0.75, 1).normalize(),
+  near: new THREE.Vector3(0.25, 0.75, 1).normalize(),   // replaced per plan: down on the pad at liftoff
   earth: new THREE.Vector3(0, 1, 0.55).normalize(),
   moon: new THREE.Vector3(0.25, 0.2, 1).normalize(),   // replaced per plan: along the orbit's normal
   descent: new THREE.Vector3(0, 0, 1),   // replaced per plan: from the side of the site
@@ -102,27 +106,39 @@ export function createScene(
   // the Moon's real orbit plane at touchdown (core/sky.ts moonOrbitIcrf), with the Moon where it
   // really is then. Without the table's Earth vectors there are no stars.
   const stars = makeStarField();
-  // Earth's north pole in missionAt's frame (x, y in the Moon's orbit plane, z its normal), from
-  // the same turn: ICRF's z is Earth's pole. Without it the departure stays in the Moon's plane.
-  let earthPole: [number, number, number] | null = null;
   if (sky) {
     const moonAt = P(missionAt(plan, td).earthPlane.moon).normalize();
-    const icrfToScene = alignFrames(sky.toMoon, sky.pole, [moonAt.x, moonAt.y, moonAt.z], [0, 1, 0]);
-    stars.turn(icrfToScene);
+    stars.turn(alignFrames(sky.toMoon, sky.pole, [moonAt.x, moonAt.y, moonAt.z], [0, 1, 0]));
     scene.add(stars.object);
-    const [x, y, z] = apply(icrfToScene, [0, 0, 1]);
-    earthPole = [x, -z, y];
   }
-  const departure = departureFor(plan, earthPole);
+  // The departure: from the pad into the parking orbit's plane, then the coast (issue #192).
+  const departure = departureFor(plan);
 
-  // Earth, turned so the pad is under the craft at launch.
+  // The near view looks down on the pad at liftoff from a little above the parking orbit's
+  // plane: Earth really turns, so a fixed view would often have the pad on the far side.
+  const padAtLaunch = P3(departureAt(plan, departure, launch)!).normalize();
+  const nearView = padAtLaunch.clone().addScaledVector(axisOf(departure.normal).normalize(), 0.6).normalize();
+
   const earth = makeEarth(R_EARTH * KM, true);
   scene.add(earth);
   const padDir = earthDirection(pad.lat, pad.lon);
-  const launchDir = P3(departureAt(plan, departure, launch)!).normalize();
-  const tilt = new THREE.Quaternion().setFromUnitVectors(padDir, launchDir);
+  // Earth's turn at a moment. With plan.earth, its real axes (core/departure.ts earthAxesAt):
+  // the mesh's x, y and z are longitude 0, the north pole and longitude 90° W (earthDirection).
+  // Without, a picture: turned so the pad is under the craft at launch, spun about the scene's up.
+  const earthFrame = plan.earth?.icrfToPlane ?? null;
+  const tilt = new THREE.Quaternion().setFromUnitVectors(padDir, padAtLaunch);
   const spin = new THREE.Quaternion();
   const yAxis = new THREE.Vector3(0, 1, 0);
+  const basis = new THREE.Matrix4();
+  const turnEarth = (st: MissionState): void => {
+    if (earthFrame) {
+      const [ex, ey, ez] = earthAxesAt(earthFrame, st.tMs);
+      earth.quaternion.setFromRotationMatrix(basis.makeBasis(axisOf(ex), axisOf(ez), axisOf(ey).negate()));
+    } else {
+      spin.setFromAxisAngle(yAxis, EARTH_SPIN * st.elapsedS);
+      earth.quaternion.copy(tilt).multiply(spin);
+    }
+  };
   const padMark = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * KM * 0.012, 12, 8),
     new THREE.MeshBasicMaterial({ color: themeColor('--warn') }));
   padMark.position.copy(padDir.clone().multiplyScalar(R_EARTH * KM * 1.002));
@@ -135,7 +151,7 @@ export function createScene(
   const moon = new THREE.Group();
   scene.add(moon);
   const at = (t: number, lat: number, lon: number): THREE.Vector3 => P3(moonFixedInPlane(plan, t, lat, lon));
-  const axis = ([x, y, z]: [number, number, number]): THREE.Vector3 => new THREE.Vector3(x, z, -y);   // P3, unscaled
+  const axis = axisOf;
   const [lx, ly, lz] = lunarFrameInEarthPlane(plan);
   // The group's axes are P3 of the lunar frame's: x, then z (its normal) up, then -y.
   moon.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(axis(lx), axis(lz), axis(ly).negate()));
@@ -398,7 +414,7 @@ export function createScene(
     const target = targetFor(scale, st);
     let offset = camera.position.clone().sub(lastTarget);
     if (scale !== shown) {
-      const view = scale === 'descent' ? descentView : scale === 'moon' ? moonView : VIEW_DIRECTION[scale];
+      const view = scale === 'descent' ? descentView : scale === 'moon' ? moonView : scale === 'near' ? nearView : VIEW_DIRECTION[scale];
       const to = view.clone().multiplyScalar(distanceFor(scale));
       if (shown === null || prefersReducedMotion()) {
         offset = to;
@@ -452,8 +468,7 @@ export function createScene(
   return {
     update: (st, scale, burning) => {
       moon.position.copy(P(st.earthPlane.moon));
-      spin.setFromAxisAngle(yAxis, EARTH_SPIN * st.elapsedS);
-      earth.quaternion.copy(tilt).multiply(spin);
+      turnEarth(st);
       turnBody(st.tMs);
       placeSite(st.tMs);
       if (!glide) placeCraft(st);

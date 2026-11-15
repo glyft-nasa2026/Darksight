@@ -9,6 +9,7 @@ import { ASCENT_LOSSES_KMS, HIGH_GATE_KM, LOW_GATE_KM,
   APOLLO_11_TIMES, approachSeconds, DESCENT_START_ALT_KM, EXAMPLE_LANDER, missionAt,
   type Lander, type MissionTimes, type OkPlan, type Step, type StepId,
 } from './mission';
+import { PARKING_MAX_LAPS } from './departure';
 import type { Pad } from './pads';
 import type { Body, Flip, Sample, Summary } from './types';
 
@@ -32,7 +33,7 @@ export const MODEL_LIMITS: readonly string[] = [
   'Burns are instant, except the powered descent, which is simulated.',
   'A 100 km circular lunar orbit in the plane the arrival leads into, through the site at touchdown; LOI at the arrival’s closest point, so the wait before DOI moves from Apollo 11’s by under half a lap. The Moon keeps longitude 0 towards Earth and its axis upright to the transfer’s plane.',
   `A guided powered descent from 15 km in Apollo’s phases: braking at full thrust to a ${HIGH_GATE_KM} km high gate, an approach on a straight slant to a ${Math.round(LOW_GATE_KM * 1000)} m low gate, then throttled straight down to touchdown (Bennett 1970).`,
-  'Phase lengths from Apollo 11 (NASA SP-4029). The launch time is touchdown less the phases: no launch window is solved.',
+  `Phase lengths from Apollo 11 (NASA SP-4029), but the parking orbit’s: the launch is moved to when the pad, carried round by Earth’s turning, is under a parking orbit that leads to the arrival, from half a lap to ${PARKING_MAX_LAPS} laps before TLI; of those times, the least inclined orbit. Earth is a sphere; its pole and turning from precession and sidereal time.`,
   'The launch vehicle’s propellant is not modelled. Its Δv includes a cited budget for gravity and drag losses, not a simulated ascent.',
   'No ascent from the Moon and no return to Earth.',
   'The Moon has no atmosphere: no drag, and no refraction of the Sun or Earth.',
