@@ -101,6 +101,15 @@ body.intro-open {
 .intro-hero {
   position: absolute;
   inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The first screen: the hero itself. The lower sections (more.css) follow it. */
+.intro-first {
+  position: relative;
+  min-height: 100%;
   display: grid;
   align-content: center;
   padding: var(--space-5) calc(var(--space-5) * 2);
@@ -283,7 +292,7 @@ body.intro-open {
 }
 
 @media (max-width: 800px) {
-  .intro-hero {
+  .intro-first {
     padding: var(--space-5);
     align-content: end;
     padding-bottom: calc(var(--space-5) * 3);

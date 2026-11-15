@@ -535,6 +535,11 @@ one, from the list in `site.ts`, after "Start exploring" (`web/src/ui/intro/`). 
 first eight with placeholders; T15 added `#panel`. A task that adds a slot includes `site.ts`,
 `index.html` and this contract in its scope, and coordinates with active layout work.
 
+The main page (`web/src/ui/intro/`) is not a slot. Under its first screen it scrolls to About,
+Meet the team, Privacy, Licence and a footer (issue #117). Their words and the team list are in
+`intro/landing.ts`; the team photos are `web/public/team/*.jpg`. Links there to a section are
+buttons that scroll, never `#id` links: the page address hash holds the state (section 4).
+
 `#mission` (T34) is a full-width card after `#sky`, and last on a phone. "Land here" on a
 scenario card sets its landing point; the page address keeps it as `land=`, with `pad=` and
 `lander=` when they differ from the defaults. "Proceed" on the card opens the launch-site picker
