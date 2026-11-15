@@ -420,6 +420,38 @@ with sync_playwright() as p:
     recentred = channels_changed(centred, canvas_shot('/tmp/t12-off-map-recentred.png'))
     assert recentred < len(centred) * 0.01, recentred
     passed('centre selected site off the height map', {'changed_color_channels_after_right_drag_pan': panned_3d, 'after_zoom_out_and_centre_vs_first_view': recentred})
+    # Issue #85: the finer patch follows the ground in the middle of the view, not the selected
+    # site. Zoomed out, a right-drag pans far from the site; the patch moves there, and "Centre
+    # selected site" brings it back. canvas data-patch is where the patch is centred.
+    def patch_at():
+        got = canvas.get_attribute('data-patch')
+        assert got, 'no patch drawn'
+        lat, lon = map(float, got.split(','))
+        return {'lat': lat, 'lon': lon}
+    start_patch = round(degrees_apart(patch_at(), apollo11), 3)
+    assert start_patch < 1, start_patch
+    # Clicking "Centre selected site" may have scrolled the page: measure the canvas again.
+    canvas.scroll_into_view_if_needed()
+    box = canvas.bounding_box()
+    mid_x, mid_y = box['x']+box['width']/2, box['y']+box['height']/2
+    page.mouse.move(mid_x, mid_y+50)
+    for _ in range(6):
+        page.mouse.wheel(0, 400)
+        page.wait_for_timeout(20)
+    # From right of the middle: the nudge panel sits over the left of the view.
+    on_canvas = page.evaluate(f"document.elementFromPoint({mid_x+50}, {mid_y+50}) === document.querySelector('.scene-canvas')")
+    assert on_canvas, 'the pan must start on the 3D view'
+    page.mouse.move(mid_x+50, mid_y+50); page.mouse.down(button='right')
+    page.mouse.move(mid_x+350, mid_y+50, steps=10); page.mouse.up(button='right')
+    page.wait_for_timeout(2500)   # 200 ms to settle, then the new tiles and mesh
+    moved_patch = round(degrees_apart(patch_at(), apollo11), 3)
+    assert moved_patch > 3, moved_patch
+    assert page.evaluate("async () => (await import('/src/state.ts')).getState().live.site") == apollo11
+    page.locator('.scene-reset').click()
+    page.wait_for_timeout(1500)
+    back_patch = round(degrees_apart(patch_at(), apollo11), 3)
+    assert back_patch < 1, back_patch
+    passed('level of detail follows the view', {'patch_deg_from_site_at_start': start_patch, 'after_zoom_out_and_pan': moved_patch, 'after_centre': back_patch})
     stretch.fill('5')
     page.wait_for_timeout(500)
     raised = channels_changed(centred, canvas_shot('/tmp/t12-off-map-5x.png'))
