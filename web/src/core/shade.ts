@@ -99,18 +99,29 @@ function sweep(g: PolarGround, lx: number, ly: number, elevDeg: number, lit: Uin
   const step = Math.sign(main);
   const rise = slope * g.cell_m * Math.hypot(1, side);
   const shadow = new Float32Array(size * size);
-  const at = (m: number, s: number): number => alongCols ? s * size + m : m * size + s;
+  // Cell (m, s) is at index m * mStride + s * sStride.
+  const mStride = alongCols ? 1 : size, sStride = alongCols ? size : 1;
   const first = step > 0 ? size - 1 : 0;
-  for (let s = 0; s < size; s++) { const i = at(first, s); shadow[i] = z[i]; lit[i] = 1; }
+  for (let s = 0; s < size; s++) { const i = first * mStride + s * sStride; shadow[i] = z[i]; lit[i] = 1; }
+  // Every cell of a line takes its blocker from the same two neighbours on the line before:
+  // the same offset `side` along it, so the split into a whole cell and a fraction is the same.
+  const shift = Math.floor(side), f = side - shift;
   for (let m = first - step; m >= 0 && m < size; m -= step) {
-    const up = m + step;
+    const row = m * mStride, upRow = (m + step) * mStride;
     for (let s = 0; s < size; s++) {
-      const i = at(m, s), u = s + side;
-      if (u < 0 || u > size - 1) { shadow[i] = z[i]; lit[i] = 1; continue; }
-      const s0 = Math.min(Math.floor(u), size - 2), f = u - s0;
-      const blocker = shadow[at(up, s0)] * (1 - f) + shadow[at(up, s0 + 1)] * f - rise;
-      lit[i] = z[i] >= blocker ? 1 : 0;
-      shadow[i] = Math.max(z[i], blocker);
+      const i = row + s * sStride, s0 = s + shift;
+      if (s0 < 0 || s0 >= size - 1) {
+        // The ray comes in from beyond the grid's side (or exactly on its last cell).
+        if (f === 0 && s0 === size - 1) {
+          const blocker = shadow[upRow + s0 * sStride] - rise;
+          lit[i] = z[i] >= blocker ? 1 : 0; shadow[i] = Math.max(z[i], blocker);
+        } else { shadow[i] = z[i]; lit[i] = 1; }
+        continue;
+      }
+      const blocker = shadow[upRow + s0 * sStride] * (1 - f) + shadow[upRow + (s0 + 1) * sStride] * f - rise;
+      const zi = z[i];
+      lit[i] = zi >= blocker ? 1 : 0;
+      shadow[i] = zi > blocker ? zi : blocker;
     }
   }
 }
@@ -145,7 +156,7 @@ export function shadePolar(dem: Dem, sun: Vec3, maxCells = 1300): PolarShade {
       const dzdx = (z[row * size + c1] - z[row * size + c0]) / ((c1 - c0) * cell_m);
       // Rows grow down and y grows up.
       const dzdy = (z[r0 * size + col] - z[r1 * size + col]) / ((r1 - r0) * cell_m);
-      cosI[i] = (-dzdx * lx - dzdy * ly + lz) / Math.hypot(dzdx, dzdy, 1);
+      cosI[i] = (-dzdx * lx - dzdy * ly + lz) / Math.sqrt(dzdx * dzdx + dzdy * dzdy + 1);
     }
   }
   return { size, stride, frac, cosI, height: g.height, heightRange: g.heightRange };
