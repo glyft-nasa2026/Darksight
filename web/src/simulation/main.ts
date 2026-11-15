@@ -172,7 +172,7 @@ function captionFor(p: OkPlan, id: StepId, st: ReturnType<typeof missionAt>): st
     return `Translunar injection: a ${dvText(stepOf(p, 'tli').dvKmS ?? 0)} burn stretches the parking orbit into a long ellipse that reaches the Moon’s distance.`;
   }
   if (near('loi')) {
-    return `Lunar orbit insertion: at the closest point of the fly-by, a ${dvText(stepOf(p, 'loi').dvKmS ?? 0)} braking burn slows the craft enough for the Moon to capture it, in a ${lunar} circular polar orbit.`;
+    return `Lunar orbit insertion: at the closest point of the fly-by, a ${dvText(stepOf(p, 'loi').dvKmS ?? 0)} braking burn slows the craft enough for the Moon to capture it, in a ${lunar} circular orbit inclined ${o.lunarOrbitIncDeg.toFixed(0)}°, the plane the arrival leads into.`;
   }
   if (near('doi')) {
     return `Descent orbit insertion: a ${dvText(stepOf(p, 'doi').dvKmS ?? 0)} burn lowers the far side of the orbit to ${kmText(o.descentStartAltKm)} above the ground, just before the landing site.`;
@@ -186,7 +186,7 @@ function captionFor(p: OkPlan, id: StepId, st: ReturnType<typeof missionAt>): st
         : `Coasting to the Moon for ${durationText(o.coastS)}, slowing as it climbs away from Earth.`;
     case 'loi':
     case 'lunar-orbit':
-      return `In a ${lunar} polar orbit, ${durationText(o.lunarOrbitPeriodS)} a lap. The Moon turns underneath until the landing site comes under the track.`;
+      return `In a ${lunar} orbit inclined ${o.lunarOrbitIncDeg.toFixed(0)}°, ${durationText(o.lunarOrbitPeriodS)} a lap. The Moon turns underneath until the landing site comes under the track.`;
     case 'doi':
     case 'descent-orbit':
       return `On the descent orbit: coasting down from ${lunar} to ${kmText(o.descentStartAltKm)}, where the powered descent begins.`;
