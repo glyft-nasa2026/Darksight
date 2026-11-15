@@ -33,10 +33,22 @@ const ERRORS = {
   'thrust-too-low': 'This lander’s engine is too weak to stop before the ground. Go back and give it more thrust.',
 } as const;
 
-// Simulated seconds per real second; burns of minutes play at most at SLOW_SPEED.
+// Simulated seconds per real second. "Auto" (the default) picks one per stage (issue #105):
+// Earth orbit 1 h/s, the trip to the Moon 6 h/s, lunar orbit 1 h/s, the landing 30 min/s.
+// The two burns that last minutes, the ascent and the powered descent, play at most at
+// SLOW_SPEED in every mode, so they take about half a minute instead of flashing past.
 const SPEEDS: [label: string, s: number][] = [['1 min/s', 60], ['1 h/s', 3600], ['6 h/s', 6 * 3600]];
+const AUTO_SPEED: Record<StepId, number> = {
+  launch: 3600, parking: 3600,
+  tli: 6 * 3600, coast: 6 * 3600,
+  loi: 3600, 'lunar-orbit': 3600,
+  doi: 1800, 'descent-orbit': 1800, 'powered-descent': 1800, touchdown: 1800,
+};
 const SLOW_SPEED = 30;
 const SLOW_STEPS: StepId[] = ['launch', 'powered-descent'];
+
+/** "30 s/s", "30 min/s", "6 h/s". */
+const rateText = (s: number): string => (s < 60 ? `${s} s/s` : s < 3600 ? `${s / 60} min/s` : `${s / 3600} h/s`);
 
 function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -91,7 +103,18 @@ root.append(bar, stage, hud);
 const plannerUrl = (): string => `index.html#${stateToAddress()}`;
 back.href = plannerUrl();
 back.addEventListener('click', (e) => {
-  // Came here from the planner: go back to it as it was left (no second start screen).
+  // Opened in a new tab by the planner (issue #105): the planner is still open in its own tab,
+  // as it was left. Close this one, which returns there; if the browser won't, follow the link.
+  let planner: Window | null = null;
+  try { planner = window.opener && !window.opener.closed ? window.opener : null; } catch { planner = null; }
+  if (planner) {
+    e.preventDefault();
+    try { planner.focus(); } catch { /* not allowed everywhere; closing still shows it */ }
+    window.close();
+    setTimeout(() => { if (!window.closed) location.assign(plannerUrl()); }, 300);
+    return;
+  }
+  // Came here in the same tab from the planner: go back to it as it was left.
   const from = document.referrer ? new URL(document.referrer) : null;
   if (from && from.origin === location.origin && !from.pathname.endsWith('simulation.html') && history.length > 1) {
     e.preventDefault();
@@ -104,24 +127,36 @@ let plan: OkPlan | null = null;
 let picture: MissionScene | null = null;
 let cursor = 0;
 let playing = false;
-let speed = SPEEDS[1][1];
+let speed: 'auto' | number = 'auto';
 let frame = 0;
 let lastMs = 0;
 const stepButtons = new Map<StepId, HTMLButtonElement>();
 const stepOf = (p: OkPlan, id: StepId) => p.steps.find((s) => s.id === id)!;
 const endMs = (): number => (plan ? plan.runsOutMs ?? plan.touchdownMs : 0);
 
+const autoButton = make('button', 'btn sim-small', 'Auto');
+autoButton.type = 'button';
+autoButton.dataset.speed = 'auto';
+autoButton.addEventListener('click', () => { speed = 'auto'; drawControls(); });
+speeds.append(autoButton);
 for (const [label, s] of SPEEDS) {
   const b = make('button', 'btn sim-small', label);
   b.type = 'button';
   b.dataset.speed = String(s);
-  b.addEventListener('click', () => { speed = s; drawControls(); });
+  b.addEventListener('click', () => { speed = s; drawControls(); });   // a manual speed turns Auto off
   speeds.append(b);
+}
+
+/** The speed playing now: Auto's for this step, or the chosen one; the burns capped. */
+function paceAt(id: StepId): number {
+  const base = speed === 'auto' ? AUTO_SPEED[id] : speed;
+  return SLOW_STEPS.includes(id) ? Math.min(base, SLOW_SPEED) : base;
 }
 
 function drawControls(): void {
   play.textContent = playing ? '❚❚ Pause' : cursor >= endMs() && plan ? '↺ Replay' : '▶ Play';
-  for (const b of speeds.querySelectorAll('button')) b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === speed));
+  for (const b of speeds.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.speed === String(speed)));
+  autoButton.textContent = speed === 'auto' && plan ? `Auto · ${rateText(paceAt(plan.steps[missionAt(plan, cursor).stepIndex].id))}` : 'Auto';
 }
 
 function drawFrame(): void {
@@ -165,8 +200,7 @@ function tick(now: number): void {
   const dt = Math.min(0.25, (now - lastMs) / 1000);
   lastMs = now;
   const step = plan.steps[missionAt(plan, cursor).stepIndex];
-  const pace = SLOW_STEPS.includes(step.id) ? Math.min(speed, SLOW_SPEED) : speed;
-  cursor = Math.min(endMs(), cursor + dt * pace * 1000);
+  cursor = Math.min(endMs(), cursor + dt * paceAt(step.id) * 1000);
   if (cursor >= endMs()) playing = false;
   drawFrame();
   drawControls();
@@ -279,7 +313,7 @@ function render(): void {
   message.hidden = true;
   hud.hidden = false;
   const sc = landingScenario()!;
-  picture = createScene(canvasBox, p, padById(s.padId), sc.color);
+  picture = createScene(canvasBox, p, padById(s.padId), sc.site, sc.color);
   cursor = p.launchMs;
   drawTrip(p);
   drawChapters(p);

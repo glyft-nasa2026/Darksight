@@ -29,6 +29,16 @@
 }
 .sim-info b { font-weight: 500; display: flex; align-items: center; gap: var(--space-2); }
 .sim-dot { width: var(--space-3); height: var(--space-3); border-radius: 50%; background: var(--sim-site); flex: none; }
+.sim-canvas { overflow: hidden; }
+.sim-label {
+  position: absolute; pointer-events: none; white-space: nowrap;
+  font-size: var(--fs-sm); padding: 0 var(--space-1); border-radius: var(--radius);
+  background: var(--bg); opacity: 0.9;
+}
+.sim-label[hidden] { display: none; }
+.sim-label-body { color: var(--text); transform: translate(-50%, calc(-100% - var(--space-1))); }
+.sim-label-craft { color: var(--ok); font-weight: 500; transform: translate(var(--space-3), -50%); }
+.sim-label-site { color: var(--sim-site); transform: translate(-50%, var(--space-2)); }
 .sim-message { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: var(--space-5); margin: 0; }
 .sim-message[hidden], .sim-hud[hidden] { display: none; }
 .sim-hud { display: flex; flex-direction: column; gap: var(--space-3); }
