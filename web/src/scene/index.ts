@@ -722,12 +722,14 @@ export function mount(el: HTMLElement): void {
     const mock = dem?.meta.source === 'mock' || s.eph?.meta.source === 'mock';
     const whole = mode === '2d' ? 'Whole-Moon map' : 'Moon globe';
     // Near the north pole the 2D map is the north cap's own polar view, not the whole-Moon map:
-    // the caption names the map that is on screen.
+    // the caption names the map that is on screen. It says nothing about terrain away from the
+    // south-pole height map: since T37 the readout has a coarse terrain skyline there and says so
+    // itself ("outside terrain coverage" was true only while those sites had a smooth Moon).
     const northView = mode === '2d' && viewOf(mapHost)?.kind === 'north';
     caption.textContent = [mock ? 'Mock data' : '',
       polar ? (mode === '2d' ? 'South-pole terrain · polar stereographic' : 'South-pole terrain')
         : northView ? 'North-pole terrain · polar stereographic'
-          : `${whole}${mode === '2d' ? ' · equidistant cylindrical' : ''} · ${dem ? 'outside terrain coverage' : 'Loading height map'}`,
+          : `${whole}${mode === '2d' ? ' · equidistant cylindrical' : ''}${dem ? '' : ' · Loading height map'}`,
       now ? (now.sunFrac > 0 ? 'Sun visible' : 'Sun hidden') : '',
       stretch > 1 && dem ? 'Heights exaggerated; shadows are illustrative' : 'Lighting is illustrative; use the readout for visibility',
     ].filter(Boolean).join(' · ');
