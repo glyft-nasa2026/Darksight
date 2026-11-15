@@ -1,6 +1,6 @@
 # T28: Mirror on rickphobia.com
 
-Status: not started
+Status: waiting for M3 (Yi Hung, branch `t28-mirror`). The mirror is live at https://rickphobia.com/projects/darksight/ and updates itself: every 5 minutes a cron job on Yi Hung's server (`~/homelab/tools/darksight-mirror`) copies in the `deploy` branch's newest build, so steps 1 to 3 repeat after every merge with nobody copying. "Done when" lines 1 and 2 pass on `main` e57ac3d (15 Nov). Line 3 is checked after the last merge at M3: the mirror's `version.txt` names that merge and lines 1 and 2 pass again. Address for T26's README: https://rickphobia.com/projects/darksight/
 
 | | |
 |---|---|

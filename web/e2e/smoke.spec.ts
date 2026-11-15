@@ -14,7 +14,6 @@ const SLOTS = [
   'nudge',
   'about',
   'panel',
-  'mission',
 ] as const;
 
 test('the page loads, every slot is filled and the data arrives', async ({ page }) => {
@@ -35,7 +34,8 @@ test('the page loads, every slot is filled and the data arrives', async ({ page 
   expect(await status.textContent(), '#status after the data loaded').not.toContain('Data not loaded');
 
   // main.ts mounts the slots behind the loading screen; wait for the last one in site.ts.
-  await expect(page.locator('#mission')).not.toBeEmpty({ timeout: 30_000 });
+  // #mission is not on this page: it has its own, mission.html (T34-f), tested below.
+  await expect(page.locator('#sky')).not.toBeEmpty({ timeout: 30_000 });
 
   for (const id of SLOTS) {
     const slot = page.locator(`#${id}`);
@@ -46,5 +46,27 @@ test('the page loads, every slot is filled and the data arrives', async ({ page 
     expect(text, `#${id} failed to start`).not.toContain('failed to start');
   }
 
+  expect(problems, 'console errors and uncaught exceptions').toEqual([]);
+});
+
+// T34-f: the mission card's own page, opened by "Open mission" with the site's address. A landing
+// point in the address, so the card plans a mission rather than asking for one.
+test('the mission page loads and draws the mission to the landing point', async ({ page }) => {
+  const problems: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') problems.push(`console error: ${msg.text()}`);
+  });
+  page.on('pageerror', (err) => problems.push(`page threw: ${err.message}`));
+
+  await page.goto('./mission.html#live=-89.6866,-162.81,2026-11-15T05:00:00Z&land=-89.6866,-162.81,2026-11-15T05:00:00Z');
+  const status = page.locator('#mp-status');
+  await expect(status, '#mp-status should stop saying "Loading"').not.toContainText('Loading', { timeout: 60_000 });
+  expect(await status.textContent(), '#mp-status after the data loaded').not.toContain('Data not loaded');
+
+  const mission = page.locator('#mission');
+  await expect(mission).toHaveCount(1);
+  await expect(mission.locator('h2')).toContainText('Mission simulation ·', { timeout: 30_000 });
+  await expect(mission.getByRole('button', { name: /Proceed/ })).toBeVisible();
+  expect(await mission.textContent(), '#mission failed to start').not.toContain('failed to start');
   expect(problems, 'console errors and uncaught exceptions').toEqual([]);
 });
