@@ -1,6 +1,6 @@
 # T42: Date search: the first date with enough sunlight and Earth
 
-Status: done, in review (MarsRon, branch `t42-date-search`, pull request #167). MarsRon checked the "Done when" list: working
+Status: done (MarsRon, pull request #167, merged as `4112870`). MarsRon checked the "Done when" list: working
 
 | | |
 |---|---|

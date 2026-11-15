@@ -9,7 +9,7 @@ import {
   getState, isLanding, LIVE_ID, MAX_PINNED, pin, select, setLanding, setLiveSite, setLiveTime,
   stateToAddress, subscribe, unpin, type Scenario,
 } from '../../state';
-import { checkLat, checkLon, checkUtc, coordText, groupName, toBoxValue, toPickerValue, utcText, type Checked } from './input';
+import { checkLat, checkLon, checkUtc, coordText, groupName, siteOptionText, toBoxValue, toPickerValue, utcText, type Checked } from './input';
 
 const SAME_DEG = 1e-6; // state keeps 6 decimals, so this is "the same point"
 
@@ -245,7 +245,7 @@ export function mount(el: HTMLElement): void {
       const og = make('optgroup');
       og.label = groupName(group);
       for (const s of members) {
-        const o = make('option', '', s.name);
+        const o = make('option', '', siteOptionText(s));
         o.value = s.id;
         og.append(o);
       }
@@ -308,7 +308,10 @@ export function mount(el: HTMLElement): void {
     c.li.style.setProperty('--scn-color', `var(${sc.color})`);
     c.body.setAttribute('aria-pressed', String(isSelected));
     setText(c.label, sc.id === LIVE_ID ? 'Live' : sc.label);
-    setText(c.where, siteAt(sites, sc.site)?.name ?? coordText(sc.site.lat, sc.site.lon));
+    const place = siteAt(sites, sc.site)?.name ?? coordText(sc.site.lat, sc.site.lon);
+    setText(c.where, place);
+    // The card cuts a long name short ("Shackleton crater fl…"): the whole name shows on hover.
+    if (c.where.title !== place) c.where.title = place;
     setText(c.when, `${utcText(sc.tMs)} UTC`);
     const landing = isLanding(sc);
     setText(c.land, landing ? 'Landing site' : 'Land here');

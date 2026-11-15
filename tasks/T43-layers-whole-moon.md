@@ -1,6 +1,6 @@
 # T43: Map layers over the whole Moon
 
-Status: not started
+Status: done (MarsRon, pull request #172, merged as `4e0e6a8`). Every "Done when" line passes on the branch merged with main on 15 Nov. North uses the LOLA north maps (AVGVISIB_65N_240M_201608, _EARTH, LPSR_65N_240M_201608).
 
 | | |
 |---|---|
@@ -70,19 +70,19 @@ future layer that doesn't.
 
 ## Done when
 
-- [ ] A test over `LAYER_KEYS` (so a layer added later is covered without editing the test): every
+- [x] A test over `LAYER_KEYS` (so a layer added later is covered without editing the test): every
       layer gives a value, not null, at 89 N, 45 N 90 E, 0 N 0 E, 0 N 180 E, 60 S 120 W and 89 S.
       One version on synthetic grids runs always; one on real data skips on mock.
-- [ ] On real data (skips on mock): the steepest slope within 20 km of Apollo 15 (Mons Hadley
+- [x] On real data (skips on mock): the steepest slope within 20 km of Apollo 15 (Mons Hadley
       Delta) is steeper than the steepest within 20 km of Apollo 11 (Mare Tranquillitatis); the smooth-Moon Earth layer is near 1 at 0 N 0 E
       and near 0 at 0 N 180 E.
-- [ ] Every layer toggles and fades on the south polar, north polar and whole-Moon maps, and the
+- [x] Every layer toggles and fades on the south polar, north polar and whole-Moon maps, and the
       legend names the source at the point shown.
-- [ ] The readout shows a slope at every site, with the distance it is measured over; the number
+- [x] The readout shows a slope at every site, with the distance it is measured over; the number
       comes from `core/`.
-- [ ] At 1280 and 390 px wide nothing overlaps or scrolls sideways.
-- [ ] The load-time budget still passes (a new row in `docs/load-time.md`).
-- [ ] `npm test` and `npm run build` pass.
+- [x] At 1280 and 390 px wide nothing overlaps or scrolls sideways.
+- [x] The load-time budget still passes (a new row in `docs/load-time.md`).
+- [x] `npm test` and `npm run build` pass.
 
 ## Notes
 

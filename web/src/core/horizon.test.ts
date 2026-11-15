@@ -1,8 +1,9 @@
 // T05 tests for the terrain skyline (contract section 3, Skyline). Every grid is made up in
-// memory with parseDem; none needs the real dem.bin.
+// memory with parseDem or parseGlobe; none needs the real dem.bin or globe.bin.
 import { describe, expect, it } from 'vitest';
 import { parseDem, type Dem, type DemMeta } from './dem';
-import { skylineAt, skylineElev, walkDistances, SKYLINE_MAX_DIST_M } from './horizon';
+import { parseGlobe, type GlobeHeights, type GlobeMeta } from './globe';
+import { groundAt, skylineAt, skylineElev, skylineGrid, walkDistances, SKYLINE_MAX_DIST_M } from './horizon';
 import { DEFAULT_EYE_M, MOON_RADIUS_KM, type Skyline } from './types';
 
 const R = MOON_RADIUS_KM * 1000;
@@ -59,17 +60,22 @@ describe('skylineAt: flat skyline cases', () => {
     expect(values(s).every((v) => v === 0)).toBe(true);
   });
 
-  it('is flat, with terrain false, for a site north of 85 S, even with a height map', () => {
+  it('is flat, with terrain false, for a site north of 85 S when globe.bin is not loaded (T37)', () => {
     for (const site of [{ lat: -84.99, lon: 10 }, { lat: 0, lon: 0 }, { lat: 45, lon: -120 }]) {
       const s = skylineAt(flatFull, site);
       expect(s.terrain).toBe(false);
+      expect(s.grid).toBeNull();
+      expect(s.cellM).toBeNull();
       expect(s.elev).toHaveLength(360);
       expect(values(s).every((v) => v === 0)).toBe(true);
     }
   });
 
   it('walks the terrain at exactly 85 S', () => {
-    expect(skylineAt(flatFull, { lat: -85, lon: 0 }).terrain).toBe(true);
+    const s = skylineAt(flatFull, { lat: -85, lon: 0 });
+    expect(s.terrain).toBe(true);
+    expect(s.grid).toBe('dem');
+    expect(s.cellM).toBe(240);
   });
 });
 
@@ -197,8 +203,142 @@ describe('skylineAt: at the exact south pole', () => {
   });
 });
 
+// --- T37, option C: globe.bin north of 85 S ----------------------------------------------------
+
+/** Great-circle distance between two points, metres. */
+function gcDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const p1 = lat1 * RAD, p2 = lat2 * RAD, dl = (lon2 - lon1) * RAD;
+  const c = Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dl);
+  return R * Math.acos(Math.min(1, Math.max(-1, c)));
+}
+
+/** A made-up whole-Moon grid laid out like globe.bin (contract section 2). height(lat, lon) at each cell centre. */
+function makeGlobe(width: number, height: number, h: (lat: number, lon: number) => number = () => 0): GlobeHeights {
+  const meta: GlobeMeta = { width, height, height_scale: 0.5, source: 'made up for a test' };
+  const buffer = new ArrayBuffer(width * height * 2);
+  const view = new DataView(buffer);
+  for (let row = 0; row < height; row++) {
+    const lat = 90 - ((row + 0.5) * 180) / height;
+    for (let col = 0; col < width; col++) {
+      const lon = -180 + ((col + 0.5) * 360) / width;
+      view.setInt16((row * width + col) * 2, Math.round(h(lat, lon) / 0.5), true);
+    }
+  }
+  return parseGlobe(meta, buffer);
+}
+
+// The real file's shape: 2880 x 1440 cells, 0.125 degrees, 3.8 km north to south.
+const GW = 2880, GH = 1440;
+const flatGlobe = makeGlobe(GW, GH);
+const CELL = flatGlobe.rowSpacingM;
+
+describe('skylineAt on globe.bin (T37): which grid a site uses', () => {
+  it('uses dem.bin at or south of 85 S, even with globe.bin loaded, and globe.bin just north of it', () => {
+    const at85 = skylineAt(flatFull, { lat: -85, lon: 0 }, flatGlobe);
+    expect([at85.grid, at85.cellM]).toEqual(['dem', 240]);
+    const pole = skylineAt(flatFull, { lat: -89.67, lon: 129.78 }, flatGlobe);
+    expect(pole.grid).toBe('dem');
+    const north = skylineAt(flatFull, { lat: -84.99, lon: 0 }, flatGlobe);
+    expect(north.grid).toBe('globe');
+    expect(north.terrain).toBe(true);
+    expect(north.cellM).toBeCloseTo(3790.6, 0);
+  });
+
+  it('never downgrades a polar site: with no dem.bin it stays flat, globe.bin or not', () => {
+    for (const site of [{ lat: -85, lon: 0 }, { lat: -89.9, lon: 45 }, { lat: -90, lon: 0 }]) {
+      const s = skylineAt(null, site, flatGlobe);
+      expect(s.terrain).toBe(false);
+      expect(s.grid).toBeNull();
+      expect(skylineGrid(null, site, flatGlobe)).toBeNull();
+    }
+  });
+
+  it('skylineGrid and groundAt agree with skylineAt; groundAt takes the site height from the same grid', () => {
+    const tall = makeGlobe(360, 180, () => 1000);
+    const deep = makeDem(FULL, () => -2000);
+    expect(skylineGrid(deep, { lat: -86, lon: 0 }, tall)).toBe('dem');
+    expect(groundAt(deep, { lat: -86, lon: 0 }, tall)).toBeCloseTo(-2000, 6);
+    // Inside dem.bin's square but north of 85 S: the globe's height, as its skyline uses.
+    expect(skylineGrid(deep, { lat: -82, lon: 0 }, tall)).toBe('globe');
+    expect(groundAt(deep, { lat: -82, lon: 0 }, tall)).toBeCloseTo(1000, 6);
+    expect(groundAt(deep, { lat: -82, lon: 0 }, null)).toBe(0);
+    expect(groundAt(null, { lat: -88, lon: 0 }, tall)).toBe(0);
+    expect(skylineGrid(deep, { lat: Number.NaN, lon: 0 }, tall)).toBeNull();
+  });
+});
+
+describe('skylineAt on globe.bin (T37): walk', () => {
+  it('steps from one 3.8 km cell out to 150 km, half a cell at a time', () => {
+    const d = walkDistances(CELL);
+    expect(d[0]).toBeCloseTo(CELL, 6);
+    expect(d[1] - d[0]).toBeCloseTo(CELL / 2, 6);
+    expect(d[d.length - 1]).toBeLessThanOrEqual(SKYLINE_MAX_DIST_M);
+  });
+
+  it('flat globe, eye 2 m: every value is the dip to the curved ground, the same all round', () => {
+    for (const site of [{ lat: 0, lon: 0 }, { lat: 26.13, lon: 3.63 }, { lat: -70, lon: -170 }]) {
+      const s = skylineAt(null, site, flatGlobe);
+      const want = Math.max(...walkDistances(CELL).map((d) => elevOf(0, DEFAULT_EYE_M, d, 0)));
+      for (const e of values(s)) expect(e).toBeCloseTo(want, 4);
+    }
+  });
+
+  // "Done when" line 2: a ring wall gives the wall's elevation at every azimuth, within one cell's
+  // worth. The wall, by distance d from the site: rising in a straight line from 0 at 22 km to
+  // 1,000 m at 30 km, flat to 40 km, falling to 0 at 48 km. Its slopes are two cells wide, so the
+  // 3.8 km grid can stand for it (a wall that jumps from 0 to 1,000 m between one cell centre and
+  // the next is ragged on any grid by up to a cell's diagonal). "Exact" is the contract's formula
+  // on the wall itself, every 10 m out to 150 km; "one cell's worth" is how much the elevation of
+  // the wall's top changes when it is one cell (3.8 km) further away.
+  const wallH = (d: number): number => Math.max(0, Math.min(1000, (d - 22_000) / 8, (48_000 - d) / 8));
+  // Rows more than 2 degrees (61 km) from the site are flat: the wall ends at 48 km. Skipping the
+  // distance there keeps building a real-size grid quick (it shares the machine with timing tests).
+  const ringAt = (c: { lat: number; lon: number }): GlobeHeights =>
+    makeGlobe(GW, GH, (lat, lon) => (Math.abs(lat - c.lat) > 2 ? 0 : wallH(gcDist(c.lat, c.lon, lat, lon))));
+  let exact = -Infinity;
+  for (let d = 10; d <= SKYLINE_MAX_DIST_M; d += 10) exact = Math.max(exact, elevOf(0, DEFAULT_EYE_M, d, wallH(d)));
+  const oneCell = elevOf(0, DEFAULT_EYE_M, 30_000, 1000) - elevOf(0, DEFAULT_EYE_M, 30_000 + CELL, 1000);
+
+  for (const c of [{ lat: 26.13, lon: 3.63 }, { lat: -45, lon: 179.9 }, { lat: 70, lon: -60 }]) {
+    it(`ring wall round (${c.lat}, ${c.lon}): every azimuth within one cell's worth of the wall`, () => {
+      const s = skylineAt(null, c, ringAt(c));
+      const v = values(s);
+      const worst = Math.max(...v.map((e) => Math.abs(e - exact)));
+      console.log(`ring at (${c.lat}, ${c.lon}): ${Math.min(...v).toFixed(3)} to ${Math.max(...v).toFixed(3)} deg; ` +
+        `exact ${exact.toFixed(3)} deg; worst off by ${worst.toFixed(3)}, one cell's worth ${oneCell.toFixed(3)} deg`);
+      expect(s.grid).toBe('globe');
+      expect(worst).toBeLessThanOrEqual(oneCell);
+    });
+  }
+
+  it('a site exactly on the north pole gets a skyline with no NaN, within one cell\'s worth of the wall', () => {
+    const s = skylineAt(null, { lat: 90, lon: 0 }, ringAt({ lat: 90, lon: 0 }));
+    expect(values(s).every(Number.isFinite)).toBe(true);
+    for (const e of values(s)) expect(Math.abs(e - exact)).toBeLessThanOrEqual(oneCell);
+  });
+
+  it('one skyline on the real-size globe grid takes under 150 ms', () => {
+    const site = { lat: 26.13, lon: 3.63 };
+    let t = performance.now();
+    skylineAt(null, site, flatGlobe);
+    const cold = performance.now() - t;
+    const times: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      t = performance.now();
+      skylineAt(null, site, flatGlobe);
+      times.push(performance.now() - t);
+    }
+    times.sort((a, b) => a - b);
+    console.log(`globe skyline timing: first call ${cold.toFixed(1)} ms; next 5 ` +
+      `${times.map((x) => x.toFixed(1)).join(', ')} ms (median ${times[2].toFixed(1)} ms); ` +
+      `${walkDistances(CELL).length} steps an azimuth against ${walkDistances(240).length} on dem.bin`);
+    // The same limit and reason as the dem.bin timing test above (issue #67).
+    expect(times[0]).toBeLessThan(150);
+  });
+});
+
 describe('skylineElev', () => {
-  const s: Skyline = { elev: new Float32Array(360), terrain: true };
+  const s: Skyline = { elev: new Float32Array(360), terrain: true, grid: 'dem', cellM: 240 };
   s.elev[10] = 2;
   s.elev[11] = 4;
   s.elev[359] = 6;

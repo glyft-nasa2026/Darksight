@@ -1,9 +1,11 @@
-// T14 map layers: settings, fading and colouring. Pure functions, no DOM: model.test.ts runs them
-// in node. index.ts holds the one store the page uses and draws with these.
+// T14 map layers: settings, fading, colouring and the legend's words. Pure functions, no DOM:
+// model.test.ts runs them in node. index.ts holds the one store the page uses and draws with these.
+// The layer keys, values and sources come from core/layers.ts (T43); this file only words them.
+import { LAYER_KEYS, type LayerKey, type LayerSource } from '../../core/layers';
 import { SLOPE_RAMP_MAX_DEG } from '../../core/slope';
+import { distanceText } from '../distance';
 
-export type LayerKey = 'sun' | 'earth' | 'psr' | 'height' | 'slope';
-export const LAYER_KEYS: readonly LayerKey[] = ['sun', 'earth', 'psr', 'height', 'slope'];
+export { LAYER_KEYS, type LayerKey } from '../../core/layers';
 
 export const LAYER_LABELS: Record<LayerKey, string> = {
   sun: 'Sunlight (share of time lit)',
@@ -146,4 +148,36 @@ export function slopeRamp(degrees: ArrayLike<number>, maxDeg = SLOPE_RAMP_MAX_DE
     out[i] = Number.isFinite(d) ? Math.min(1, Math.max(0, d / maxDeg)) : NaN;
   }
   return out;
+}
+
+/** T43: the legend's short name of each layer. */
+export const LAYER_SHORT: Record<LayerKey, string> = {
+  sun: 'Sunlight', earth: 'Earth in view', psr: 'Never lit', height: 'Height', slope: 'Slope',
+};
+
+/** T43: a layer's value at a point as the legend writes it: "43 % of the time", "−1,234 m", "7°". */
+export function valueText(key: LayerKey, v: number): string {
+  switch (key) {
+    case 'sun': case 'earth': return `${Math.round(v * 100)} % of the time`;
+    case 'psr': return `${Math.round(v * 100)} % of the ground`;
+    case 'height': return `${Math.round(v).toLocaleString('en-GB').replace('-', '−')} m`;
+    case 'slope': return v < 0.5 ? 'under 1°' : `${Math.round(v)}°`;
+  }
+}
+
+/**
+ * T43: the source of a layer's value at a point, in words (contract section 2, "Which source
+ * applies where"): "LOLA, 480 m cells, with terrain", "Smooth Moon, no terrain shadows".
+ */
+export function sourceText(key: LayerKey, src: LayerSource): string {
+  const cell = src.cellM === null ? '' : distanceText(src.cellM);
+  const over = key === 'slope' ? `slope over ${cell}` : `${cell} cells`;
+  switch (src.id) {
+    case 'lola-south': return `LOLA, ${cell} cells, with terrain (south polar map)`;
+    case 'lola-north': return `LOLA, ${cell} cells, with terrain (north polar map)`;
+    case 'smooth': return key === 'psr' ? 'Smooth Moon: no terrain, so no permanent shadow' : `Smooth Moon, no terrain shadows (${cell} cells)`;
+    case 'dem-south': return `LOLA south-pole height map, ${over}`;
+    case 'dem-north': return `LOLA north-pole height map, ${over}`;
+    case 'globe': return `LOLA whole-Moon height map, ${over}`;
+  }
 }

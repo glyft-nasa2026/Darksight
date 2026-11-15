@@ -1,6 +1,6 @@
 # T36: Upcoming mission targets in the site list
 
-Status: not started. Step 1 is done: the team agreed on 15 Nov 2026 that the list may hold 25 sites (the 20 stay, and up to 5 upcoming targets are added; `docs/decisions.md`, F12 in `SPEC.md`)
+Status: done (pull request #162): four planned sites (`im-3`, `blue-ghost-2`, `blue-ghost-3`, `chandrayaan-4`; 24 in all), `data-prep/check_features.py`, `features.json` and its contract entry, the planned-site test, "(planned)" after the name in the site list, and `web/scripts/quickmap-sheet.mjs`; Yi Hung checked the four pins on the contact sheet (F12). Extra scope: `web/src/ui/scenarios/input.ts` and `input.test.ts`. Open: IM-3's point has no independent second source (`docs/sources/T36.md`)
 
 | | |
 |---|---|
@@ -93,6 +93,11 @@ No new package: Python reads the gazetteer's KMZ with the standard library (`zip
 `shackleton-floor` and `shackleton-rim` stay: T24's checks and the demo use them by id. A planned
 target south of 85 S gets the terrain skyline; anywhere else it gets the smooth Moon (T37 covers
 that). `tasks/T07-sites.md` still says "15-20": it records what T07 did.
+
+## After the merge
+
+- 15 Nov 2026, audit before submission (pull request #189). All four coordinates match their cited papers digit for digit, with the two 0-360 conversions right. `blue-ghost-2`'s source link opened an abstract page with no coordinate; it now opens the paper's PDF, which reads "(23.813 S, 182.258 E)".
+- *cosmetic*: six of the seven "Done when" boxes are still unticked although the status says done. Line 2 asks for the mission owner's page; all four sources are payload-team papers.
 
 ## Prompt to paste into Claude Code
 

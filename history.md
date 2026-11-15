@@ -4,6 +4,43 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the terrain skyline over the whole Moon (T37, option C)
+
+### docs/decisions.md: 14 Nov, "Real terrain for any point south of 85 S"
+
+- Was: "Real terrain for any point south of 85 S, computed in the browser from one LOLA grid".
+- Now: `dem.bin` (240 m) at or south of 85 S, unchanged; `globe.bin` (3.8 km) for every other site;
+  the page says which.
+- Why: 14 of the 20 curated sites had a smooth Moon. The team picked option C of three (T37):
+  whole-Moon reach with no new download, without coarsening the polar sites.
+
+### SPEC.md: 6. Where real terrain applies
+
+- Was: "South of 85 S: Real, from LOLA, looking out to 150 km" and "Anywhere else: Smooth Moon
+  (0 degrees). The app says so on screen".
+- Now: real at 240 m south of 85 S, coarse at 3.8 km elsewhere; a smooth Moon only while a height
+  map is loading or missing.
+- Why: as above.
+
+### docs/data-contract.md: 2. `globe.bin`; 3. `Skyline` and `horizon.ts`; 4. state
+
+- Was: `globe.bin` gave numbers only to the height and slope layers and the readout's slope line;
+  the skyline was "`terrain = false` and all zeros when `dem` is null or the site is north of
+  85 S"; `Skyline` was `{ elev, terrain }`; `state.ts` had no `globe`.
+- Now: `globe.bin` also gives the skyline and ground height north of 85 S through `core/globe.ts`;
+  `Skyline` carries `grid` and `cellM`; `AppState` has `globe` and `globeStatus`, and its arrival
+  clears only the caches of sites north of 85 S.
+- Why: option C needs a second grid, and the page must say which grid a skyline used.
+
+## 15 Nov 2026: the nudge panel starts top left (issue #177)
+
+### docs/data-contract.md: 5. Page slots, `#nudge`
+
+- Was: the nudge panel starts in the bottom left corner of the map.
+- Now it starts top left. The scene's status message ("Loading…", "Graphics paused…") moves from
+  top left to bottom left so the panel doesn't cover it.
+- Why: issue #177 asked for the top left corner.
+
 ## 15 Nov 2026: the timeline plays, and the solar panel card has a battery (T40)
 
 P5 asked for both.
@@ -20,6 +57,69 @@ P5 asked for both.
 - Was: "Flat panel or upright panel that turns to face the Sun; shows relative power".
 - Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
 - Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
+
+## 15 Nov 2026: the twelve newer launch pads checked against their pages (T34)
+
+### docs/sources/T34.md: the twelve launch pads
+
+- Was: one row for the twelve pads added in #104, with their twelve page links: "The coordinates
+  were written by the AI from these pages without fetching them; **a person still has to check
+  each one against its page or a map**".
+- Now one row per pad names the page element its value is checked against, and a row says how
+  the check is done (a Playwright script run by an AI agent, 15 Nov 2026). Taiyuan LC-9 moves from
+  38.84917 N, 111.60806 E to 38.8632 N, 111.589639 E; Plesetsk's pad is named Site 43/4.
+- Why: T34's last open item. The script found that Taiyuan LC-9 held the page title's coordinate,
+  2.2 km from the pad, and that four more pages (Vandenberg, Starbase, Plesetsk, Tanegashima) give
+  the spaceport or the complex in the title, so each pad's own value comes from a list item, a
+  map template, Wikidata or the Japanese article.
+
+### tasks/T34-mission.md: `Status:`
+
+- Was: "Open: a person still has to check the twelve pad coordinates added in #104 against their
+  sources (`docs/sources/T34.md`)."
+- Now the check is done by script (#185), and the table in that pull request lets a person
+  confirm it.
+- Why: the same check.
+
+## 15 Nov 2026: map layers over the whole Moon (T43)
+
+### docs/data-contract.md: 2. `globe.bin` and `north.bin`
+
+- Was: "for pictures"; no number shown to the user came from them, and nothing in `core/` loaded them.
+- Now: the height and slope layers and the readout's slope line take heights from them where
+  `dem.bin` does not reach, through `core/globe.ts` (moved from `web/src/scene/`, which re-exports it).
+- Why: the decision of 15 Nov 2026 (`docs/decisions.md`): every map layer covers the whole Moon, and
+  these were the only whole-Moon heights.
+
+### docs/data-contract.md: 2. `layers/layers.json`
+
+- Was: one south-polar grid at the top level (`size`, `pixel_m`, ... and `layers.{sun,earth,psr}`).
+- Now: `polar.south` and `polar.north`, each with its grid, `min_lat`, `files` and `products`;
+  `meanings` at the top. The south files keep their names and bytes; the north ones are new
+  (`north_*.bin`), and a new `layers/smooth.json` gives the smooth-Moon Sun and Earth elsewhere.
+- Why: T43 step 1 found that the LOLA team publishes the north maps too (PGDA product 69, PDS
+  `AVGVISIB_65N_240M_201608`, `..._EARTH`, `LPSR_65N_240M_201608`), so the north uses them as the south does.
+
+### docs/data-contract.md: 5. Map layers
+
+- Was: drawn on the south-polar map only (`kind === 'south'`), with `drawLayers(ctx, toScreen)`; the
+  controls said "pick a site south of 80° S" elsewhere.
+- Now: drawn on the south polar, north polar and whole-Moon maps, `drawLayers(ctx, { kind, view,
+  reachDeg, unitPx })`, with a dashed seam where sources meet and a legend naming the source at the
+  selected site. That message is gone.
+- Why: T43, SPEC section 6.
+
+### SPEC.md: 6. Where real terrain applies
+
+- Was: Lit % and Earth-visible % near the poles: "south; north where published".
+- Now: south and north, both published.
+- Why: T43 step 1 (above).
+
+### web/src/ui/readout (F3)
+
+- Was: "Ground slope: no height map here (it covers 80° S to the pole)" north of 80 S.
+- Now: a slope at every site: "Ground slope 2° (over 3.8 km)" on `globe.bin`, "(over 1.2 km)" on `north.bin`.
+- Why: T43; the slope line follows the slope layer.
 
 ## 15 Nov 2026: date search (T42)
 

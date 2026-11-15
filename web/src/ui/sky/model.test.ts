@@ -21,7 +21,7 @@ function sample(i: number, sunAz: number, sunAlt: number, earthAz = 0, earthAlt 
 function skylineOf(f: (az: number) => number, terrain = true): Skyline {
   const elev = new Float32Array(360);
   for (let az = 0; az < 360; az++) elev[az] = f(az);
-  return { elev, terrain };
+  return { elev, terrain, grid: terrain ? 'dem' : null, cellM: terrain ? 240 : null };
 }
 
 describe('pathOf', () => {

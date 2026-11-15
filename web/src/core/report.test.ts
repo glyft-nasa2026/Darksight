@@ -36,7 +36,7 @@ const conditions: LandingConditions = {
   sunFlip: { type: 'set', tMs: TOUCHDOWN + 48 * 24 * HOUR },
   earthFlip: { type: 'rise', tMs: TOUCHDOWN + 3 * 24 * HOUR },
   sunText: 'Sunset in 48 d 0 h', earthText: 'Earthrise in 3 d 0 h',
-  summary: summary(samples), terrain: true,
+  summary: summary(samples), terrain: true, terrainCellM: 240, terrainText: 'Terrain from LOLA, 240 m cells',
 };
 
 const ctx = (over: Partial<ReportContext> = {}): ReportContext => ({
@@ -145,6 +145,8 @@ describe('JSON', () => {
     expect(doc.site_at_touchdown.sun.alt_deg).toBe(1.6);
     expect(doc.site_at_touchdown.earth.visible).toBe(false);
     expect(doc.site_at_touchdown.summary_30d.lit_pct).toBe(conditions.summary.litPct);
+    expect(doc.site_at_touchdown.terrain_skyline).toBe(true);
+    expect(doc.site_at_touchdown.terrain_cell_m).toBe(240);   // T37
     expect(doc.data.mock).toBe(false);
     expect(doc.warnings[0].code).toBe('earth-hidden');
     expect(doc.sources.length).toBeGreaterThan(3);
@@ -264,5 +266,12 @@ describe('file names', () => {
   it('use the coordinates for a site with no id', () => {
     const r = buildReport(p, ctx({ site: { id: null, name: 'Scenario A', ...SITE } }));
     expect(reportFileName(r, 'csv')).toBe('darksight-mission-89.6866S-162.8100W-2026-11-21T1604Z.csv');
+  });
+});
+
+describe('model and sources', () => {
+  it('names GMAT as the next step, in the limits and the sources', () => {
+    expect(report.model.some((l) => l.includes('GMAT'))).toBe(true);
+    expect(report.sources.some((s) => s.name.includes('GMAT') && s.url.startsWith('https://'))).toBe(true);
   });
 });

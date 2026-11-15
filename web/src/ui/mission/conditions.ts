@@ -5,15 +5,17 @@ import type { OkPlan } from '../../core/mission';
 import type { LandingConditions, ReportWarning } from '../../core/report';
 import { countdownText } from '../../core/windows';
 import {
-  type MissionResult, flipFor, neverLitFor, neverLitPendingFor, samplesFor, skylineFor, summaryFor, type Scenario,
+  type MissionResult, flipFor, getState, neverLitFor, neverLitPendingFor, samplesFor, skylineFor, summaryFor,
+  type Scenario,
 } from '../../state';
 import { noRowText } from '../tableGap';
+import { terrainShort } from '../terrain';
 import { kgText, pctText, utcText } from './format';
 
 export const ERRORS = {
   'bad-input': 'The lander needs positive numbers, and a dry mass below its mass after TLI.',
   'coast-out-of-range': 'No transfer reaches the Moon in that coast time.',
-  'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
+  'thrust-too-low': 'This lander’s engine can’t lift it in the Moon’s gravity, so it can’t slow to a landing. Give it more thrust or less mass.',
 } as const;
 
 /** Why there is no plan, in the card's words; null when there is one. */
@@ -34,6 +36,7 @@ export function landingConditions(sc: Scenario): LandingConditions | 'loading' {
   const sunUp = now.sunFrac > 0;
   const sunFlip = flipFor(sc, 'sun');
   const earthFlip = flipFor(sc, 'earth');
+  const sky = skylineFor(sc);
   return {
     sun: { up: sunUp, altDeg: now.sun.alt, azDeg: now.sun.az, aboveSkylineDeg: now.sunAbove, discFrac: now.sunFrac },
     earth: { up: now.earthUp, altDeg: now.earth.alt, azDeg: now.earth.az, aboveSkylineDeg: now.earthAbove },
@@ -42,7 +45,9 @@ export function landingConditions(sc: Scenario): LandingConditions | 'loading' {
     sunText: countdownText('sun', sunUp, sunFlip, sc.tMs, neverLitFor(sc), neverLitPendingFor(sc)),
     earthText: countdownText('earth', now.earthUp, earthFlip, sc.tMs),
     summary: summaryFor(sc),
-    terrain: skylineFor(sc).terrain,
+    terrain: sky.terrain,
+    terrainCellM: sky.cellM,
+    terrainText: terrainShort(sky, sc.site, getState().globeStatus),
   };
 }
 

@@ -59,17 +59,17 @@ const lowSun = table(60, () => -1);
 
 // ---- made-up skylines ------------------------------------------------------------------------
 
-const level = (deg: number): Skyline => ({ elev: new Float32Array(360).fill(deg), terrain: deg !== 0 });
+const level = (deg: number): Skyline => ({ elev: new Float32Array(360).fill(deg), terrain: deg !== 0, grid: deg !== 0 ? 'dem' : null, cellM: deg !== 0 ? 240 : null });
 const flat = level(0);
 /** Rolling hills, 0.5 to 3.5 degrees. */
 const bumpy: Skyline = {
   elev: Float32Array.from({ length: 360 }, (_, az) => 2 + 1.5 * Math.sin(3 * az * RAD)),
-  terrain: true,
+  terrain: true, grid: 'dem', cellM: 240,
 };
 /** Level ground with one mountain, 5 degrees tall, from azimuth 100 to 140. */
 const peak: Skyline = {
   elev: Float32Array.from({ length: 360 }, (_, az) => (az >= 100 && az <= 140 ? 5 : 0)),
-  terrain: true,
+  terrain: true, grid: 'dem', cellM: 240,
 };
 
 // ---- sites -----------------------------------------------------------------------------------
@@ -348,7 +348,7 @@ describe('nextFlip', () => {
   it('finds a late sunrise over a wall to the east', () => {
     const wall: Skyline = {
       elev: Float32Array.from({ length: 360 }, (_, az) => (az >= 45 && az <= 135 ? 10 : 0)),
-      terrain: true,
+      terrain: true, grid: 'dem', cellM: 240,
     };
     const flip = nextFlip(eph, equator, 0, wall, sunAt(180), 'sun');
     expect(flip?.type).toBe('rise');

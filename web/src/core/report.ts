@@ -5,7 +5,7 @@
 //
 // Units: times in ms since 1970 (UTC) inside the report, ISO 8601 with Z in the files; Δv and
 // speeds in km/s inside, m/s in the files; altitudes and distances in km; masses in kg.
-import {
+import { ASCENT_LOSSES_KMS, HIGH_GATE_KM,
   APOLLO_11_TIMES, approachSeconds, DESCENT_START_ALT_KM, EXAMPLE_LANDER, missionAt,
   type Lander, type MissionTimes, type OkPlan, type Step, type StepId,
 } from './mission';
@@ -22,16 +22,21 @@ export const PHASE_NAMES: Record<StepId, string> = {
 };
 
 /** The model's simplifications, the card's list (tasks/T34-mission.md, Model). */
+/** The note on the launch's Δv, on the mission card and in the report (issue #181). */
+export const LAUNCH_DV_NOTE =
+  `* Includes ${ASCENT_LOSSES_KMS.toFixed(2)} km/s of gravity and drag losses, the middle of the usual 1.5 to 2 km/s; the launch vehicle is not modelled.`;
+
 export const MODEL_LIMITS: readonly string[] = [
   'A planning model, not a flight-dynamics solution.',
   'Patched conics from Earth to the Moon; the Earth–Moon picture is the model’s plane, not an ephemeris track.',
   'Burns are instant, except the powered descent, which is simulated.',
   'A 100 km circular polar lunar orbit.',
-  'A gravity-turn powered descent at one throttle, held to the ground.',
+  `A guided powered descent from 15 km in Apollo’s phases: braking at full thrust to a ${HIGH_GATE_KM} km high gate, then throttled straight down to touchdown (Bennett 1970).`,
   'Phase lengths from Apollo 11 (NASA SP-4029). The launch time is touchdown less the phases: no launch window is solved.',
-  'The launch vehicle’s propellant is not modelled, and its Δv is ideal, without gravity and drag losses.',
+  'The launch vehicle’s propellant is not modelled. Its Δv includes a cited budget for gravity and drag losses, not a simulated ascent.',
   'No ascent from the Moon and no return to Earth.',
   'The Moon has no atmosphere: no drag, and no refraction of the Sun or Earth.',
+  'For a flight-dynamics solution (full gravity, finite burns, targeting, a launch window), take this plan into a tool such as NASA’s General Mission Analysis Tool (GMAT), which is open source.',
 ];
 
 /** Where the numbers come from (docs/sources/T34.md, docs/sources/T35.md). */
@@ -42,6 +47,7 @@ export const REPORT_SOURCES: readonly { name: string; url: string }[] = [
   { name: 'Phase lengths: NASA SP-4029, Apollo 11 timeline', url: 'https://www.nasa.gov/wp-content/uploads/static/history/SP-4029/Apollo_11i_Timeline.htm' },
   { name: 'Example lander: Intuitive Machines Nova-C (Isp an example value)', url: 'https://en.wikipedia.org/wiki/Intuitive_Machines_Nova-C' },
   { name: 'Moon’s sidereal rotation: NASA Moon fact sheet', url: 'https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html' },
+  { name: 'The next step, not used for these numbers: NASA General Mission Analysis Tool (GMAT), open source', url: 'https://etd.gsfc.nasa.gov/capabilities/capabilities-listing/general-mission-analysis-tool-gmat/' },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -64,6 +70,8 @@ export type LandingConditions = {
   earthText: string;
   summary: Summary;          // next 30 days
   terrain: boolean;          // the skyline is real terrain, not the smooth Moon
+  terrainCellM: number | null;   // T37: the skyline's grid cell, metres (240, about 3790); null for a smooth Moon
+  terrainText: string;       // T37: which terrain, in ui/terrain.ts's words ("Coarse terrain: ... 3.8 km cells")
 };
 
 export type ReportWarning = { code: string; text: string; level: 'warn' | 'bad' };
@@ -387,6 +395,7 @@ export function reportJson(r: Report): string {
         earth_pct: c.summary.earthPct, longest_earth_gap_h: c.summary.longestEarthGap_h,
       },
       terrain_skyline: c.terrain,
+      terrain_cell_m: c.terrainCellM,
     } : null,
     surface_periods: r.surface.map((p) => ({
       body: p.body, up: p.up, start_utc: iso(p.startMs), end_utc: iso(p.endMs), duration_s: (p.endMs - p.startMs) / 1000,

@@ -88,7 +88,7 @@ def enter(page):
 # A floor the readout calls hidden must look dark: under this share of the same ground's brightness
 # with no Sun at all (a time outside the table, which the map draws without light or shadow).
 # The same ground cancels its height colour, so only the light is compared. Relative, not a fixed
-# brightness: the shadow level (SHADOW_LIGHT, issue #154) and the theme's colours change.
+# brightness: the ambient light in shadow (AMBIENT_*, issue #154) and the theme's colours change.
 DARK_SHARE = 0.9
 
 
@@ -117,7 +117,9 @@ def passed(name, detail):
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
-    page = browser.new_page(viewport={'width': 1280, 'height': 900}, device_scale_factor=1)
+    # Reduced motion: a switch between 2D and 3D jumps, as before T29's cross-fade, so the checks
+    # right after a switch see the view they ask for. T29's fade has its own test (e2e/transition.spec.ts).
+    page = browser.new_page(viewport={'width': 1280, 'height': 900}, device_scale_factor=1, reduced_motion='reduce')
     errors = []
     graphics_warnings = []
     page.on('pageerror', lambda e: errors.append(str(e)))

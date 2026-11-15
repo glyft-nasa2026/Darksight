@@ -18,6 +18,8 @@ import { failedDecades, RETRY_MAX_MS, RETRY_MS, tableGap } from './state';
 // T42: also on lines of their own.
 import { firstWindow, monthsLater } from './core/datesearch';
 import { dateSearchFor } from './state';
+// T37: also on lines of their own.
+import { parseGlobe, type GlobeHeights } from './core/globe';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -40,7 +42,7 @@ function circlingSun(days: number): Ephemeris {
 
 beforeEach(() => {
   restoreFromAddress('', T0);
-  setData({ eph: null, dem: null, sites: [] });
+  setData({ eph: null, dem: null, sites: [], globe: null });
 });
 
 describe('start', () => {
@@ -429,6 +431,63 @@ describe('cached accessors', () => {
     expect(skylineFor(getState().live).terrain).toBe(false);
   });
 
+  describe('T37: globe.bin north of 85 S', () => {
+    const size = 16;
+    const polarDem = (): ReturnType<typeof parseDem> => parseDem({
+      size, pixel_m: 10_000, x_min_m: -80_000, y_max_m: 80_000, height_scale: 1, nodata: -32768,
+      min_lat: -80, source: 'made up for a test',
+    }, new ArrayBuffer(size * size * 2));
+    /** A whole-Moon grid, 1 degree a cell, every cell `h` metres high. */
+    const globeOf = (h: number): GlobeHeights => {
+      const buffer = new ArrayBuffer(360 * 180 * 2);
+      const view = new DataView(buffer);
+      for (let i = 0; i < 360 * 180; i++) view.setInt16(i * 2, h, true);
+      return parseGlobe({ width: 360, height: 180, height_scale: 1, source: 'made up for a test' }, buffer);
+    };
+    const north: Scenario = { id: 'n', label: 'N', color: '--scn-a', site: { lat: 26.13, lon: 3.63 }, tMs: T0 };
+    const polar: Scenario = { id: 'p', label: 'P', color: '--scn-b', site: { lat: -89.9, lon: 0 }, tMs: T0 };
+
+    it('a site north of 85 S is a smooth Moon until globe.bin arrives, then coarse terrain; a polar site stays on dem.bin', () => {
+      setData({ dem: polarDem() });
+      expect(skylineFor(north).terrain).toBe(false);
+      expect(skylineFor(polar).grid).toBe('dem');
+      setData({ globe: globeOf(500) });
+      expect(getState().globeStatus).toBe('ready');
+      expect(skylineFor(north).grid).toBe('globe');
+      expect(skylineFor(north).cellM).toBeCloseTo((Math.PI * 1737.4e3) / 180, 3);
+      expect(skylineFor(polar).grid).toBe('dem');
+    });
+
+    it('globe.bin arriving keeps the polar sites\' cached results and drops only the northern ones', () => {
+      setData({ eph: circlingSun(60), dem: polarDem() });
+      const polarSky = skylineFor(polar), northSky = skylineFor(north);
+      const polarSamples = samplesFor(polar, '30d'), northSamples = samplesFor(north, '30d');
+      setData({ globe: globeOf(500) });
+      expect(skylineFor(polar)).toBe(polarSky);
+      expect(samplesFor(polar, '30d')).toBe(polarSamples);
+      expect(skylineFor(north)).not.toBe(northSky);
+      expect(samplesFor(north, '30d')).not.toBe(northSamples);
+      // Any other data still clears everything.
+      setData({ dem: polarDem() });
+      expect(skylineFor(polar)).not.toBe(polarSky);
+    });
+
+    it('globe.bin failing or missing (globe: null) says so, and the northern site stays a smooth Moon', () => {
+      setData({ dem: polarDem(), globe: null });
+      expect(getState().globeStatus).toBe('missing');
+      expect(skylineFor(north).terrain).toBe(false);
+      expect(skylineFor(polar).grid).toBe('dem');
+    });
+
+    it('a pasted link keeps the loaded globe.bin', () => {
+      const g = globeOf(0);
+      setData({ globe: g });
+      restoreFromAddress('', T0);
+      expect(getState().globe).toBe(g);
+      expect(getState().globeStatus).toBe('ready');
+    });
+  });
+
   it('the timeline starts at the window for live and at its own time for a pinned scenario', () => {
     setData({ eph: circlingSun(400) });
     setLiveTime(T0 + 10 * DAY);                       // inside the window: it stays at T0
@@ -692,6 +751,30 @@ describe('decades of the table (loaded as needed)', () => {
       expect(calls).toBeGreaterThan(0);
       expect(getState().eph).not.toBeNull();
       expect(samplesFor(getState().live, '30d')[0].tMs).toBe(later);
+    });
+
+    it('a window cut short at the failed decade is whole again once the decade arrives', async () => {
+      failThenServe(1);
+      setLiveSite({ lat: 0, lon: 0 });
+      setLiveTime(T0 + (DAYS - 20) * DAY);    // 20 days before the file that fails
+      await flush();
+      expect(asked).toHaveLength(1);
+      const live = getState().live;
+      expect(samplesFor(live, '30d')).toHaveLength(20 * 24);   // stops where the failed file starts
+      const cutShort = summaryFor(live);
+      expect(flipFor(live, 'sun')?.type).toBe('set');
+
+      await vi.advanceTimersByTimeAsync(RETRY_MS);              // nobody touches the page
+      await flush();
+      expect(asked).toHaveLength(2);
+      expect(failedDecades()).toEqual([]);
+      expect(getState().live).toBe(live);                       // same site, same time
+      expect(samplesFor(live, '30d')).toHaveLength(30 * 24);
+      // The 30-day figures are worked out again over the whole window, not kept from the short one.
+      const whole = summaryFor(live);
+      expect(whole).not.toBe(cutShort);
+      expect(cutShort.litPct).toBeLessThan(35);                 // 20 days, most of them one night
+      expect(whole.litPct).toBeGreaterThan(45);                 // 30 days: about half lit
     });
 
     it('a decade that keeps failing is not asked for again before the wait is over', async () => {

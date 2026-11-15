@@ -7,9 +7,10 @@ import { plotlyIfLoaded, whenPlotly } from '../plotly';
 import type { Body, Sample } from '../../core/types';
 import { countdownText } from '../../core/windows';
 import {
-  flipFor, getState, neverLitFor, samplesFor, subscribe, summaryFor, type AppState, type Scenario,
+  flipFor, getState, neverLitFor, samplesFor, skylineFor, subscribe, summaryFor, type AppState, type Scenario,
 } from '../../state';
 import { axisTitle, plotLayout, themeColor } from '../plotTheme';
+import { terrainNote } from '../terrain';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
 // A line of its own, so the state import above stays as other branches edit it (T32).
 import { neverLitPendingFor } from '../../state';
@@ -115,6 +116,11 @@ function drawTable(cols: Column[]): HTMLTableElement {
       make('span', 'cmp-where', where),
       make('span', 'cmp-when muted', `${utcText(c.sc.tMs)} UTC`),
     );
+    // The readout's words, on every column they apply to (T37, ui/terrain.ts): coarse terrain
+    // north of 85° S says so, and a smooth Moon (a height map not in yet or missing) says why,
+    // since then a crater floor reads as lit. Nothing for the detailed polar terrain.
+    const ground = terrainNote(skylineFor(c.sc), c.sc.site, getState().globeStatus);
+    if (ground) th.append(make('span', 'cmp-ground muted', ground));
     hr.append(th);
   }
   head.append(hr);
@@ -216,8 +222,11 @@ export function mount(el: HTMLElement): void {
   const hint = make('p', 'muted', 'Pin a scenario to compare');
   el.replaceChildren(title, message, tableWrap, hint, stripsTitle, strips, note);
 
+  // checking: a column read "checking to 2100…". Its answer comes when the never-lit scan ends,
+  // which changes nothing else here, so each notify redraws until no column is checking (T32).
   type Shown = {
     live: Scenario; pinned: Scenario[]; eph: AppState['eph']; dem: AppState['dem']; sites: AppState['sites'];
+    checking: boolean;
   };
   let shown: Shown | null = null;
   let drawId = 0;
@@ -249,9 +258,9 @@ export function mount(el: HTMLElement): void {
     frame = 0;
     const s = getState();
     // Pinned scenarios never change, but live does on every map click, time entry and drag.
-    if (shown && shown.live === s.live && shown.pinned === s.pinned && shown.eph === s.eph
-      && shown.dem === s.dem && shown.sites === s.sites) return;
-    shown = { live: s.live, pinned: s.pinned, eph: s.eph, dem: s.dem, sites: s.sites };
+    if (shown && !shown.checking && shown.live === s.live && shown.pinned === s.pinned
+      && shown.eph === s.eph && shown.dem === s.dem && shown.sites === s.sites) return;
+    shown = { live: s.live, pinned: s.pinned, eph: s.eph, dem: s.dem, sites: s.sites, checking: false };
     const id = ++drawId;
 
     if (!s.eph) {
@@ -277,6 +286,7 @@ export function mount(el: HTMLElement): void {
       };
     });
     note.textContent = NOTE + (cols.some((c) => c.days < SPAN_DAYS) ? NOTE_SHORT : '');
+    shown.checking = cols.some((c) => c.now !== null && neverLitPendingFor(c.sc));
 
     message.hidden = true;
     hint.hidden = s.pinned.length > 0;

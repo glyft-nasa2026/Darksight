@@ -33,15 +33,17 @@ describe('pctText', () => {
   });
 });
 
-describe('slopeText (T41)', () => {
-  it('rounds to whole degrees and says what it is measured over', () => {
+describe('slopeText (T41, T43)', () => {
+  it('rounds the slope to whole degrees and names what it is measured over', () => {
     expect(slopeText({ kind: 'ok', deg: 7.3, baselineM: 240 })).toBe('Ground slope 7° (over 240 m)');
     expect(slopeText({ kind: 'ok', deg: 29.6, baselineM: 240 })).toBe('Ground slope 30° (over 240 m)');
     expect(slopeText({ kind: 'ok', deg: 0.2, baselineM: 960 })).toBe('Ground slope under 1° (over 960 m)');
+    expect(slopeText({ kind: 'ok', deg: 2.4, baselineM: 3790.4 })).toBe('Ground slope 2° (over 3.8 km)');
+    expect(slopeText({ kind: 'ok', deg: 5, baselineM: 1200 })).toBe('Ground slope 5° (over 1.2 km)');
   });
 
   it('says why there is no slope', () => {
-    expect(slopeText({ kind: 'outside', minLat: -80 })).toBe('Ground slope: no height map here (it covers 80° S to the pole)');
+    expect(slopeText({ kind: 'missing', files: ['globe.bin'] })).toBe('Ground slope: no height map here (globe.bin did not load)');
     expect(slopeText({ kind: 'loading' })).toBe('Ground slope: waiting for the height map');
     expect(slopeText({ kind: 'nodata' })).toBe('Ground slope: the height map has no data around this point');
   });

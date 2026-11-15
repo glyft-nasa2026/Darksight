@@ -114,14 +114,24 @@ export function mount(el: HTMLElement): void {
     return d;
   };
 
+  // The stored values the boxes were last checked against.
+  let shownBattery: Battery | null = null;
   const renderBattery = (): void => {
     const s = getState();
     const b = s.battery;
-    // A box being typed in keeps its text; the others show the stored values.
-    for (const f of inputs) {
-      const box = boxes[f.key];
-      if (document.activeElement !== box && (box.value === '' || Number(box.value) !== b[f.key])) {
-        box.value = String(b[f.key]);
+    // New stored values (a share link) replace a rejected entry and its message.
+    const last = shownBattery;
+    if (last && inputs.some((f) => last[f.key] !== b[f.key])) batError.textContent = '';
+    shownBattery = { ...b };
+    // A box being typed in keeps its text; the others show the stored values. While a rejected
+    // value is on screen with its message, every box keeps its text: a value typed in another
+    // box meanwhile is not applied yet, and must not be thrown away with the message still up.
+    if (batError.textContent === '') {
+      for (const f of inputs) {
+        const box = boxes[f.key];
+        if (document.activeElement !== box && (box.value === '' || Number(box.value) !== b[f.key])) {
+          box.value = String(b[f.key]);
+        }
       }
     }
     if (!s.eph) {

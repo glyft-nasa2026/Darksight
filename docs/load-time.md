@@ -120,6 +120,8 @@ measurement gave 1.45 s and 0.62 s.
 | Longest freeze after loading, phone (Realme 6) | 0.5 s | 1.022 s (Shackleton floor, one session) | **Fail**: every one of the five spots is over 0.5 s (785 to 1022 ms). Issue #32, row 1 |
 | Longest freeze after loading, phone (Realme 6), again after issue #32's fix (pull request #132, measured 15 Nov 2026) | 0.5 s | 534 ms (Shackleton floor, two sessions: 311 to 534 ms a spot, median about 450; the same spots on `main` before it, `964eca2`: 615 to 867 ms) | **Accepted as is** by the team (Leon, issue #32): 8 of the 10 spots are under 0.5 s, two are 510 and 534 ms. Measured on builds served from the laptop over USB (`adb reverse`), so the processor and not the network; the freeze is the change handler's own run time measured in the page |
 | Longest freeze after loading | 0.5 s | 0.486 s (Shackleton floor, laptop) | **Pass**, by 14 ms, on the laptop. The phone is in the two rows above. The 1.06 s freeze when `globe.bin` arrives after loading is outside the four actions; see section 6, item 3 |
+| Height map in, again after T37 (pull request #193, commit `676a781`, measured 15 Nov 2026 on `vite preview`; section 9) | 20 s | 6.97 s at Shackleton rim (median of 3: 6.98, 6.97, 6.97); 6.81 s at Apollo 15. The coarse skyline north of 85 S, from the `globe.bin` already downloaded, at 16.02 s | **Pass**, on a different laptop and served locally (section 9) |
+| Longest freeze after loading, each map layer switched on, after T43 (pull request #172, measured 15 Nov 2026; section 8) | 0.5 s | under 50 ms: no long task while any of the five layers loads and draws, on the whole-Moon or the south polar map (before the layer pictures were built in slices: 0.9 to 1.1 s for slope) | **Pass**, on a different laptop and with no throttle (section 8) |
 
 ## 6. Fails and who can fix them
 
@@ -197,3 +199,73 @@ what is described under "Method" above: a fresh profile per load, the cache off,
 Fast 4G values, three loads per connection, then the freezes and the decade test. The team can
 ask for it to be added in a separate pull request, for example as `tools/measure-load.py`, so a
 fix can be checked against the same numbers.
+
+## 8. T43: map layers over the whole Moon (15 Nov 2026)
+
+T43 adds files that a visit downloads only when a map layer is switched on, never on a first
+visit (checked: no `data/layers/` file is asked for before a layer is on). They come from the same
+host as the rest, without compression, like every `.bin`.
+
+| Switched on | Files fetched (first time a layer needs them) | Bytes |
+|---|---|---|
+| Sunlight | `layers/layers.json`, `sun.bin`, `north_sun.bin`, `smooth.json`, `smooth_sun.bin` | 3.47 MB |
+| Earth in view | `earth.bin`, `north_earth.bin`, `smooth_earth.bin` | 3.47 MB |
+| Never lit | `psr.bin`, `north_psr.bin` (a smooth Moon has no file: 0 everywhere) | 3.21 MB |
+| Height, Slope | none: `dem.bin`, `north.bin` and `globe.bin`, already downloaded for the map | 0 |
+
+All five: 10.1 MB, of which 4.8 MB (`north_*.bin`) and 0.52 MB (`smooth_*.bin`) are new with T43;
+the south files are T14's, byte for byte.
+
+| Action | Legend shows the value and source | Longest freeze |
+|---|---|---|
+| Each layer on, Apollo 15 (whole-Moon map) | 39 to 123 ms | none over 50 ms |
+| Each layer on, Shackleton rim (south polar map) | 40 to 149 ms | none over 50 ms |
+| Readout's slope line at a site away from the poles (needs `globe.bin`) | ready 1.31 s after Enter | – |
+
+A layer's picture for a map view asks `core/layers.ts` for a value at every pixel: up to 4.1
+million (slope and height on the whole-Moon map, `globe.bin`'s 2880 x 1440 cells). Built at once
+that froze the page for 0.9 to 1.1 s (slope) and 0.35 to 0.57 s (the others); it is now built a
+slice of rows at a time between frames, so the map shows the layer about a second later instead.
+
+Method: a Playwright script (Node, Playwright 1.65.1, its own Chromium) against `vite preview` of
+the built site on the same machine, 1440 x 900, a new browser context per site, the HTTP cache off
+over the DevTools protocol, **no throttle**, one session per site. Laptop: AMD Ryzen 7 260, Linux.
+Long tasks from a `PerformanceObserver` in the page. This is not T27's laptop, network or script,
+so these numbers compare with each other, not with sections 2 and 3; the files' sizes and the
+fact that none of them loads on a first visit hold anywhere.
+
+
+## 9. T37: the coarse terrain skyline north of 85 S (15 Nov 2026)
+
+T37 adds no download: the skyline north of 85 S walks `globe.bin` (8.29 MB), which the page
+already fetched for the map and the 3D globe, after the height map (issue #96). `state.ts` now
+also receives it (`setData({ globe })`), and a site north of 85 S says "Smooth Moon until the
+whole-Moon height map loads" until it is in. The height map itself is `dem.pack` (4.38 MB) since
+pull request #176, not the 12.85 MB `dem.bin` of sections 1 and 2.
+
+Measured on `t37-terrain-north` at `676a781` (pull request #193; `main` merged in), the built site
+served by `vite preview` on the laptop. Three loads per connection and site; the median first.
+
+| Moment | Fast 4G | No throttle |
+|---|---|---|
+| Readout shows Sun and Earth numbers, Shackleton rim (plain address) | **1.79** (1.84, 1.79, 1.79) | **1.38** (1.38, 1.38, 1.38) |
+| "Loading" line gone (height map in), Shackleton rim | **6.97** (6.98, 6.97, 6.97) | **1.38** (1.38, 1.38, 1.38) |
+| "Loading" line gone (height map in), Apollo 15 | **6.81** (6.80, 6.81, 6.82) | **1.32** (1.32, 1.32, 1.32) |
+| `globe.bin` in, Apollo 15 | **15.81** (15.80, 15.81, 15.82) | – |
+| Readout says "Coarse terrain: LOLA whole-Moon height map, 3.8 km cells", Apollo 15 | **16.02** (16.02, 16.02, 16.03) | **1.32** (1.32, 1.32, 1.32) |
+| Longest long task from `globe.bin`'s arrival on, Apollo 15 (the coarse skyline, its series and the map) | 158, 159, 160 ms | 168, 173, 170 ms |
+
+The coarse skyline costs about 0.2 s after `globe.bin` arrives, inside a long task under the
+0.5 s freeze budget. A polar site never waits for `globe.bin`: its skyline uses `dem.bin` only, and
+`globe.bin`'s arrival does not clear its cached results.
+
+Method: a Playwright script (Node, Playwright 1.65.1, its own Chromium 159.0.8154.6, headless)
+against `vite preview` of the built branch, 1440 x 900, a new browser context per load, the HTTP
+cache off over the DevTools protocol, "Fast 4G" as DevTools' preset (9 Mbps down and 1.5 Mbps up,
+each x 0.9, 165 ms latency) with `Network.emulateNetworkConditions`, "Start exploring" clicked as
+soon as it appeared. Times from navigation start; the page polled every 20 ms for the readout's
+numbers, the empty `#status` line and the readout's terrain note; long tasks from a
+`PerformanceObserver`. Apollo 15 is `#live=26.13239,3.6333,2026-11-15T00:00:00Z`. Laptop: AMD
+Ryzen 7 260, Linux, as section 8. Not T27's laptop, browser or deployed site, so the throttled
+numbers are the closest comparison with the budget, not with sections 2 and 3. The script is not
+in the repo (section 7).
