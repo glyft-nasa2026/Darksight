@@ -1,12 +1,14 @@
 // The whole-Moon height grid (contract section 2: globe.bin + globe.json) and the north cap
-// (north.bin + north.json): fetching them, once for every view, and the surface normals that let
+// (north.bin + north.json): fetching them, once for every view, as the packed copies the build
+// writes (globe.pack, north.pack) where there are any, and the surface normals that let
 // the Sun's light show the relief. The reader itself is core/globe.ts (T43), re-exported here. No
 // three.js here, so the flat map (web/src/map/), the map layers and the readout can use it as well
 // as the 3D globe. The normals are illustration; the numbers (height and slope layers, the
 // readout's slope line) come from core/.
 
 import type { Dem, DemMeta } from '../core/dem';
-import { parseGlobe, parseNorth, type GlobeHeights, type GlobeMeta } from '../core/globe';
+import { globeFromHeights, northFromHeights, parseGlobe, parseNorth, type GlobeHeights, type GlobeMeta } from '../core/globe';
+import { unpackHeightFile } from '../core/heightPack';
 import { MOON_RADIUS_KM } from '../core/types';
 import { afterHeightMap } from '../loadOrder';
 
@@ -16,7 +18,26 @@ const RAD = Math.PI / 180;
 /** Slopes are drawn this many times steeper, or relief a few km a cell would barely shade. */
 export const GLOBE_RELIEF = 6;
 
-/** Fetches both files from data/ next to the page. Rejects if either is missing or malformed. */
+/**
+ * Downloads and unpacks a packed copy (globe.pack, north.pack: contract section 2). Null when
+ * there is none to use (the dev server answers with the page itself; a data set without one) or
+ * it fails, and the caller then loads the .bin file.
+ */
+async function loadPacked(base: string, name: string, width: number, height: number): Promise<Int16Array | null> {
+  try {
+    const res = await fetch(base + name + '.pack');
+    if (!res.ok) return null;
+    return await unpackHeightFile(new Uint8Array(await res.arrayBuffer()), width, height, name + '.pack');
+  } catch (err) {
+    console.warn(`${name}.pack not loaded, loading ${name}.bin instead:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * Fetches globe.json, then globe.pack (about 60 % of globe.bin's size), or globe.bin where there
+ * is no packed copy. Rejects if globe.json or globe.bin is missing or malformed.
+ */
 export async function loadGlobe(): Promise<GlobeHeights> {
   const base = import.meta.env.BASE_URL + 'data/';
   const metaRes = await fetch(base + 'globe.json');
@@ -25,6 +46,8 @@ export async function loadGlobe(): Promise<GlobeHeights> {
   const meta = (await metaRes.json().catch(() => {
     throw new Error('globe.json: missing, or not JSON');
   })) as GlobeMeta;
+  const heights = await loadPacked(base, 'globe', meta.width, meta.height);
+  if (heights) return globeFromHeights(meta, heights);
   const binRes = await fetch(base + 'globe.bin');
   if (!binRes.ok) throw new Error(`globe.bin: HTTP ${binRes.status}`);
   return parseGlobe(meta, await binRes.arrayBuffer());
@@ -39,7 +62,10 @@ export function sharedGlobe(): Promise<GlobeHeights> {
   return shared ??= afterHeightMap().then(loadGlobe);
 }
 
-/** Fetches the north cap from data/ next to the page. Rejects if it is missing or malformed. */
+/**
+ * Fetches north.json, then north.pack, or north.bin where there is no packed copy. Rejects if
+ * north.json or north.bin is missing or malformed.
+ */
 export async function loadNorth(): Promise<Dem> {
   const base = import.meta.env.BASE_URL + 'data/';
   const metaRes = await fetch(base + 'north.json');
@@ -47,6 +73,8 @@ export async function loadNorth(): Promise<Dem> {
   const meta = (await metaRes.json().catch(() => {
     throw new Error('north.json: missing, or not JSON');
   })) as DemMeta;
+  const heights = await loadPacked(base, 'north', meta.size, meta.size);
+  if (heights) return northFromHeights(meta, heights);
   const binRes = await fetch(base + 'north.bin');
   if (!binRes.ok) throw new Error(`north.bin: HTTP ${binRes.status}`);
   return parseNorth(meta, await binRes.arrayBuffer());
