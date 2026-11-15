@@ -1,6 +1,6 @@
 # T39: Why the Moon is different, in plain words
 
-Status: not started
+Status: done apart from "Done when" line 2 (Yi Hung, pull request #159): the About panel's "Why the Moon is different" section, five points in two sentences or fewer, each with a button to where the page shows it. Still to do: someone outside the team reads it and says why a crater floor stays dark and why Earth doesn't rise or set at a near-side site (T18's 60-second tester can do it)
 
 | | |
 |---|---|
@@ -48,14 +48,14 @@ or date comes from `core/` (CLAUDE.md), never worked out in the module.
 
 ## Done when
 
-- [ ] The explainer covers the five points, in two sentences or fewer each.
+- [x] The explainer covers the five points, in two sentences or fewer each.
 - [ ] Someone outside the team reads it and can then say why a crater floor stays dark and why
       Earth doesn't rise or set at a near-side site. T18's 60-second tester can do this.
-- [ ] Every fact has a source in `docs/sources/T39.md`, and no number about a site or date is
+- [x] Every fact has a source in `docs/sources/T39.md`, and no number about a site or date is
       worked out outside `core/`.
-- [ ] At 390 px wide nothing overlaps or scrolls sideways, and `npm run test:page` (contrast)
+- [x] At 390 px wide nothing overlaps or scrolls sideways, and `npm run test:page` (contrast)
       passes.
-- [ ] `npm test` and `npm run build` pass.
+- [x] `npm test` and `npm run build` pass.
 
 ## Notes
 
