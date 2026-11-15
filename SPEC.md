@@ -24,6 +24,7 @@ seconds, and showing how much a 1 km move or a 1 day slip changes the answer.
 | | F16 animated 2D to 3D transition | Thermal models |
 | | F20 mission simulation, launch to touchdown | Server, database, accounts |
 | | F21 mission report, print and download | |
+| | F22 date search | |
 
 ## 3. Screen
 
@@ -76,6 +77,7 @@ can be pinned.
 | F19 | Example on first open | A link with no scenarios in it opens on a ready comparison: the crater rim (live) against the crater floor (pinned as A), at the current hour. A link with scenarios in it opens exactly those | The plain link shows two different columns in the compare table, Live and A; unpinning A and reloading leaves nothing pinned |
 | F20 | Mission simulation (if time) | "Land here" on a scenario card makes its site and time the landing point. A mission card shows the flight from a chosen launch pad to touchdown at that site and time: an animation, the five flight-sequence phases, Δv and propellant per phase, and the Sun and Earth at the site at touchdown. A planning model (patched conics, a simulated powered descent), not a flight-dynamics solution | Touchdown is at the scenario's site and time; the numbers match `core/mission.test.ts`; a shared link reopens the same mission |
 | F21 | Mission report (if time) | The planned mission as a report that can be printed, saved as PDF and downloaded as data files, built in the browser from the same plan as the mission card | The report and the mission card show the same numbers |
+| F22 | Date search (if time) | "Find a date" in the scenario panel: from the live scenario's site and time, the first window within 1, 3, 6 or 12 months in which the Sun and Earth (or the Sun only, or Earth only) stay up together for at least 24 h, 48 h, 96 h or 7 days. It moves the live time to the window's start and says how long the window lasts, or that there is none | The window starts where the countdown's rise is, to the minute, and the readout then shows both up |
 
 ## 5. How it works
 

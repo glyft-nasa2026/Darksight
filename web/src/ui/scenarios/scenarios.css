@@ -197,3 +197,29 @@
 .scn-open[hidden] {
   display: none;
 }
+
+/* T42: "Find a date" under the time box: three choices and the button, wrapping on a phone. */
+.scn-find {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.scn-find-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.scn-find-menu {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.scn-find-note {
+  font-family: var(--font-num);
+}
