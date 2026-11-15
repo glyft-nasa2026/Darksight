@@ -4,6 +4,46 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: map layers over the whole Moon (T43)
+
+### docs/data-contract.md: 2. `globe.bin` and `north.bin`
+
+- Was: "for pictures"; no number shown to the user came from them, and nothing in `core/` loaded them.
+- Now: the height and slope layers and the readout's slope line take heights from them where
+  `dem.bin` does not reach, through `core/globe.ts` (moved from `web/src/scene/`, which re-exports it).
+- Why: the decision of 15 Nov 2026 (`docs/decisions.md`): every map layer covers the whole Moon, and
+  these were the only whole-Moon heights.
+
+### docs/data-contract.md: 2. `layers/layers.json`
+
+- Was: one south-polar grid at the top level (`size`, `pixel_m`, ... and `layers.{sun,earth,psr}`).
+- Now: `polar.south` and `polar.north`, each with its grid, `min_lat`, `files` and `products`;
+  `meanings` at the top. The south files keep their names and bytes; the north ones are new
+  (`north_*.bin`), and a new `layers/smooth.json` gives the smooth-Moon Sun and Earth elsewhere.
+- Why: T43 step 1 found that the LOLA team publishes the north maps too (PGDA product 69, PDS
+  `AVGVISIB_65N_240M_201608`, `..._EARTH`, `LPSR_65N_240M_201608`), so the north uses them as the south does.
+
+### docs/data-contract.md: 5. Map layers
+
+- Was: drawn on the south-polar map only (`kind === 'south'`), with `drawLayers(ctx, toScreen)`; the
+  controls said "pick a site south of 80° S" elsewhere.
+- Now: drawn on the south polar, north polar and whole-Moon maps, `drawLayers(ctx, { kind, view,
+  reachDeg, unitPx })`, with a dashed seam where sources meet and a legend naming the source at the
+  selected site. That message is gone.
+- Why: T43, SPEC section 6.
+
+### SPEC.md: 6. Where real terrain applies
+
+- Was: Lit % and Earth-visible % near the poles: "south; north where published".
+- Now: south and north, both published.
+- Why: T43 step 1 (above).
+
+### web/src/ui/readout (F3)
+
+- Was: "Ground slope: no height map here (it covers 80° S to the pole)" north of 80 S.
+- Now: a slope at every site: "Ground slope 2° (over 3.8 km)" on `globe.bin`, "(over 1.2 km)" on `north.bin`.
+- Why: T43; the slope line follows the slope layer.
+
 ## 15 Nov 2026: date search (T42)
 
 ### tasks/T42-date-search.md

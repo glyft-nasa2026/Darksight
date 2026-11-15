@@ -111,7 +111,7 @@ source applies at the point shown. A layer limited to part of the Moon needs a d
 
 | Layer | Near the poles | Elsewhere |
 |---|---|---|
-| Lit %, Earth-visible % | The LOLA team's maps, with terrain (south; north where published) | Smooth Moon, from the Sun and Earth directions: "no terrain shadows" |
+| Lit %, Earth-visible % | The LOLA team's maps, with terrain, south and north (both published; T43) | Smooth Moon over the same 18.6 years, from the Sun and Earth directions: "no terrain shadows" |
 | Never lit | The LOLA team's permanent-shadow maps | None on a smooth Moon: shown as 0, saying so |
 | Height, slope | `dem.bin` (240 m) south of 80 S; `north.bin` (1200 m) north of 80 N | `globe.bin`, 0.125° a cell (3.8 km at the equator) |
 
