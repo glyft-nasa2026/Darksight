@@ -308,7 +308,10 @@ export function mount(el: HTMLElement): void {
     c.li.style.setProperty('--scn-color', `var(${sc.color})`);
     c.body.setAttribute('aria-pressed', String(isSelected));
     setText(c.label, sc.id === LIVE_ID ? 'Live' : sc.label);
-    setText(c.where, siteAt(sites, sc.site)?.name ?? coordText(sc.site.lat, sc.site.lon));
+    const place = siteAt(sites, sc.site)?.name ?? coordText(sc.site.lat, sc.site.lon);
+    setText(c.where, place);
+    // The card cuts a long name short ("Shackleton crater fl…"): the whole name shows on hover.
+    if (c.where.title !== place) c.where.title = place;
     setText(c.when, `${utcText(sc.tMs)} UTC`);
     const landing = isLanding(sc);
     setText(c.land, landing ? 'Landing site' : 'Land here');
