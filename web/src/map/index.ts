@@ -18,6 +18,7 @@ import { MOON_RADIUS_KM, type Site } from '../core/types';
 import { sharedNorth } from '../scene/globe';
 import { globeSlopes, sharedGlobe, type GlobeHeights } from '../scene/globeHeights';
 import { getState, select, selected, setLiveSite, subscribe, type AppState } from '../state';
+import { drawLayers, onLayersChange } from '../ui/layers';
 import { themeColor } from '../ui/plotTheme';
 import './map.css';
 
@@ -42,6 +43,10 @@ const RELIEF_LIGHT = 1.2;
 const DAWN = 0.08;
 /** A press that moves less than this many CSS pixels is a click, not a drag (as in the 3D scene). */
 const CLICK_SLOP = 5;
+/** Time changes closer together than this are a drag: the polar light layer is drawn coarser until they stop. */
+const DRAG_GAP_MS = 250;
+/** Cells per side of the polar light layer while the time is dragged (about 1 km a cell at the south), and otherwise. */
+const DRAG_CELLS = 650, FULL_CELLS = 1300;
 const POLAR_STEPS = [5, 2, 1, 0.5, 0.25, 0.1];    // parallels, degrees apart
 const MERIDIAN_STEPS = [90, 45, 30, 15, 10, 5, 2, 1];
 const GLOBAL_STEPS = [30, 15, 10, 5, 2, 1, 0.5, 0.25, 0.1];
@@ -109,6 +114,8 @@ export function mount(el: HTMLElement): void {
   let ring: HTMLCanvasElement | null = null, ringKey = '';
   let ringCells: { key: string; cell: Int32Array; alpha: Uint8Array } | null = null;
   let shade: PolarShade | null = null, shadeKey = '';
+  // A timeline drag: the time it last changed, whether changes are coming fast, and the full redraw after.
+  let lastT = NaN, lastTimeChange = -Infinity, dragging = false, settle = 0;
   let sunPoint: LatLon | null = null, earthPoint: LatLon | null = null;
   // The whole-Moon heights, once fetched; the map is plain grey outside the polar grid until then.
   let globe: GlobeHeights | null = null, slopes: Int8Array | null = null;
@@ -148,14 +155,16 @@ export function mount(el: HTMLElement): void {
     const sun: Vec3 | null = vectors ? vectors.sun : null;
     const grid = cap()!;
     buildRing(vectors);
-    const key = `polar|${theme.key}|${demId(grid)}|${demId(dem)}|${sun ? sun.join(',') : 'unlit'}`;
+    // While the time is dragged, a coarser layer keeps up with the pointer (issue #112 follow-up).
+    const cells = dragging ? DRAG_CELLS : FULL_CELLS;
+    const key = `polar|${theme.key}|${demId(grid)}|${demId(dem)}|${cells}|${sun ? sun.join(',') : 'unlit'}`;
     if (base && baseKey === key && shade) return;
-    const sunKey = `${demId(grid)}|${sun ? sun.join(',') : 'unlit'}`;
+    const sunKey = `${demId(grid)}|${cells}|${sun ? sun.join(',') : 'unlit'}`;
     if (!shade || shadeKey !== sunKey) {
       // With no Sun, any direction gives the heights; the light is then left out below. The north
       // cap is stored mirrored about the equator, so the Sun is mirrored too: the shadows match.
       const toSun: Vec3 = sun ? (kind === 'north' ? [sun[0], sun[1], -sun[2]] : sun) : [0, 0, -1];
-      shade = shadePolar(grid, toSun);
+      shade = shadePolar(grid, toSun, cells);
       shadeKey = sunKey;
     }
     // The south cap uses its own colour ramp; the north cap the whole-Moon map's, so its colours
@@ -579,6 +588,8 @@ export function mount(el: HTMLElement): void {
       }
       ctx.restore();
     }
+    // T14 map layers, over the terrain and under the grid and pins; south-polar map only.
+    if (kind === 'south' && dem) drawLayers(ctx, (x, y) => viewToScreen(view, x, y));
     gridLabels = [];
     if (kind !== 'global') drawPolarGrid(); else drawGlobalGrid();
     if (kind === 'global') {
@@ -606,6 +617,14 @@ export function mount(el: HTMLElement): void {
     const changedSite = siteKey !== key;
     if (kind !== nextKind) baseKey = '';
     dem = s.dem; kind = nextKind; siteKey = key;
+    if (sc.tMs !== lastT) {
+      // A change soon after the last one is part of a drag; the full layer follows once it stops.
+      const now = performance.now();
+      dragging = now - lastTimeChange < DRAG_GAP_MS;
+      lastTimeChange = now; lastT = sc.tMs;
+      clearTimeout(settle);
+      if (dragging) settle = window.setTimeout(() => { dragging = false; baseDirty = true; invalidate(); }, DRAG_GAP_MS);
+    }
     el.hidden = s.mode !== '2d';
     readTheme();
     // The light layer is rebuilt in the next frame, not here: a timeline drag sends many changes
@@ -704,6 +723,8 @@ export function mount(el: HTMLElement): void {
   const themeObserver = new MutationObserver(() => { readTheme(); update(getState()); });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
   const unsubscribe = subscribe(update);
+  // T14: redraw for layer data, opacity and every frame of a fade. Removes itself once disposed.
+  const offLayers = onLayersChange(() => { if (disposed) offLayers(); else invalidate(); });
   update(getState()); resize();
   // The whole-Moon heights arrive after the first frame (the 3D globe shares the same download).
   // Without the files the map stays as it was: plain outside the polar grid.
@@ -720,7 +741,7 @@ export function mount(el: HTMLElement): void {
 
   function dispose(): void {
     if (disposed) return;
-    disposed = true; cancelAnimationFrame(frame); unsubscribe(); observer.disconnect(); themeObserver.disconnect();
+    disposed = true; cancelAnimationFrame(frame); clearTimeout(settle); unsubscribe(); observer.disconnect(); themeObserver.disconnect();
     canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move);
     canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', cancel);
     canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', key);

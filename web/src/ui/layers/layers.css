@@ -1,0 +1,62 @@
+/* Styles for the map-layer controls (T14). Use only the variables and classes of ui/theme.css. */
+
+/* Inside the scene card, under the map caption: a thin rule above, not a second card. */
+.ly-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) 0 0;
+  border: 0;
+  border-top: thin solid var(--border);
+  min-width: 0;
+}
+
+.ly-title {
+  padding: 0;
+  font-size: var(--fs-md);
+}
+
+.ly-row {
+  display: grid;
+  grid-template-columns: auto 1fr minmax(0, 8rem);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ly-label {
+  font-size: var(--fs-sm);
+}
+
+.ly-opacity {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.ly-opacity:disabled {
+  opacity: 0.4;
+}
+
+.ly-status:empty {
+  display: none;
+}
+
+.ly-note,
+.ly-where {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.ly-where[hidden] {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .ly-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .ly-opacity {
+    grid-column: 1 / -1;
+  }
+}
