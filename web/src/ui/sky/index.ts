@@ -142,7 +142,7 @@ export function mount(el: HTMLElement): void {
     }
     const sc = selected();
     const key = `${sc.id}|${sc.site.lat},${sc.site.lon},${sc.site.eye_m ?? ''}|${sc.tMs}|` +
-      `${st.dem ? 1 : 0}|${st.globeStatus}|${chart.clientWidth}x${chart.clientHeight}`;
+      `${st.dem ? 1 : 0}|${st.globeStatus}${st.north ? 1 : 0}|${chart.clientWidth}x${chart.clientHeight}`;
     if (!force && key === lastKey) return;
     lastKey = key;
 

@@ -9,10 +9,15 @@
 //   elev  = atan2(r1 cos(gamma) - r0, r1 sin(gamma))
 //   skyline[az] = largest elev along that azimuth
 //
-// Which height map (T37, option C): dem.bin (240 m) for a site at or south of 85 S, globe.bin
-// (3.8 km, T43's reader in core/globe.ts) for every other site. One grid for the whole walk. A
-// polar site never falls back to globe.bin. terrain = false and all zeros when the site's grid is
-// not loaded.
+// Which height map (T37): the finest one that has the site.
+//   dem.bin   (240 m)  for a site south of 80 S
+//   north.bin (1.2 km) for a site north of 80 N
+//   globe.bin (3.8 km, T43's reader in core/globe.ts) for every other site
+// A walk that starts on a polar map reads it as far as it has heights and globe.bin past its edge
+// at 80 degrees, so the ground beyond the edge still counts. Within 5 degrees of a pole the 150 km
+// walk never reaches the edge: those sites read their polar map alone, and a site at or south of
+// 85 S does not wait for globe.bin. Every other site does. terrain = false and all zeros when a
+// grid the site needs is not loaded; without north.bin a northern site uses globe.bin.
 // The Moon has no atmosphere: no refraction.
 
 import type { Dem } from './dem';
@@ -25,7 +30,10 @@ const DEG = 180 / Math.PI;
 
 /** How far the walk goes, metres. */
 export const SKYLINE_MAX_DIST_M = 150_000;
-/** Sites at or south of this latitude use dem.bin; the rest use globe.bin (T37). */
+/**
+ * A site at or south of this latitude reads dem.bin alone: its walk stays inside the map's edge at
+ * 80 S (150 km is 4.95 degrees). Every other site needs globe.bin (T37).
+ */
 export const SKYLINE_MIN_LAT = -85;
 /**
  * Within this many degrees of the south pole (about 3 m), the walk starts from the pole itself.
@@ -42,31 +50,63 @@ export function walkDistances(cellM: number, maxM: number = SKYLINE_MAX_DIST_M):
   return out;
 }
 
-/** Which height map a site's skyline uses, or null when that grid is not loaded (contract section 3). */
-export function skylineGrid(dem: Dem | null, site: Site, globe: GlobeHeights | null): TerrainGrid | null {
+/**
+ * Which height map a site's skyline starts from, or null when a grid it needs is not loaded
+ * (contract section 3). `north` is north.bin as core/globe.ts parseNorth reads it.
+ */
+export function skylineGrid(dem: Dem | null, site: Site, globe: GlobeHeights | null,
+  north: Dem | null = null): TerrainGrid | null {
   if (site.lat <= SKYLINE_MIN_LAT) return dem ? 'dem' : null;
   // A NaN latitude fails both tests and gets no grid.
-  return globe && site.lat > SKYLINE_MIN_LAT ? 'globe' : null;
+  if (!globe || !(site.lat > SKYLINE_MIN_LAT)) return null;
+  if (dem?.covers(site.lat, site.lon)) return 'dem';
+  // The north cap stores mirrored latitudes: ask it for (-lat, lon).
+  if (north?.covers(-site.lat, site.lon)) return 'north';
+  return 'globe';
+}
+
+type HeightFn = (lat: number, lon: number) => number;
+
+/** The heights a site's walk reads: its grid, that grid's cell, and the map past a polar edge. */
+function walkTerrain(dem: Dem | null, site: Site, globe: GlobeHeights | null, north: Dem | null):
+  { grid: TerrainGrid; cellM: number; heightAt: HeightFn; outer?: Skyline['outer'] } | null {
+  const grid = skylineGrid(dem, site, globe, north);
+  if (!grid) return null;
+  if (grid === 'globe') {
+    return { grid, cellM: globe!.rowSpacingM, heightAt: (lat, lon) => globe!.heightBilinear(lat, lon) };
+  }
+  const map = grid === 'dem' ? dem! : north!;
+  const sign = grid === 'dem' ? 1 : -1;   // the north cap's latitudes are mirrored
+  const cellM = map.meta.pixel_m;
+  // Within 5 degrees of the pole the walk never reaches the map's edge.
+  if (sign * site.lat <= SKYLINE_MIN_LAT) return { grid, cellM, heightAt: (lat, lon) => map.heightAt(sign * lat, lon) };
+  const edge = map.meta.min_lat;          // -80 for both, as stored
+  const heightAt: HeightFn = (lat, lon) => {
+    const la = sign * lat;
+    if (!(la <= edge)) return globe!.heightBilinear(lat, lon);
+    const h = map.heightAt(la, lon);
+    // heightAt reads 0 outside its grid, so only a 0 needs the second look.
+    return h !== 0 || map.covers(la, lon) ? h : globe!.heightBilinear(lat, lon);
+  };
+  return { grid, cellM, heightAt, outer: { lat: sign * edge, cellM: globe!.rowSpacingM } };
 }
 
 /** The site's ground height, metres, from the same grid as its skyline; 0 when it has none. */
-export function groundAt(dem: Dem | null, site: Site, globe: GlobeHeights | null): number {
-  const grid = skylineGrid(dem, site, globe);
+export function groundAt(dem: Dem | null, site: Site, globe: GlobeHeights | null, north: Dem | null = null): number {
+  const grid = skylineGrid(dem, site, globe, north);
   if (grid === 'dem') return dem!.heightAt(site.lat, site.lon);
+  if (grid === 'north') return north!.heightAt(-site.lat, site.lon);
   if (grid === 'globe') return globe!.heightBilinear(site.lat, site.lon);
   return 0;
 }
 
 /** Skyline seen from a site: 360 elevations in degrees, index = azimuth. */
-export function skylineAt(dem: Dem | null, site: Site, globe: GlobeHeights | null = null): Skyline {
+export function skylineAt(dem: Dem | null, site: Site, globe: GlobeHeights | null = null,
+  north: Dem | null = null): Skyline {
   const elev = new Float32Array(360);
-  const grid = skylineGrid(dem, site, globe);
-  if (!grid) return { elev, terrain: false, grid: null, cellM: null };
-
-  const heightAt: (lat: number, lon: number) => number = grid === 'dem'
-    ? (lat, lon) => dem!.heightAt(lat, lon)
-    : (lat, lon) => globe!.heightBilinear(lat, lon);
-  const cellM = grid === 'dem' ? dem!.meta.pixel_m : globe!.rowSpacingM;
+  const walk = walkTerrain(dem, site, globe, north);
+  if (!walk) return { elev, terrain: false, grid: null, cellM: null };
+  const { grid, cellM, heightAt, outer } = walk;
 
   const eye = site.eye_m ?? DEFAULT_EYE_M;
   const r0 = R_M + heightAt(site.lat, site.lon) + eye;
@@ -89,7 +129,7 @@ export function skylineAt(dem: Dem | null, site: Site, globe: GlobeHeights | nul
     }
     elev[az] = Math.atan(best) * DEG;
   }
-  return { elev, terrain: true, grid, cellM };
+  return outer ? { elev, terrain: true, grid, cellM, outer } : { elev, terrain: true, grid, cellM };
 }
 
 /** Skyline elevation at any azimuth, straight-line between the two whole degrees around it. */

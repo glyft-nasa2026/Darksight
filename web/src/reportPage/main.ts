@@ -7,7 +7,7 @@ import './reportPage.css';
 import { loadDem } from '../core/dem';
 import { loadEphemeris } from '../core/ephemeris';
 import { holdUntilHeightMap } from '../loadOrder';
-import { sharedGlobe } from '../scene/globeHeights';
+import { sharedGlobe, sharedNorth } from '../scene/globeHeights';
 import type { Report } from '../core/report';
 import type { CuratedSite } from '../core/types';
 import { setData, stateToAddress } from '../state';
@@ -94,7 +94,9 @@ track('site list',
   (sites) => setData({ sites }));
 const demJob = loadDem((f) => { demFraction = f; showStatus(); });
 track('height map', demJob, (dem) => setData({ dem }));
-// T37: globe.bin, the coarse skyline for sites north of 85 S, as on the site: after the height map
-// (issue #96), and null when it fails or is missing.
+// T37: globe.bin (the skyline north of 85 S) and north.bin (the finer one north of 80 N), as on the
+// site: after the height map (issue #96), in one change of state. globe is null when it fails or
+// is missing; without north.bin the northern sites use globe.bin.
 holdUntilHeightMap(demJob);
-sharedGlobe().then((globe) => setData({ globe }), () => setData({ globe: null }));
+Promise.all([sharedGlobe(), sharedNorth().catch(() => null)])
+  .then(([globe, north]) => setData({ globe, north }), () => setData({ globe: null }));

@@ -19,7 +19,7 @@ const WHAT_IT_SHOWS = [
   'Pick a site anywhere on the Moon, on the map, from the curated list or by typing its latitude ' +
     'and longitude, pick a time, and pin up to three scenarios to compare. Every number comes from ' +
     'the same calculation in the browser, from a table of Sun and Earth positions and LOLA height ' +
-    'maps: a fine one near the south pole and a coarser one for the whole Moon.',
+    'maps: finer ones near the two poles and a coarser one for the whole Moon.',
   'Map layers show sunlight, Earth in view, permanent shadow, height and slope over the whole Moon. ' +
     '"Find a date" looks for the first window with enough sunlight and Earth in view, and the ' +
     'Timeline tab plays the time forward with the battery\'s charge. "Open mission" plans a flight ' +
@@ -46,9 +46,11 @@ const LIBRATION = [
 
 const KNOWN_LIMITS = [
   // SPEC.md section 8, plus where the terrain applies (section 6).
-  'Real terrain applies everywhere, looking out to 150 km. South of 85° S it comes from the LOLA ' +
-    'south-pole height map, 240 m per cell. Anywhere else it comes from LOLA\'s whole-Moon height ' +
-    'map, 3.8 km per cell: crater walls and massifs show, a ridge under a few km across doesn\'t. ' +
+  'Real terrain applies everywhere, looking out to 150 km. Within 10° of the south pole it comes ' +
+    'from the LOLA south-pole height map, 240 m per cell; within 10° of the north pole, from the ' +
+    'north-pole one, 1.2 km per cell. Anywhere else, and past the edge of those two maps, it comes ' +
+    'from LOLA\'s whole-Moon height map, 3.8 km per cell: crater walls and massifs show, a ridge ' +
+    'under a few km across doesn\'t. ' +
     'The page says which applies, and treats the Moon as smooth while a height map is loading.',
   'The height map is 240 m per cell near the south pole. Rocks and small craters near the lander aren\'t seen.',
   'The skyline looks out to 150 km. A very tall peak further away is missed.',
