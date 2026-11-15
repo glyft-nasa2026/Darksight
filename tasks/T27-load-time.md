@@ -1,6 +1,6 @@
 # T27: Load time on the real data
 
-Status: ready for review, phone still to measure (Leon, branch t27-load-time, pull request #83). Laptop numbers measured on commit 961b65c and written to docs/load-time.md: two budgets failed (numbers 6.46 s, height map 29.2 s), the freeze passes (486 ms). Follow-ups: issues #95 and #96. Second delivery (branch t27-load-time-b): height map measured again after #109, 16.44 s, pass; numbers still fail (#95). Next: the phone measurement
+Status: ready for review, phone measured (Realme 6, 15 Nov, branch t27-load-time-c) (Leon, branch t27-load-time, pull request #83). Laptop numbers measured on commit 961b65c and written to docs/load-time.md: two budgets failed (numbers 6.46 s, height map 29.2 s), the freeze passes (486 ms). Follow-ups: issues #95 and #96. Second delivery (branch t27-load-time-b): height map measured again after #109, 16.44 s, pass; numbers still fail (#95). Phone: the Shackleton floor freeze fails (1.02 s, issue #32 row 1); numbers 5.60 s, height map 8.75 s, one load each.
 
 | | |
 |---|---|

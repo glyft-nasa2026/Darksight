@@ -13,6 +13,7 @@ import {
 import { themeColor } from '../ui/plotTheme';
 import { moonFromIcrf, multiply, type Mat3 } from '../core/sky';
 import { makeStarField } from './stars';
+import { hiddenByMoon, poleLines, POLES, poleStub, viewportFraction } from './poles';
 import { mount as mountMap, unmount as unmountMap } from '../map';
 import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import {
@@ -187,6 +188,17 @@ export function mount(el: HTMLElement): void {
   const earthMaterial = new SpriteMaterial({ map: earthTexture(), depthTest: true });
   const earth = new Sprite(earthMaterial); earth.name = 'Earth'; world.add(earth);
   const pins = new Group(); world.add(pins);
+  // The poles (issue #107): a stub of the spin axis at each, labelled in the page over the canvas.
+  const poles = poleLines(); world.add(poles);
+  const poleTips = POLES.map((pole) => poleStub(pole)[1]);
+  const poleLabels = POLES.map((pole) => {
+    const label = document.createElement('span');
+    label.className = 'scene-pole'; label.textContent = pole.label; label.hidden = true;
+    label.title = pole.id === 'north' ? 'North pole' : 'South pole';
+    label.setAttribute('aria-hidden', 'true');
+    viewport.append(label);
+    return label;
+  });
   // The real sky behind the Moon (issue #80), turned with the Moon at the selected time.
   const stars = makeStarField(invalidate); world.add(stars.object);
   const pinGeometry = new SphereGeometry(1, 12, 8);
@@ -229,7 +241,7 @@ export function mount(el: HTMLElement): void {
   }
   function render(): void {
     // In 2D the flat map shows instead: nothing is drawn here, so no shadow map is rendered.
-    if (mode === '2d') return;
+    if (mode === '2d') { placePoleLabels(); return; }
     // The camera moves from metres above a crater to beyond the whole Moon: keep the depth
     // range tight around what can be seen, or near surfaces fight and far ones vanish.
     const fromCentre = orbitCamera.position.distanceTo(globe.position);
@@ -239,6 +251,17 @@ export function mount(el: HTMLElement): void {
     sizePins(); sizeSun();
     fitShadow();
     renderer.render(world, orbitCamera);
+    placePoleLabels();
+  }
+  /** Each pole's label at its stub's tip, hidden when the tip is off screen or behind the Moon. */
+  function placePoleLabels(): void {
+    orbitCamera.updateMatrixWorld();
+    poleTips.forEach((tip, i) => {
+      const label = poleLabels[i];
+      const at = mode === '3d' && !hiddenByMoon(orbitCamera.position, tip) ? viewportFraction(orbitCamera, tip) : null;
+      label.hidden = !at;
+      if (at) { label.style.left = `${at.x * 100}%`; label.style.top = `${at.y * 100}%`; }
+    });
   }
   /**
    * three.js leaves everything outside the Sun's shadow box unshadowed, which drew straight-edged
@@ -566,6 +589,7 @@ export function mount(el: HTMLElement): void {
     themeKey = key; world.background = new Color(themeColor('--bg'));
     // Three quarters of the smallest gap: about the size the pins had at the starting zoom.
     pinPx = Math.max(1, themeLength(viewport, '--space-1') * 0.75);
+    poles.material.color.set(themeColor('--muted'));
     sun.color.set(themeColor('--text')); ambient.color.set(themeColor('--text'));
     // Until the height map arrives there is no 0 m colour; the middle of the ramp stands in.
     globeMaterial.color.set(themeColor('--terrain-lo')).lerp(new Color(themeColor('--terrain-hi')), 0.5);
@@ -637,6 +661,7 @@ export function mount(el: HTMLElement): void {
     sunMaterial.map?.dispose(); sunMaterial.dispose(); glareMaterial.map?.dispose(); glareMaterial.dispose();
     pinGeometry.dispose(); globe.geometry.dispose(); globeMaterial.map?.dispose(); globeMaterial.normalMap?.dispose(); globeMaterial.dispose(); terrainMaterial.dispose(); detailMaterial.dispose();
     earthMaterial.map?.dispose(); earthMaterial.dispose(); sun.dispose(); stars.dispose();
+    poles.geometry.dispose(); poles.material.dispose(); poleLabels.forEach((label) => label.remove());
     // Free the WebGL context now: browsers allow only a few, and a remount would leak one.
     renderer.dispose(); renderer.forceContextLoss(); canvas.remove(); mounts.delete(el);
   }

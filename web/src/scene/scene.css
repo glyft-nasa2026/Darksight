@@ -20,3 +20,9 @@
   .scene-toolbar { gap: var(--space-2); }
   .scene-toolbar h2, .scene-stretch { flex-basis: 100%; }
 }
+/* Issue #107: a pole's label at the tip of its axis stub, in a box like the message so it reads on lit ground. */
+.scene-pole {
+  position: absolute; transform: translate(-50%, -100%); margin: 0;
+  padding: 0 var(--space-1); border-radius: var(--radius); background: var(--panel); color: var(--text);
+  font-family: var(--font-num); font-size: var(--fs-sm); pointer-events: none;
+}
