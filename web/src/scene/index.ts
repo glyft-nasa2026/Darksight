@@ -721,9 +721,13 @@ export function mount(el: HTMLElement): void {
     const now: Sample | undefined = samplesFor(sc, '30d')[0];
     const mock = dem?.meta.source === 'mock' || s.eph?.meta.source === 'mock';
     const whole = mode === '2d' ? 'Whole-Moon map' : 'Moon globe';
+    // Near the north pole the 2D map is the north cap's own polar view, not the whole-Moon map:
+    // the caption names the map that is on screen.
+    const northView = mode === '2d' && viewOf(mapHost)?.kind === 'north';
     caption.textContent = [mock ? 'Mock data' : '',
       polar ? (mode === '2d' ? 'South-pole terrain · polar stereographic' : 'South-pole terrain')
-        : `${whole}${mode === '2d' ? ' · equidistant cylindrical' : ''} · ${dem ? 'outside terrain coverage' : 'Loading height map'}`,
+        : northView ? 'North-pole terrain · polar stereographic'
+          : `${whole}${mode === '2d' ? ' · equidistant cylindrical' : ''} · ${dem ? 'outside terrain coverage' : 'Loading height map'}`,
       now ? (now.sunFrac > 0 ? 'Sun visible' : 'Sun hidden') : '',
       stretch > 1 && dem ? 'Heights exaggerated; shadows are illustrative' : 'Lighting is illustrative; use the readout for visibility',
     ].filter(Boolean).join(' · ');
