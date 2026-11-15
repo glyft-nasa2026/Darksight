@@ -1,6 +1,6 @@
 # T23: UI polish: every module matches the design
 
-Status: not started
+Status: in progress (Fabian): Readout done on `t23-ui-polish`, not yet pushed. Next, one at a time: scenarios, compare (after #91), timeline (after T40), sky, scene, nudge
 
 | | |
 |---|---|
