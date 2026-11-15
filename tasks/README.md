@@ -76,12 +76,14 @@ order given in `docs/team-workflow.md`, "The first three merges".
 | [T33](T33-decade-retry.md) | A decade that failed to download is tried again (issue #32, row 4) | if time | - |
 | [T34](T34-mission.md) | Mission simulation, launch to touchdown (F20) | if time | M2 |
 | [T35](T35-report.md) | Mission report, print and download (F21) | if time | T34 |
-| [T36](T36-planned-sites.md) | Upcoming mission targets in the site list | if time | M2, the team's answer on the site count |
+| [T36](T36-planned-sites.md) | Upcoming mission targets in the site list | if time | M2 (the count is agreed: 25) |
 | [T37](T37-terrain-north.md) | Terrain skyline north of 85 S | if time | M2, pull request #146, the team's choice of option |
 | [T38](T38-libration.md) | Say that libration and the Moon's orbit are included | if time | - |
 | [T39](T39-moon-vs-earth.md) | Why the Moon is different, in plain words | if time | - |
 | [T40](T40-timeline-play.md) | Play the timeline | if time | M2 |
 | [T41](T41-slope.md) | Ground slope, as a map layer and a readout line | if time | M2, T14 |
+| [T42](T42-date-search.md) | Date search: the first date with enough sunlight and Earth | if time | M2; only before the M3 freeze |
+| [T43](T43-layers-whole-moon.md) | Map layers over the whole Moon | if time | M2, T14, T41; agree the `globe.bin` reader with T37 |
 
 ## Order
 
@@ -108,7 +110,10 @@ T34 and T35 (F20, F21; agreed 15 Nov) run after M2 and before the M3 freeze. T35
 T36 to T41 (15 Nov) cover what the challenge statement asks for and the site doesn't do yet.
 All stop at the M3 freeze; T38 and T39 are text, and the team decides if they may merge after it.
 T38 and T39 both edit web/src/ui/about/index.ts, so agree an order. T37 waits for #146 and,
-like T33, changes `state.ts`. T36 and T37 start with a team decision.
+like T33, changes `state.ts`. T37 starts with a team decision; T36's count is agreed (25 sites, 15 Nov).
+T42 (15 Nov) adds a date search to `core/` and the Scenarios panel; it may touch `state.ts`, like T40.
+T43 (15 Nov) takes every map layer past 80 S to the whole Moon. Like T37 it lets `core/` read
+`globe.bin`, so the two agree one reader. It edits `web/src/map/index.ts` and `ui/layers/`.
 ```
 
 After T00 and T20, several tasks can run in parallel: the page already shows live

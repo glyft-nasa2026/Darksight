@@ -4,6 +4,107 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the timeline plays, and the solar panel card has a battery (T40)
+
+P5 asked for both.
+
+### SPEC.md: F8 Timeline
+
+- Was: "For the selected scenario: degrees above the skyline against time, one line for Sun, one for Earth, shaded below zero. Range buttons: 30 days, 90 days, 1 year; earlier and later buttons. Dragging sets the live time, and the chart stays still while the marker moves", ending at the drag.
+- Now a Timeline tab beside Scenarios also plays the live time forward, and says whether the Sun and
+  Earth are in view, whether the radio link is blocked, and the battery's charge.
+- Why: the challenge statement asks for animations over a lunar day; nothing played by itself.
+
+### SPEC.md: F15 Panel choice
+
+- Was: "Flat panel or upright panel that turns to face the Sun; shows relative power".
+- Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
+- Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
+
+## 15 Nov 2026: date search (T42)
+
+### tasks/T42-date-search.md
+
+- Was: "A decade that isn't loaded gives NaN rows. The search must never treat NaN as hidden".
+- Now: a decade not in memory is found with `eph.missing()`, and the search stops there.
+- Why: `vectorsAt()` hands back the nearest loaded row for a decade not in memory, so the Sun and
+  Earth would read as standing still, not NaN (`core/ephemeris.ts`; NaN only when no decade is
+  loaded at all). Found while writing T42.
+
+### SPEC.md: 2. Cut line and 4. Features
+
+- Was: no F22.
+- Now: F22, date search (if time).
+- Why: a planner asks "when is it good enough here?", the reverse of what the page answered.
+
+## 15 Nov 2026: ground slope as a map layer and a readout line (T41)
+
+### SPEC.md: 4. Features, F3 and F14
+
+- Was: F3 listed the Sun's and Earth's rows only; F14 had four layers (lit %, Earth-visible %,
+  never lit, height).
+- Now: F3 adds the ground slope at the site; F14 adds a fifth layer, slope.
+- Why: the challenge statement asks how to represent steep slopes at the south pole. Slope showed
+  only as shading on the map and in 3D, and nothing measured it.
+
+### docs/data-contract.md: section 3
+
+- Was: `dem.cell()` read a `nodata` cell as 0, and nothing could tell a hole from a 0 m height.
+- Now: `dem.hasData(row, col)`, and `core/slope.ts` (method in its table row).
+- Why: a slope next to a hole would be a cliff that isn't there; T41 gives it null instead.
+
+## 15 Nov 2026: map layers cover the whole Moon (T43)
+
+Placed below T41's entry, not at the top, so it does not collide with pull request #164's new
+entry there. MarsRon decided on 15 Nov 2026.
+
+### CLAUDE.md: Facts this project depends on
+
+- Was: nothing said where a map layer applies.
+- Now: "Every map layer covers the whole Moon"; a layer limited to part of it needs a decision.
+- Why: with no stated reach, T14 and T41 each took the reach of their data file, `dem.bin`,
+  which T04 cut at 80 S to stay inside its 15 MB budget. Every layer stopped at 80 S.
+
+### SPEC.md: section 6 and F3
+
+- Was: section 6 covered the skyline only. F3: "Ground slope 7° (over 240 m)", "or why there is
+  none (no height map north of 80° S)".
+- Now: section 6 has a table of each layer's source near the poles and elsewhere. F3 gives the
+  slope everywhere, with the distance it is measured over.
+- Why: as above. The readout's slope is the slope layer's number at the site.
+
+### docs/data-contract.md: section 2, `globe.bin`; section 5, the layers paragraph
+
+- Was: `globe.bin` and `north.bin` were "for pictures only": no number shown came from them and
+  `core/` never loaded them. Layers were drawn "on the south-polar map only".
+- Now: map layers may take heights from them through a reader in `core/` (T43 adds it); T43
+  extends the layers to the north polar and whole-Moon maps.
+- Why: without this, `dem.bin` was the only source a layer could use. The pictures-only rule
+  kept rough pictures from passing as measurements; a layer and the readout say which grid and
+  cell size a value comes from, which answers that.
+
+## 15 Nov 2026: the curated list may hold 25 sites (T36)
+
+The team agreed on 15 Nov 2026.
+
+### SPEC.md: 4. Features, F12
+
+- Was: "15-20 sites: Apollo, recent landers, south-pole candidates. Each has a source link".
+- Now: "15-25 sites: …, and up to 5 upcoming mission targets (`planned`)".
+- Why: the challenge asks for future CLPS targets, and each current group answers another category
+  it names, so swapping sites out would open a new gap. The 20 had no recorded reason. The cap of
+  5 limits the per-site source and QuickMap checks before the freeze. `tasks/T07-sites.md` keeps
+  "15-20": it records what T07 did.
+
+### tasks/T36-planned-sites.md
+
+- Was: step 1 (the count) open; the targets and the QuickMap check by hand.
+- Now: step 1 done (25). A gazetteer check (`data-prep/check_features.py`, a fixture and a test)
+  proves each target sits on its named feature, and a Playwright contact sheet of QuickMap views
+  makes the person's check quick. The person still signs off: F12 needs a person's check.
+- Why: Yi Hung asked for the script and the automation to be in the ticket, so the work can start
+  in a new session.
+
 ## 15 Nov 2026: a decade that failed to download is tried again (T33, issue #32 row 4)
 
 Issue #32, row 4: after a failed download the readout said the time was outside the table,

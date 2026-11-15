@@ -1,6 +1,6 @@
 # T40: Play the timeline
 
-Status: not started
+Status: in progress (P5, branch `t40-timeline-play`, draft pull request #164). As P5 asked, Play sits in a "Timeline" tab beside Scenarios in the side card, with the Sun, Earth, communication and battery as it plays; the solar panel card gains the battery inputs (`core/battery.ts`).
 
 | | |
 |---|---|

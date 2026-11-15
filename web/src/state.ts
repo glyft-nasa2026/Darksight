@@ -1,6 +1,7 @@
 // App state, as docs/data-contract.md section 4.
 // UI modules read state and call actions. They never call each other.
 
+import { EXAMPLE_BATTERY, validBattery, type Battery } from './core/battery';
 import type { Dem } from './core/dem';
 import { loadEphemerisChunk, type Ephemeris } from './core/ephemeris';
 import { sunAltAzAtSite } from './core/geometry';
@@ -11,6 +12,8 @@ import {
 import { DEFAULT_PAD_ID, padById } from './core/pads';
 import type { Body, CuratedSite, Flip, Sample, Site, Skyline, Summary } from './core/types';
 import { nextFlip, series, summary, SUN_RADIUS } from './core/windows';
+// T42: a line of its own, so the shared import lines above stay as other branches edit them.
+import { END_LOOK_DAYS, firstWindow, monthsLater, type DateSearch, type Need } from './core/datesearch';
 
 export type Scenario = { id: string; label: string; color: string; site: Site; tMs: number };
 // color is the name of a theme variable, for example '--scn-a'. Never a colour code.
@@ -27,6 +30,8 @@ export type AppState = {
   landing: { site: Site; tMs: number } | null;
   padId: string;
   lander: Lander;
+  // The battery that the solar panel card and the timeline playback run (T40).
+  battery: Battery;
 };
 
 export const LIVE_ID = 'live';
@@ -60,6 +65,7 @@ const EXAMPLE_PAIRS: readonly { rim: string; floor: string }[] = [
 //   #live=-89.5,0,2026-11-14T10:00:00Z&a=-88,45,2027-01-01T00:00:00Z&sel=a&range=90d&mode=3d
 // A scenario is lat,lon,time and, only if it was set, eye height in metres. The mission (T34)
 // adds land= (the same form), pad=<id> and lander=mass,dry,isp,thrust, each only when set.
+// The battery (T40) adds bat=capacityWh,panelW,useW when it differs from the example.
 // ---------------------------------------------------------------------------------------------
 
 const round6 = (v: number): number => Number(v.toFixed(6));
@@ -115,6 +121,18 @@ function textToLander(text: string | null): Lander | null {
   return validLander(l) ? l : null;
 }
 
+function textToBattery(text: string | null): Battery | null {
+  if (!text) return null;
+  const parts = text.split(',');
+  if (parts.length !== 3 || parts.some((x) => x.trim() === '')) return null;
+  const [capacityWh, panelW, useW] = parts.map(Number);
+  const b: Battery = { capacityWh, panelW, useW };
+  return validBattery(b) ? b : null;
+}
+
+const sameBattery = (a: Battery, b: Battery): boolean =>
+  a.capacityWh === b.capacityWh && a.panelW === b.panelW && a.useW === b.useW;
+
 const sameLander = (a: Lander, b: Lander): boolean =>
   a.massKg === b.massKg && a.dryKg === b.dryKg && a.ispS === b.ispS && a.thrustN === b.thrustN;
 
@@ -147,6 +165,7 @@ function stateFromAddress(hash: string, nowMs: number): { next: AppState; named:
     landing: textToSiteTime(q.get('land')),
     padId: padById(q.get('pad')).id,
     lander: textToLander(q.get('lander')) ?? { ...EXAMPLE_LANDER },
+    battery: textToBattery(q.get('bat')) ?? { ...EXAMPLE_BATTERY },
   };
   return { next, named: liveAt !== null || pinned.length > 0 };
 }
@@ -166,6 +185,10 @@ export function stateToAddress(): string {
   if (!sameLander(state.lander, EXAMPLE_LANDER)) {
     const l = state.lander;
     parts.push(`lander=${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}`);
+  }
+  if (!sameBattery(state.battery, EXAMPLE_BATTERY)) {
+    const b = state.battery;
+    parts.push(`bat=${b.capacityWh},${b.panelW},${b.useW}`);
   }
   return parts.join('&');
 }
@@ -543,6 +566,13 @@ export function setLander(l: Lander): void {
   notify();
 }
 
+/** The battery the panel card and the playback run (T40). Ignores values outside BATTERY_LIMITS. */
+export function setBattery(b: Battery): void {
+  if (!validBattery(b) || sameBattery(b, state.battery)) return;
+  state = { ...state, battery: { ...b } };
+  notify();
+}
+
 /** The live or pinned scenario named by selectedId. */
 export function selected(): Scenario {
   return state.pinned.find((p) => p.id === state.selectedId) ?? state.live;
@@ -646,21 +676,24 @@ export function neverLitFor(sc: Scenario): boolean {
 }
 
 /**
- * True while neverLitFor can't answer yet but will once the decades to 2100 are in: the Sun is
- * down there, it doesn't rise within 60 days, and a decade from sc.tMs to the end of the table
- * is still downloading (issue #32, row 3). The countdown then says it is still checking, rather
- * than "No sunrise in the next 60 days" turning into "Permanently shadowed" seconds later.
- * False once the decades are in (neverLitFor answers), false while one of them waits to be
- * tried again after a failed download (true again while the retry downloads), and false wherever neverLitFor answers
- * false at once: the Sun up, a sunrise within 60 days, or within 60 days of the end of the table.
- * Asks for nothing itself; neverLitFor, called beside it, asks for the decades.
+ * True while neverLitFor can't answer yet but will: the Sun is down there, it doesn't rise
+ * within 60 days, and either a decade from sc.tMs to the end of the table is still downloading
+ * (issue #32, row 3) or they are all in and the scan back from 2100 is still running in slices
+ * (issue #32, row 1). The countdown then says it is still checking, rather than "No sunrise in
+ * the next 60 days" turning into "Permanently shadowed" a moment later. False once neverLitFor
+ * answers, false while one of the decades waits to be tried again after a failed download (true
+ * again while the retry downloads), and false wherever neverLitFor answers false at once: the
+ * Sun up, a sunrise within 60 days, or within 60 days of the end of the table. Downloads nothing
+ * itself; with every decade in, it starts the scan if neverLitFor hasn't yet, so the order the
+ * two are called in doesn't matter.
  */
 export function neverLitPendingFor(sc: Scenario): boolean {
   const eph = state.eph;
   if (!eph || !table || sc.tMs < eph.startMs || eph.endMs - sc.tMs < FLIP_DAYS * DAY_MS) return false;
   if (sunlitTest(eph, sc)(sc.tMs) || flipFor(sc, 'sun') !== null) return false;
   const need = table.missing(sc.tMs, eph.endMs);
-  return need.length > 0 && !need.some((i) => failed.has(i));
+  if (need.length > 0) return !need.some((i) => failed.has(i));
+  return lastLitMs(eph, sc, sc.tMs) === null;   // null while the scan is still running
 }
 
 /**
@@ -809,4 +842,48 @@ export function missionFor(): MissionResult {
     };
   }
   return { status: 'ready', plan: missionCache.plan };
+}
+
+// ---------------------------------------------------------------------------------------------
+// T42: date search. The first window, from a scenario's time, in which the Sun, Earth or both
+// stay up for at least minHours (core/datesearch.ts). The decades it reads are fetched here,
+// like a scenario's own, without holding the page on "Loading".
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * core's answer, or 'loading' while the table, or a decade the search needs, is still on its
+ * way; 'failed' (T33) when the decade holding the scenario's time did not download. A decade
+ * further on that failed stops the search there: core answers 'no-rows' at its first missing hour.
+ */
+export type DateSearchFor = DateSearch | { status: 'loading' } | { status: 'failed'; decadeMs: number };
+
+let lastSearch: { key: string; skyline: Skyline; result: DateSearch } | null = null;
+
+/**
+ * The first window from sc.tMs, starting within `months` calendar months, in which `need` holds
+ * for at least minHours. Asks for every decade from sc.tMs to the search's end plus the look
+ * for the window's end (END_LOOK_DAYS); 'loading' until they are in. The last answer is kept,
+ * so a module may ask on every redraw.
+ */
+export function dateSearchFor(sc: Scenario, need: Need, minHours: number, months: number): DateSearchFor {
+  const t = table;
+  if (!state.eph || !t) return { status: 'loading' };
+  const endMs = monthsLater(sc.tMs, months);
+  const lookMs = Math.max(minHours * HOUR_MS, END_LOOK_DAYS * DAY_MS);
+  const toMs = Math.min(endMs + lookMs, t.endMs);
+  let readTo = toMs;
+  if (sc.tMs >= t.startMs && toMs > sc.tMs) {
+    const r = readableTo(sc.tMs, toMs);
+    if (r === null) {
+      return tableGap(sc.tMs) === 'failed' ? { status: 'failed', decadeMs: sc.tMs } : { status: 'loading' };
+    }
+    readTo = r;
+  }
+  const skyline = skylineFor(sc);
+  // readTo and the table are in the key: a decade that arrives later gives a new answer.
+  const key = `${siteKey(sc.site)}|${sc.tMs}|${need}|${minHours}|${months}|${readTo}|${t.missing(t.startMs, t.endMs).length}`;
+  if (lastSearch && lastSearch.key === key && lastSearch.skyline === skyline) return lastSearch.result;
+  const result = firstWindow(t, sc.site, groundFor(sc.site), skyline, sc.tMs, endMs, need, minHours);
+  lastSearch = { key, skyline, result };
+  return result;
 }

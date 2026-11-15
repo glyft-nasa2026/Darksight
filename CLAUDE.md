@@ -47,6 +47,11 @@ Anyone can take any task. The rules below keep parallel sessions coordinated.
 - Moon radius is 1737.4 km. Heights are metres above that sphere.
 - **Every number shown to the user comes from `web/src/core/`.** UI and 3D code never compute
   Sun or Earth angles themselves. The 3D scene illustrates; it is not the source of truth.
+- **Every map layer covers the whole Moon**: the south polar, north polar and whole-Moon maps.
+  Where the best source covers only part of the Moon, a coarser global source fills in the rest,
+  and the page says which source applies at the point shown. A data file's reach (`dem.bin` stops
+  at 80 S) is not a feature's reach. A layer limited to part of the Moon needs a decision in
+  `docs/decisions.md` first (SPEC section 6).
 - No server, no database, no accounts. The site is static files.
 
 ## Code

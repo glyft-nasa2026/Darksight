@@ -8,8 +8,10 @@ import { mount as mountAbout } from './ui/about/index';
 import { mount as mountCompare } from './ui/compare/index';
 import { mount as mountNudge } from './ui/nudge/index';
 import { mount as mountPanel } from './ui/panel/index';
+import { mount as mountPlayback } from './ui/playback/index';
 import { mount as mountReadout } from './ui/readout/index';
 import { mount as mountScenarios } from './ui/scenarios/index';
+import { mount as mountSidetabs } from './ui/sidetabs/index';
 import { mount as mountSky } from './ui/sky/index';
 import { mount as mountTimeline } from './ui/timeline/index';
 
@@ -18,6 +20,9 @@ export const slots: [id: string, mount: (el: HTMLElement) => void][] = [
   ['about', mountAbout],
   ['scene', mountScene],
   ['scenarios', mountScenarios],
+  ['playback', mountPlayback],
+  // After both cards it switches between (T40).
+  ['sidetabs', mountSidetabs],
   ['readout', mountReadout],
   ['nudge', mountNudge],
   ['panel', mountPanel],

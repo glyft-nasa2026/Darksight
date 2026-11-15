@@ -7,6 +7,8 @@ import { expect, test } from '@playwright/test';
 const SLOTS = [
   'scene',
   'scenarios',
+  'playback',   // T40: hidden behind the Timeline tab, but filled
+  'sidetabs',
   'readout',
   'compare',
   'timeline',
