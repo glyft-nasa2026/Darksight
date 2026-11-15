@@ -21,7 +21,7 @@ import {
 } from './format';
 import { stepCells, totalsCells } from './cells';
 import { conditionStats, ERRORS, landingConditions, missionWarnings, planMessage } from './conditions';
-import { BURN_SPEED, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
+import { BURN_SPEED, heldText, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const W = 1000;   // the picture's viewBox
@@ -30,7 +30,8 @@ const H = 400;
 
 // Simulated seconds per real second, the same as the simulation page's (pace.ts, issue #105):
 // "Auto" (the default) picks one per stage, every change is gradual, and the playback slows
-// in time for each burn, so the ascent and the powered descent don't flash past.
+// in time for each burn, so the ascent and the powered descent don't flash past. A speed button
+// keeps only those two slow; Auto alone slows round TLI, LOI and DOI (issue #196).
 const SPEEDS: [label: string, s: number][] = [['1 min/s', 60], ['1 h/s', 3600], ['6 h/s', 6 * 3600]];
 
 type View = 'auto' | 'earth' | 'moon' | 'descent';
@@ -456,7 +457,7 @@ export function mount(el: HTMLElement): void {
   const controls = make('div', 'ms-controls');
   controls.append(playButton, speedSeg, scrub, viewSeg);
   const slowNote = make('p', 'ms-note muted',
-    `Auto picks a speed for each stage. Speeds change gradually, and the ascent and the powered descent play at most at ${BURN_SPEED} s/s.`);
+    `Auto picks a speed for each stage and slows down around TLI, LOI and DOI. Speeds change gradually, and the ascent and the powered descent play at most at ${BURN_SPEED} s/s.`);
 
   const main = make('div', 'ms-main');
   main.append(view, controls, slowNote);
@@ -533,8 +534,8 @@ export function mount(el: HTMLElement): void {
     playButton.textContent = playing ? '❚❚ Pause' : '▶ Play';
     for (const b of speedSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.speed === String(speed)));
     autoButton.textContent = speed === 'auto' && plan ? `Auto · ${rateText(pace)}` : 'Auto';
-    // A manual speed: say what is playing while it glides, or while a burn holds it slower.
-    rateNow.textContent = speed !== 'auto' && plan && Math.abs(Math.log(pace / speed)) > 0.01 ? `now ${rateText(pace)}` : '';
+    // A manual speed: say what is playing and why, while it glides or a burn holds it slower.
+    rateNow.textContent = plan ? heldText(limits, speed, pace, cursor) : '';
     for (const b of viewSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === chosenView));
   };
 
