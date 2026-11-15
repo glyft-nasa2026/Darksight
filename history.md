@@ -4,6 +4,42 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the skyline uses the finest height map that has the site (T37, third delivery)
+
+Yi Hung asked for the two open items of the T37 recheck (pull request #207) to be fixed.
+
+### docs/decisions.md: 15 Nov, "The terrain skyline covers the whole Moon, T37's option C"
+
+- Was: "`dem.bin` (240 m) for sites at or south of 85 S, as before; `globe.bin` (0.125 degrees,
+  3.8 km) for every other site. One grid a site, never mixed along a walk".
+- Now: `dem.bin` south of 80 S, `north.bin` (1.2 km) north of 80 N, `globe.bin` for every other
+  site; a walk that starts on a polar map reads `globe.bin` past that map's edge at 80 degrees. A
+  site at or south of 85 S still reads `dem.bin` alone. The row stays; a new row above it says so.
+- Why: on `globe.bin` alone, sites between 80 S and 85 S read 2 to 9 points too sunny over a year
+  against the 240 m map they lie inside (IM-2: 50.6 % against 48.2 %), and near the north pole the
+  readout was more than 20 points from the LOLA sunlight layer at 22 of 60 sampled spots. With the
+  mixed walk: 0 of 60 between 80 S and 85 S, 2 of 60 near the north pole. No new download.
+
+### SPEC.md: 6. Where real terrain applies; 8. Known limits
+
+- Was: "At or south of 85 S: Real, from LOLA's south-pole height map (240 m cells)" and "Anywhere
+  else: Coarse, from LOLA's whole-Moon height map"; "North of 85 S the skyline comes from the
+  whole-Moon height map, 3.8 km a cell".
+- Now: the 240 m map south of 80 S and the 1.2 km map north of 80 N, each with the whole-Moon map
+  past its edge; the whole-Moon map between 80 S and 80 N.
+- Why: as above.
+
+### docs/data-contract.md: 2. `globe.bin`, `north.bin`; 3. `Skyline` and `horizon.ts`; 4. state
+
+- Was: "`north.bin` is not used for the skyline"; `TerrainGrid` was `'dem' | 'globe'`; "One grid
+  for the whole walk, chosen by the site's latitude, never mixed along a walk"; `skylineAt(dem,
+  site, globe)`; `AppState` had no `north`; section 4's paragraph was headed "Coarse terrain (T37)".
+- Now: `TerrainGrid` has `'north'`; `Skyline` has an optional `outer` (where the walk changed to
+  `globe.bin`, and that cell size); `skylineAt`, `skylineGrid` and `groundAt` take `north`;
+  `AppState` has `north`, handed over with `globe` in one `setData`; the paragraph is headed
+  "Which terrain (T37)".
+- Why: the mixed walk needs the third grid, and the page must name both cell sizes a walk used.
+
 ## 15 Nov 2026: second audit pass (Compare row names, the slope's distance, three status lines)
 
 Yi Hung asked for all three after the audit in pull request #189 listed them.

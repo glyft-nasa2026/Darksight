@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseDem, type Dem, type DemMeta } from './dem';
 import type { Ephemeris } from './ephemeris';
-import { parseGlobe, type GlobeMeta } from './globe';
+import { parseGlobe, parseNorth, type GlobeMeta } from './globe';
 import { skylineAt } from './horizon';
 import { readRealTable } from './realTable.testutil';
 import type { CuratedSite, Site } from './types';
@@ -140,6 +140,12 @@ describe.skipIf(globeSkip !== null)('real data: coarse terrain north of 85 S (T3
     return parseGlobe(globeMeta as GlobeMeta, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   })();
   const dem = skipReason || !demMeta ? null : readDem(demMeta);
+  // north.bin, the 1.2 km grid for sites north of 80 N; null when it isn't the real file.
+  const northMeta = readJson<DemMeta>('north.json');
+  const north = !northMeta || northMeta.source === 'mock' || !existsSync(dataFile('north.bin')) ? null : (() => {
+    const bytes = readFileSync(dataFile('north.bin'));
+    return parseNorth(northMeta, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+  })();
   const sites = readJson<CuratedSite[]>('sites.json') ?? [];
 
   it('Apollo 15: the highest point of its skyline is above 1 degree (Mons Hadley and Hadley Delta)', () => {
@@ -153,16 +159,50 @@ describe.skipIf(globeSkip !== null)('real data: coarse terrain north of 85 S (T3
     expect(top).toBeGreaterThan(1);
   });
 
-  it('every curated site has terrain: dem.bin at or south of 85 S, globe.bin elsewhere', () => {
+  it('every curated site has terrain: dem.bin south of 80 S, north.bin north of 80 N, globe.bin elsewhere', () => {
     expect(sites.length).toBeGreaterThan(0);
     for (const s of sites) {
-      const sky = skylineAt(dem, { lat: s.lat, lon: s.lon }, globe);
-      const want = s.lat <= -85 ? (dem ? 'dem' : null) : 'globe';
+      // No curated site lies within 0.01 degrees of either edge, where the map's square decides.
+      expect(Math.abs(Math.abs(s.lat) - 80), s.id).toBeGreaterThan(0.01);
+      const sky = skylineAt(dem, { lat: s.lat, lon: s.lon }, globe, north);
+      const want = s.lat <= -85 ? (dem ? 'dem' : null)
+        : s.lat < -80 && dem ? 'dem'
+          : s.lat > 80 && north ? 'north' : 'globe';
       const v = Array.from(sky.elev);
       console.log(`${s.id.padEnd(22)} ${String(s.lat).padStart(9)} ${String(sky.grid).padEnd(5)} ` +
+        `${sky.outer ? `(globe.bin past ${sky.outer.lat})` : ''} ` +
         `highest ${Math.max(...v).toFixed(2)} deg, lowest ${Math.min(...v).toFixed(2)} deg`);
       expect(sky.grid, s.id).toBe(want);
+      // Only a site between 80 and 85 degrees can walk past its polar map's edge.
+      expect(sky.outer !== undefined, s.id).toBe(sky.grid !== 'globe' && sky.grid !== null && Math.abs(s.lat) < 85);
       expect(v.every(Number.isFinite), s.id).toBe(true);
+    }
+  });
+
+  it.skipIf(skipReason !== null)('IM-1, IM-2 and Chandrayaan-4 (80 S to 85 S) use the 240 m map', () => {
+    for (const id of ['im-1', 'im-2', 'chandrayaan-4']) {
+      const sky = skylineAt(dem, siteById(sites, id), globe, north);
+      expect([sky.grid, sky.cellM, sky.outer?.lat], id).toEqual(['dem', 240, -80]);
+    }
+  });
+
+  it.skipIf(skipReason !== null)('where a walk changes map, the two maps agree: dem.bin and north.bin against globe.bin, 0.2 degrees inside each edge', () => {
+    const rings: [string, number, ((lon: number) => number) | null][] = [
+      ['dem.bin at 80.2 S', -80.2, dem ? (lon) => dem.heightAt(-80.2, lon) : null],
+      ['north.bin at 80.2 N', 80.2, north ? (lon) => north.heightAt(-80.2, lon) : null],
+    ];
+    for (const [name, lat, polar] of rings) {
+      if (!polar) continue;
+      const diff: number[] = [];
+      for (let lon = -180; lon < 180; lon += 0.5) diff.push(polar(lon) - globe!.heightBilinear(lat, lon));
+      const mean = diff.reduce((a, b) => a + b, 0) / diff.length;
+      const abs = diff.map(Math.abs).sort((a, b) => a - b);
+      console.log(`${name} minus globe.bin, ${diff.length} points: mean ${mean.toFixed(1)} m, ` +
+        `median ${abs[abs.length >> 1].toFixed(0)} m apart, worst ${abs[abs.length - 1].toFixed(0)} m`);
+      // The same LOLA surface at two cell sizes: no offset, and a wrong longitude or a mirrored
+      // grid would put them kilometres apart (heights on this ring span several km).
+      expect(Math.abs(mean), name).toBeLessThan(20);
+      expect(abs[abs.length >> 1], name).toBeLessThan(100);
     }
   });
 
