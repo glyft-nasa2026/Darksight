@@ -1,9 +1,10 @@
 # T35: Mission report, print and download
 
-Status: in progress (P5, branch `t35-report`). Step 1 done: T34 has merged (#100 to #151) and the
-team's agreement is recorded (`docs/decisions.md`, 15 Nov). The report's contents are worked out
-in detail below, with P5. The new sections (marked **added**) and the report's own page still
-need the team's OK in the chat. Next: step 2, the design frame. Not after the M3 freeze
+Status: second delivery ready for review (P5, branch `t35-report-b`, pull request #173; the plan
+merged in #156). Every "Done when" line passes, except one test in `npm test`: the skyline timing
+test "one real skyline takes under 100 ms" fails on this machine, on `main` too. The added sections and the report's own page still want the team's
+OK in the chat. The `report` design frame was made after the module, not before. Not after the
+M3 freeze
 
 | | |
 |---|---|
@@ -279,25 +280,25 @@ Deliver in this order and stop at the freeze, saying in the pull request what wa
 
 ## Done when
 
-- [ ] `core/report.test.ts`: the CSV has a header row and one row per phase, every time ends in
+- [x] `core/report.test.ts`: the CSV has a header row and one row per phase, every time ends in
       `Z`, and its numbers read back equal the plan's; the JSON parses, has the schema version,
       every phase, and totals equal to the plan's; not-modelled values are `null`, not 0; the
       file names come out as above.
-- [ ] `core/report.test.ts`: the descent table starts at ignition, steps 30 s, and ends at
+- [x] `core/report.test.ts`: the descent table starts at ignition, steps 30 s, and ends at
       touchdown (or where the propellant runs out); the events are in time order; `periods()`
       covers the 30 days with no gap or overlap, and its lit share, Earth share and longest runs
       equal `summary()`'s for the same samples.
-- [ ] The report's numbers are the `#mission` card's: a test builds both from one plan, and the
+- [x] The report's numbers are the `#mission` card's: a test builds both from one plan, and the
       landing site's numbers come from the one `landingConditions()`.
-- [ ] Printed to PDF with headless Edge on A4 and on Letter: light pages, no row split across a
+- [x] Printed to PDF with headless Edge on A4 and on Letter: light pages, no row split across a
       page, headers repeated, page numbers shown; the page count is in the pull request.
-- [ ] Downloads work with the network off after the page has loaded.
-- [ ] With mock data the title block says "mock data".
-- [ ] With no landing point, or a plan that fails, the button is disabled and says why, and
+- [x] Downloads work with the network off after the page has loaded.
+- [x] With mock data the title block says "mock data".
+- [x] With no landing point, or a plan that fails, the button is disabled and says why, and
       `report.html` opened directly says the same and doesn't crash.
-- [ ] At 390 px wide the report is readable and the page doesn't scroll sideways. Searching
+- [x] At 390 px wide the report is readable and the page doesn't scroll sideways. Searching
       `web/src/ui/report/` for `#` colour codes finds none.
-- [ ] `npm test`, `npm run build` and the browser smoke tests pass.
+- [x] `npm test`, `npm run build` and the browser smoke tests pass.
 
 ## Prompt to paste into Claude Code
 

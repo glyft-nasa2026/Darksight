@@ -72,3 +72,22 @@ test('the mission page loads and draws the mission to the landing point', async 
   expect(await mission.textContent(), '#mission failed to start').not.toContain('failed to start');
   expect(problems, 'console errors and uncaught exceptions').toEqual([]);
 });
+
+// T35: the mission report's own page, opened by "Generate full launch schedule" with the mission's
+// address. It builds the whole report, and its print and download buttons switch on.
+test('the report page builds the report of the mission to the landing point', async ({ page }) => {
+  const problems: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') problems.push(`console error: ${msg.text()}`);
+  });
+  page.on('pageerror', (err) => problems.push(`page threw: ${err.message}`));
+
+  await page.goto('./report.html#live=-89.6866,-162.81,2026-11-15T05:00:00Z&land=-89.6866,-162.81,2026-11-15T05:00:00Z');
+  const report = page.locator('#report');
+  await expect(report.locator('h1')).toContainText('Mission report ·', { timeout: 60_000 });
+  await expect(report.locator('h2')).toHaveCount(9);
+  await expect(report.locator('.rp-schedule tbody tr')).toHaveCount(10);
+  for (const id of ['#rpp-print', '#rpp-json', '#rpp-csv']) await expect(page.locator(id)).toBeEnabled();
+  expect(await report.textContent(), '#report failed to start').not.toContain('failed to start');
+  expect(problems, 'console errors and uncaught exceptions').toEqual([]);
+});

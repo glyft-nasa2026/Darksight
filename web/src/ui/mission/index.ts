@@ -11,34 +11,22 @@ import {
   type StepId,
 } from '../../core/mission';
 import { PADS, padById } from '../../core/pads';
-import { countdownText } from '../../core/windows';
+import { PHASE_NAMES as NAMES } from '../../core/report';
 import {
-  flipFor, getState, landingScenario, missionFor, neverLitFor, neverLitPendingFor, samplesFor, setLander, setPad,
-  stateToAddress, subscribe, summaryFor,
+  getState, landingScenario, missionFor, setLander, setPad, stateToAddress, subscribe,
 } from '../../state';
 import { openPadPicker } from '../launch/picker';
 import {
-  coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, pctText, shortUtcText,
-  speedText, utcText,
+  coordText, dayText, dvText, elapsedText, kgText, kmText, shortUtcText, speedText, utcText,
 } from './format';
+import { stepCells, totalsCells } from './cells';
+import { conditionStats, ERRORS, landingConditions, missionWarnings, planMessage } from './conditions';
 import { BURN_SPEED, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
-import { noRowText } from '../tableGap';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const W = 1000;   // the picture's viewBox
 const H = 400;
 
-const NAMES: Record<StepId, string> = {
-  launch: 'Launch', parking: 'Parking orbit', tli: 'Translunar injection', coast: 'Translunar coast',
-  loi: 'Lunar orbit insertion', 'lunar-orbit': 'Lunar orbit', doi: 'Descent orbit insertion',
-  'descent-orbit': 'Descent orbit', 'powered-descent': 'Powered descent', touchdown: 'Touchdown',
-};
-
-const ERRORS = {
-  'bad-input': 'The lander needs positive numbers, and a dry mass below its mass after TLI.',
-  'coast-out-of-range': 'No transfer reaches the Moon in that coast time.',
-  'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
-} as const;
 
 // Simulated seconds per real second, the same as the simulation page's (pace.ts, issue #105):
 // "Auto" (the default) picks one per stage, every change is gradual, and the playback slows
@@ -423,11 +411,23 @@ export function mount(el: HTMLElement): void {
     });
   });
 
+  // --- The report (T35): the whole plan on a page of its own, to print or download -------------
+  const reportButton = make('button', 'btn ms-report', 'Generate full launch schedule');
+  reportButton.type = 'button';
+  reportButton.disabled = true;
+  const reportNote = make('p', 'ms-note muted', 'The plan as a report, to print, save as PDF, or download as JSON and CSV.');
+  reportButton.addEventListener('click', () => {
+    // A new tab, as the simulation: the planner stays open here. Same site, same address.
+    const url = `report.html#${stateToAddress()}`;
+    const tab = window.open(url, '_blank');
+    if (!tab) window.location.assign(url);   // a pop-up blocker stopped it: this tab instead
+  });
+
   // --- Side cards ----------------------------------------------------------------------------
   const launchInfo = make('div', 'ms-info');
   const landInfo = make('div', 'ms-info');
   const side = make('div', 'ms-side');
-  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote, proceedButton, proceedNote);
+  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote, proceedButton, proceedNote, reportButton, reportNote);
 
   // --- Animation -----------------------------------------------------------------------------
   const view = make('div', 'ms-view');
@@ -673,30 +673,20 @@ export function mount(el: HTMLElement): void {
     for (const s of p.steps) {
       if (s.id === 'touchdown') continue;
       const tr = make('tr');
-      let name = NAMES[s.id];
-      if (s.id === 'launch') name = `Launch, to ${Math.round(p.orbit.parkingAltKm)} km`;
-      if (s.id === 'lunar-orbit') name = `Lunar orbit, ${Math.round(p.orbit.lunarOrbitAltKm)} km`;
-      if (s.id === 'descent-orbit') name = `Descent orbit, to ${kmText(p.orbit.descentStartAltKm)}`;
-      const th = make('th', '', name);
+      const c = stepCells(s, p.orbit);
+      const th = make('th', '', c.name);
       th.scope = 'row';
-      const takes = s.endMs > s.startMs ? durationText((s.endMs - s.startMs) / 1000) : '—';
-      const dv = s.dvKmS === null ? '—' : `${dvText(s.dvKmS)}${s.id === 'launch' ? '*' : ''}`;
-      const burn = s.by === 'launch vehicle' ? 'launch vehicle' : s.burnS === null ? '—' : durationText(s.burnS);
-      tr.append(th, make('td', '', shortUtcText(s.startMs)), make('td', '', takes), make('td', '', dv), make('td', '', burn),
-        make('td', '', s.propellantKg === null ? '—' : kgText(s.propellantKg)),
-        make('td', '', s.massAfterKg === null ? '—' : kgText(s.massAfterKg)));
+      tr.append(th, make('td', '', shortUtcText(s.startMs)), make('td', '', c.takes), make('td', '', c.dv), make('td', '', c.burn),
+        make('td', '', c.propellant), make('td', '', c.massAfter));
       tbody.append(tr);
     }
     const foot = make('tfoot');
     const fr = make('tr');
     const fth = make('th', '', 'Lander');
     fth.scope = 'row';
-    const t = p.totals;
-    const left = t.propellantLeftKg >= 0
-      ? `${kgText(t.propellantLeftKg)} left · ${pctText(t.margin)}`
-      : `short by ${kgText(-t.propellantLeftKg)}`;
-    fr.append(fth, make('td'), make('td'), make('td', '', dvText(t.landerDvKmS)), make('td'),
-      make('td', '', kgText(t.propellantUsedKg)), make('td', t.propellantLeftKg >= 0 ? '' : 'ms-bad', left));
+    const t = totalsCells(p.totals);
+    fr.append(fth, make('td'), make('td'), make('td', '', t.dv), make('td'),
+      make('td', '', t.used), make('td', t.short ? 'ms-bad' : '', t.left));
     foot.append(fr);
     table.append(head, tbody, foot);
     tableWrap.replaceChildren(table);
@@ -730,27 +720,10 @@ export function mount(el: HTMLElement): void {
       return d;
     };
     const flag = (text: string, bad = false): HTMLElement => make('p', bad ? 'ms-flag ms-flag-bad' : 'ms-flag', text);
-    if (sc && getState().eph) {
-      const now = samplesFor(sc, '30d')[0];
-      if (!now || now.tMs !== sc.tMs) {
-        out.push(make('p', 'muted', 'Loading'));
-      } else {
-        const sunUp = now.sunFrac > 0;
-        out.push(stat('Sun', sunUp ? `Up ${now.sun.alt.toFixed(1)}° · ${pctText(now.sunFrac)} of disc` : 'Below the skyline'));
-        out.push(stat('Earth', now.earthUp ? `Up ${now.earth.alt.toFixed(1)}°` : 'Hidden'));
-        out.push(stat('Working period', countdownText(
-          'sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc), neverLitPendingFor(sc),
-        )));        out.push(stat('Earth link', countdownText('earth', now.earthUp, flipFor(sc, 'earth'), sc.tMs)));
-        const sum = summaryFor(sc);
-        out.push(stat('Lit, next 30 days', `${sum.litPct.toFixed(0)} %`));
-        out.push(stat('Earth contact, 30 days', `${sum.earthPct.toFixed(1)} %`));
-        if (!sunUp) warn.push(flag('Touchdown in darkness: the Sun is below the skyline there.'));
-        if (!now.earthUp) warn.push(flag('Earth is hidden at touchdown: no direct radio link.'));
-      }
-    }
-    if (p && p.runsOutMs !== null) {
-      warn.push(flag(`Not enough propellant: short by ${kgText(-p.totals.propellantLeftKg)}. The lander runs dry at ${utcText(p.runsOutMs)} UTC.`, true));
-    }
+    const c = sc && getState().eph ? landingConditions(sc) : null;
+    if (c === 'loading') out.push(make('p', 'muted', 'Loading'));
+    else if (c) for (const [k, v] of conditionStats(c)) out.push(stat(k, v));
+    for (const w of missionWarnings(p, c)) warn.push(flag(w.text, w.level === 'bad'));
     conds.replaceChildren(...out);
     warnings.replaceChildren(...warn);
   };
@@ -774,10 +747,11 @@ export function mount(el: HTMLElement): void {
     note.textContent = `Planning model · not a flight-dynamics solution${mock ? ' · mock data' : ''}`;
 
     if (m.status === 'none' || !sc) {
+      reportButton.disabled = true;
       stop();
       plan = null;
       shownKey = null;
-      message.textContent = 'No landing site chosen. Go back to the landing sites and press “Land here” on a scenario card, then “Open mission”.';
+      message.textContent = planMessage({ status: 'none' }) ?? '';
       body.replaceChildren(message);
       return;
     }
@@ -786,6 +760,10 @@ export function mount(el: HTMLElement): void {
       ?? `Scenario ${sc.label}`;
     const pad = padById(s.padId);
     const p = m.status === 'ready' && m.plan.ok ? m.plan : null;
+    reportButton.disabled = !p;
+    reportNote.textContent = p
+      ? 'The plan as a report, to print, save as PDF, or download as JSON and CSV.'
+      : 'The report is ready once the mission is planned.';
     info(launchInfo, '01 / Launch', pad.name, `${pad.pad} · ${pad.country}`, null, pad.lat, pad.lon, p ? p.launchMs : Number.NaN);
     if (!p) launchInfo.lastChild!.textContent = 'Launch time: once the plan is ready';
     info(landInfo, 'Final landing site', siteName, sc.label === 'Landing site' ? '' : sc.label === 'Live' ? 'Live scenario' : `Scenario ${sc.label}`, sc.color, sc.site.lat, sc.site.lon, sc.tMs);
@@ -795,10 +773,7 @@ export function mount(el: HTMLElement): void {
       stop();
       plan = null;
       shownKey = null;
-      if (m.status === 'loading') message.textContent = 'Loading';
-      else if (m.status === 'outside') message.textContent = 'This landing time is too near the edge of the Sun and Earth table (1900 to 2100) for the mission.';
-      else if (m.status === 'failed') message.textContent = noRowText('failed', m.decadeMs);
-      else if (m.status === 'ready' && !m.plan.ok) message.textContent = ERRORS[m.plan.error];
+      message.textContent = planMessage(m) ?? '';
       message.className = m.status === 'loading' ? 'muted' : 'ms-error-text';
       body.replaceChildren(top);
       main.replaceChildren(message);

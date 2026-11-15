@@ -246,3 +246,41 @@ a {
     padding: var(--space-3);
   }
 }
+
+/* Print (T35): a dark page wastes ink, and browsers drop background colours when printing, so
+   the same names get light values on paper. Contrast on --bg and --panel (white), then on
+   --panel-2: --text 17.8 / 15.7, --muted 7.8 / 6.9, --accent 6.5 / 5.8, --ok 5.4 / 4.8,
+   --warn 5.9 / 5.2, --bad 6.6 / 5.8 (WCAG 2.1, checked with a relative-luminance script in
+   the T35 pull request). The scenario, Sun and Earth colours stay fixed.
+   The second block is the same values on a class, for a picture drawn for paper while the
+   screen is still dark (the report's descent chart). Keep the two blocks the same:
+   ui/printColours.test.ts checks it. */
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --panel-2: #eef1f5;
+    --border: #808a97;
+    --text: #14181f;
+    --muted: #4a5361;
+    --accent: #1f5bb5;
+    --ok: #1b7a34;
+    --warn: #8a5a00;
+    --bad: #b42318;
+  }
+}
+
+:root.print-colours {
+    color-scheme: light;
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --panel-2: #eef1f5;
+    --border: #808a97;
+    --text: #14181f;
+    --muted: #4a5361;
+    --accent: #1f5bb5;
+    --ok: #1b7a34;
+    --warn: #8a5a00;
+    --bad: #b42318;
+}
