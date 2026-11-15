@@ -1,6 +1,6 @@
 # T26: Freeze checklist
 
-Status: not started
+Status: in progress (Yi Hung, branch `t26-freeze`, draft pull request #150). Steps 1 to 6 done on `e57ac3d`; gaps in other tasks' notes listed in the pull request for follow-up. Step 7 (checks, then the `submitted` tag) waits for the last pull request to merge
 
 | | |
 |---|---|

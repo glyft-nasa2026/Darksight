@@ -27,7 +27,8 @@ function caption(m: SkyModel, terrain: boolean): string {
   if (!m.now) return `${ground}. This time is outside the table.`;
   const sun = SUN_WORDS[m.now.sunState];
   const earth = m.now.earthUp ? 'Earth up' : 'Earth hidden';
-  return `${ground}. ${sun} · ${earth}. Paths: next 30 days.`;
+  return `${ground}. ${sun} · ${earth}. Paths: next 30 days.` +
+    (m.earthInView ? ' Earth\'s loop is the Moon\'s libration, its slow rocking (see About).' : '');
 }
 
 function traces(m: SkyModel, sunSizePx: number): Data[] {
