@@ -2,7 +2,13 @@
 
 export type Site = { lat: number; lon: number; eye_m?: number };   // eye_m default 2
 export type AltAz = { alt: number; az: number };
-export type Skyline = { elev: Float32Array; terrain: boolean };    // 360 values, index = azimuth
+export type TerrainGrid = 'dem' | 'globe';   // T37: dem.bin (240 m) or globe.bin (3.8 km)
+export type Skyline = {
+  elev: Float32Array;                // 360 values, index = azimuth
+  terrain: boolean;                  // false: a smooth Moon (all zeros)
+  grid: TerrainGrid | null;          // T37: which height map the walk used; null when terrain is false
+  cellM: number | null;              // T37: that grid's cell size, metres; null when terrain is false
+};
 export type Sample = {
   tMs: number;
   sun: AltAz; earth: AltAz;

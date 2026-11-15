@@ -102,8 +102,9 @@ the same for every site. Only the site's own "up" differs. So one table serves e
 
 | Site latitude | Skyline |
 |---|---|
-| South of 85 S | Real, from LOLA, looking out to 150 km |
-| Anywhere else | Smooth Moon (0 degrees). The app says so on screen |
+| At or south of 85 S | Real, from LOLA's south-pole height map (240 m cells), looking out to 150 km |
+| Anywhere else | Coarse, from LOLA's whole-Moon height map (0.125° a cell, 3.8 km), looking out to 150 km: crater walls and massifs, not small ridges. The app says so on screen (decision of 15 Nov 2026, T37) |
+| Either, while its height map isn't loaded or is missing | Smooth Moon (0 degrees). The app says so on screen |
 
 Map layers (F14) cover the whole Moon, on every map view (decision of 15 Nov 2026, T43). The
 finest source applies where it reaches; a coarser one fills in the rest, and the page says which
@@ -130,6 +131,8 @@ The two terrain rows are tests owned by T24.
 ## 8. Known limits (shown on the About page)
 
 - Height map is 240 m per cell. Rocks and small craters near the lander aren't seen.
+- North of 85 S the skyline comes from the whole-Moon height map, 3.8 km a cell: crater walls and
+  massifs show, a ridge under a few km across doesn't.
 - Skyline looks out to 150 km. A very tall peak further away is missed.
 - The Sun's visible fraction is by height of the disc, not by area.
 - Earth is treated as a point for "visible or hidden".
