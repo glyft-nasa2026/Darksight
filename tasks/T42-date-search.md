@@ -1,6 +1,6 @@
 # T42: Date search: the first date with enough sunlight and Earth
 
-Status: done, waiting for review (MarsRon, branch `t42-date-search`, pull request #167). Every "Done when" line passed; a person still checks them before the pull request is marked ready
+Status: done, in review (MarsRon, branch `t42-date-search`, pull request #167). MarsRon checked the "Done when" list: working
 
 | | |
 |---|---|
