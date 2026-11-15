@@ -4,6 +4,7 @@
 // user comes from here.
 
 import { MOON_RADIUS_KM } from '../core/types';
+import { afterHeightMap } from '../loadOrder';
 
 export type GlobeMeta = {
   width: number;         // cells around the equator; column 0 starts at longitude -180
@@ -71,9 +72,12 @@ export async function loadGlobe(): Promise<GlobeHeights> {
 }
 
 let shared: Promise<GlobeHeights> | null = null;
-/** loadGlobe, fetched once however many views ask for it (the 3D globe and the flat map). */
+/**
+ * loadGlobe, fetched once however many views ask for it (the 3D globe and the flat map), and
+ * only after the height map has finished downloading (issue #96).
+ */
 export function sharedGlobe(): Promise<GlobeHeights> {
-  return shared ??= loadGlobe();
+  return shared ??= afterHeightMap().then(loadGlobe);
 }
 
 /**
