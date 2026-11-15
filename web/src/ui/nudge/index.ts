@@ -10,8 +10,8 @@ import './nudge.css';
 import { destination } from '../../core/geometry';
 import { countdownText } from '../../core/windows';
 import {
-  flipFor, getState, neverLitFor, samplesFor, setGhost, setLiveSite, setLiveTime, skylineFor,
-  subscribe, summaryFor, type Scenario,
+  flipFor, getState, neverLitFor, neverLitPendingFor, samplesFor, setGhost, setLiveSite, setLiveTime,
+  skylineFor, subscribe, summaryFor, type Scenario,
 } from '../../state';
 import {
   asCorner, clampKm, compare, CORNER_NAMES, DAY_MS, freeCorner, kmText, nextCorner, NUDGE_KM, NUDGES,
@@ -56,7 +56,7 @@ function factsOf(sc: Scenario): Facts | null {
 }
 
 const sunCount = (sc: Scenario, f: Facts): string =>
-  countdownText('sun', f.sunUp, f.sunFlip, sc.tMs, !f.sunUp && neverLitFor(sc));
+  countdownText('sun', f.sunUp, f.sunFlip, sc.tMs, !f.sunUp && neverLitFor(sc), !f.sunUp && neverLitPendingFor(sc));
 const earthCount = (sc: Scenario, f: Facts): string =>
   countdownText('earth', f.earthUp, f.earthFlip, sc.tMs);
 

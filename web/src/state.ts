@@ -568,6 +568,24 @@ export function neverLitFor(sc: Scenario): boolean {
 }
 
 /**
+ * True while neverLitFor can't answer yet but will once the decades to 2100 are in: the Sun is
+ * down there, it doesn't rise within 60 days, and a decade from sc.tMs to the end of the table
+ * is still downloading (issue #32, row 3). The countdown then says it is still checking, rather
+ * than "No sunrise in the next 60 days" turning into "Permanently shadowed" seconds later.
+ * False once the decades are in (neverLitFor answers), false when one of them failed to
+ * download (neverLitFor can't answer before a reload), and false wherever neverLitFor answers
+ * false at once: the Sun up, a sunrise within 60 days, or within 60 days of the end of the table.
+ * Asks for nothing itself; neverLitFor, called beside it, asks for the decades.
+ */
+export function neverLitPendingFor(sc: Scenario): boolean {
+  const eph = state.eph;
+  if (!eph || !table || sc.tMs < eph.startMs || eph.endMs - sc.tMs < FLIP_DAYS * DAY_MS) return false;
+  if (sunlitTest(eph, sc)(sc.tMs) || flipFor(sc, 'sun') !== null) return false;
+  const need = table.missing(sc.tMs, eph.endMs);
+  return need.length > 0 && !need.some((i) => failed.has(i));
+}
+
+/**
  * The test "is any of the Sun's disc above the skyline there at tMs". The site's ground height
  * and skyline are looked up once here, not once per hour: the scan below asks 650,000 times.
  */

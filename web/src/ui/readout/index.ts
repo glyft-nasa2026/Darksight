@@ -3,7 +3,8 @@
 import './readout.css';
 import { countdownText } from '../../core/windows';
 import {
-  flipFor, getState, LIVE_ID, neverLitFor, samplesFor, selected, skylineFor, subscribe,
+  flipFor, getState, LIVE_ID, neverLitFor, neverLitPendingFor, samplesFor, selected, skylineFor,
+  subscribe,
 } from '../../state';
 import { azText, degText, pctText } from './format';
 
@@ -78,7 +79,7 @@ export function mount(el: HTMLElement): void {
       ['Azimuth', azText(now.sun.az)],
       ['Above skyline', degText(now.sunAbove)],
       ['Disc visible', pctText(now.sunFrac)],
-    ], countdownText('sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc)), 'sun');
+    ], countdownText('sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc), neverLitPendingFor(sc)), 'sun');
 
     const earth = bodyBlock('Earth', [
       ['Altitude', degText(now.earth.alt)],
