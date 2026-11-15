@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EXAMPLE_LANDER, planMission, type OkPlan } from '../core/mission';
-import { padById } from '../core/pads';
+import { EXAMPLE_LANDER, planMission, type OkPlan } from '../../core/mission';
+import { padById } from '../../core/pads';
 import { AUTO_SPEED, BURN_SPEED, MANOEUVRE_SPEED, nextPace, paceLimit, RAMP, rateText, regions } from './pace';
 
 const plan = planMission({

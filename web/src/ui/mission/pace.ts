@@ -1,10 +1,10 @@
-// Playback speed of the launch simulation (issue #105): simulated seconds per real second.
+// Playback speed of the mission animations, the card's and the simulation page's (issue #105): simulated seconds per real second.
 // Speeds change gradually, never in a jump: each stage has a speed, and near a slower stage the
 // speed is held to `slow + RAMP * distance` (distance in simulated seconds). That is the speed
 // that, easing at RAMP per real second, arrives at the slow stage exactly as it starts, so
 // slowing down begins before a burn and nothing is skipped. Leaving it speeds up the same way.
-import type { OkPlan, StepId } from '../core/mission';
-import { approachSeconds } from '../core/mission';
+import type { OkPlan, StepId } from '../../core/mission';
+import { approachSeconds } from '../../core/mission';
 
 /** Rate of change of the speed: e-fold per 1 / RAMP real seconds (30 s/s to 1 h/s in about 4 s). */
 export const RAMP = 1.2;

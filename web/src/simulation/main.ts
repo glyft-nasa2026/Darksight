@@ -15,7 +15,7 @@ import { prefersReducedMotion } from '../ui/launch/earth';
 import {
   coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, speedText, utcText,
 } from '../ui/mission/format';
-import { MANOEUVRE_WINDOW_S, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
+import { MANOEUVRE_WINDOW_S, nextPace, paceLimit, rateText, regions, type Mode } from '../ui/mission/pace';
 import { createScene, scaleFor, type MissionScene, type Scale } from './scene';
 
 const NAMES: Record<StepId, string> = {
