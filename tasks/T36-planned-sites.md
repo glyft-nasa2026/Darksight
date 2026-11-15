@@ -1,6 +1,6 @@
 # T36: Upcoming mission targets in the site list
 
-Status: in progress (Yi Hung, with Claude Code), branch `t36-planned-sites`, draft pull request #162. Steps 1 to 6 are done apart from the person's check: four planned sites (`im-3`, `blue-ghost-2`, `blue-ghost-3`, `chandrayaan-4`) pass the gazetteer check and `npm test`, and the contact sheet is made (`cd web && node scripts/quickmap-sheet.mjs`, into `data-prep/raw/quickmap/index.html`). Next: a person checks every pin on the contact sheet and signs the table in `docs/sources/T36.md`; the team agrees the "(planned)" label (step 4); then the pull request is marked ready
+Status: done (pull request #162): four planned sites (`im-3`, `blue-ghost-2`, `blue-ghost-3`, `chandrayaan-4`; 24 in all), `data-prep/check_features.py`, `features.json` and its contract entry, the planned-site test, "(planned)" after the name in the site list, and `web/scripts/quickmap-sheet.mjs`; Yi Hung checked the four pins on the contact sheet (F12). Extra scope: `web/src/ui/scenarios/input.ts` and `input.test.ts`. Open: IM-3's point has no independent second source (`docs/sources/T36.md`)
 
 | | |
 |---|---|
