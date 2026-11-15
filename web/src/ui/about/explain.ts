@@ -32,7 +32,7 @@ export const EXPLAIN: ExplainPoint[] = [
   {
     lead: 'No air:',
     text: 'the Moon has almost no atmosphere, so the sky is black even by day, there is no ' +
-      'twilight, and shadows have hard edges. A ridge either blocks the Sun or it doesn\'t, and ' +
+      'twilight, and shadows have hard edges. A ridge hides the Sun, or part of its disc, and ' +
       'nothing bends the light round it.',
     jump: 'See the shadows on the map',
     targets: ['#scene'],

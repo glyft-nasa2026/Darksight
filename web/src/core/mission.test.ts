@@ -242,6 +242,15 @@ describe('Launch', () => {
     // Ideal from Kennedy to 185 km: 7.79 km/s orbital speed less 0.41 km/s from Earth's turning.
     near(launch.dvKmS!, 7.38 + 1.75, 0.02);
   });
+
+  it('the speed at liftoff is the pad\'s speed with the turning Earth: 408 m/s at Kennedy, 465 m/s on the equator', () => {
+    const plan = okPlan();
+    near(missionAt(plan, plan.launchMs).speedKmS, 0.4083, 0.0005);
+    // The launch Δv and the speed shown agree: orbital speed less the pad's speed is the ideal Δv.
+    const launch = plan.steps.find((s) => s.id === 'launch')!;
+    const poi = plan.steps.find((s) => s.id === 'parking')!.startMs;
+    near(missionAt(plan, poi).speedKmS - missionAt(plan, plan.launchMs).speedKmS, launch.dvKmS! - ASCENT_LOSSES_KMS, 1e-6);
+  });
 });
 
 describe('Inputs the model refuses, and a lander that runs dry', () => {

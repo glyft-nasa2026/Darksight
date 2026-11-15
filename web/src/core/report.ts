@@ -70,6 +70,8 @@ export type LandingConditions = {
   earthText: string;
   summary: Summary;          // next 30 days
   terrain: boolean;          // the skyline is real terrain, not the smooth Moon
+  terrainCellM: number | null;   // T37: the skyline's grid cell, metres (240, about 3790); null for a smooth Moon
+  terrainText: string;       // T37: which terrain, in ui/terrain.ts's words ("Coarse terrain: ... 3.8 km cells")
 };
 
 export type ReportWarning = { code: string; text: string; level: 'warn' | 'bad' };
@@ -393,6 +395,7 @@ export function reportJson(r: Report): string {
         earth_pct: c.summary.earthPct, longest_earth_gap_h: c.summary.longestEarthGap_h,
       },
       terrain_skyline: c.terrain,
+      terrain_cell_m: c.terrainCellM,
     } : null,
     surface_periods: r.surface.map((p) => ({
       body: p.body, up: p.up, start_utc: iso(p.startMs), end_utc: iso(p.endMs), duration_s: (p.endMs - p.startMs) / 1000,

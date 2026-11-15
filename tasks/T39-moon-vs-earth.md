@@ -62,6 +62,10 @@ or date comes from `core/` (CLAUDE.md), never worked out in the module.
 This is text, not a new feature. Whether it can merge after the M3 freeze ("bugs, video, write-up
 only") is the team's call.
 
+## After the merge
+
+- 15 Nov 2026, audit before submission (pull request #189). "No air" said "A ridge either blocks the Sun or it doesn't", while the readout shows a partly hidden disc. It now reads "A ridge hides the Sun, or part of its disc, and nothing bends the light round it". The other four points were checked and stand.
+
 ## Prompt to paste into Claude Code
 
 ```text

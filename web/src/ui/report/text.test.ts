@@ -24,7 +24,8 @@ const conditions: LandingConditions = {
   sun: { up: false, altDeg: -0.3, azDeg: 100, aboveSkylineDeg: -1.2, discFrac: 0 },
   earth: { up: true, altDeg: 4.1, azDeg: 8, aboveSkylineDeg: 3 },
   sunFlip: null, earthFlip: null, sunText: 'No sunrise in the next 60 days', earthText: 'Earth always visible',
-  summary: { litPct: 0, longestLit_h: 0, longestDark_h: 720, earthPct: 100, longestEarthGap_h: 0 }, terrain: true,
+  summary: { litPct: 0, longestLit_h: 0, longestDark_h: 720, earthPct: 100, longestEarthGap_h: 0 }, terrain: true, terrainCellM: 240,
+  terrainText: 'Terrain from LOLA, 240 m cells',
 };
 
 const reportOf = (p: OkPlan, ephemeris = 'JPL DE440') => buildReport(p, {

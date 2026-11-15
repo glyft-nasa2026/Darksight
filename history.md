@@ -4,6 +4,65 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: second audit pass (Compare row names, the slope's distance, three status lines)
+
+Yi Hung asked for all three after the audit in pull request #189 listed them.
+
+### SPEC.md: F6 Compare table
+
+- Was: rows "Sunset in" and "Earthset in" ("Sun now, sunset in, Earth now, Earthset in").
+- Now: "Next sunrise or sunset" and "Next Earthrise or Earthset".
+- Why: the cells under "Sunset in" read "Sunrise in 3 d 5 h", "No sunset in the next 60 days" or
+  "Permanently shadowed (until 2100)" as often as a sunset, so the row's name contradicted them.
+
+### SPEC.md: F3 Readout; docs/data-contract.md: 3. `slope.ts`; tasks/T41-slope.md; tasks/T43-layers-whole-moon.md
+
+- Was: "Ground slope 7° (over 240 m)", "(over 1.2 km)" on `north.bin`, "(over 3.8 km)" on
+  `globe.bin`; `slopeBaselineM` gave `pixel_m` and `globeSlopeBaselineM` the row spacing.
+- Now: "(over 480 m)", "(over 2.4 km)" and "(over 7.6 km)": both functions give twice the
+  spacing. The slope's value is unchanged.
+- Why: the slope is a central difference, `(z[c+1] - z[c-1]) / (2 pixel_m)`. The two heights it
+  compares are two cells apart, so that is the distance it is measured over; the label named half
+  of it.
+
+### tasks/T40-timeline-play.md: `Status:` (T42 and T43: pull requests #197 and #198)
+
+- Was: T40 "in progress (P5, branch `t40-timeline-play`, draft pull request #164)"; T42 "done, in
+  review (MarsRon, branch `t42-date-search`, pull request #167)"; T43 "done, waiting for review
+  (MarsRon, branch t43-layers-whole-moon, PR #172)".
+- Now each says done and merged: #164, #167 and #172. T40 changed here, and adds what has been
+  checked since, because its "Done when" boxes were never ticked. MarsRon changed T42 and T43
+  in pull requests #197 and #198 the same hour.
+- Why: each line was written before its pull request merged and not updated after.
+
+## 15 Nov 2026: the terrain skyline over the whole Moon (T37, option C)
+
+### docs/decisions.md: 14 Nov, "Real terrain for any point south of 85 S"
+
+- Was: "Real terrain for any point south of 85 S, computed in the browser from one LOLA grid".
+- Now: `dem.bin` (240 m) at or south of 85 S, unchanged; `globe.bin` (3.8 km) for every other site;
+  the page says which.
+- Why: 14 of the 20 curated sites had a smooth Moon. The team picked option C of three (T37):
+  whole-Moon reach with no new download, without coarsening the polar sites.
+
+### SPEC.md: 6. Where real terrain applies
+
+- Was: "South of 85 S: Real, from LOLA, looking out to 150 km" and "Anywhere else: Smooth Moon
+  (0 degrees). The app says so on screen".
+- Now: real at 240 m south of 85 S, coarse at 3.8 km elsewhere; a smooth Moon only while a height
+  map is loading or missing.
+- Why: as above.
+
+### docs/data-contract.md: 2. `globe.bin`; 3. `Skyline` and `horizon.ts`; 4. state
+
+- Was: `globe.bin` gave numbers only to the height and slope layers and the readout's slope line;
+  the skyline was "`terrain = false` and all zeros when `dem` is null or the site is north of
+  85 S"; `Skyline` was `{ elev, terrain }`; `state.ts` had no `globe`.
+- Now: `globe.bin` also gives the skyline and ground height north of 85 S through `core/globe.ts`;
+  `Skyline` carries `grid` and `cellM`; `AppState` has `globe` and `globeStatus`, and its arrival
+  clears only the caches of sites north of 85 S.
+- Why: option C needs a second grid, and the page must say which grid a skyline used.
+
 ## 15 Nov 2026: the nudge panel starts top left (issue #177)
 
 ### docs/data-contract.md: 5. Page slots, `#nudge`
@@ -29,6 +88,29 @@ P5 asked for both.
 - Was: "Flat panel or upright panel that turns to face the Sun; shows relative power".
 - Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
 - Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
+
+## 15 Nov 2026: the twelve newer launch pads checked against their pages (T34)
+
+### docs/sources/T34.md: the twelve launch pads
+
+- Was: one row for the twelve pads added in #104, with their twelve page links: "The coordinates
+  were written by the AI from these pages without fetching them; **a person still has to check
+  each one against its page or a map**".
+- Now one row per pad names the page element its value is checked against, and a row says how
+  the check is done (a Playwright script run by an AI agent, 15 Nov 2026). Taiyuan LC-9 moves from
+  38.84917 N, 111.60806 E to 38.8632 N, 111.589639 E; Plesetsk's pad is named Site 43/4.
+- Why: T34's last open item. The script found that Taiyuan LC-9 held the page title's coordinate,
+  2.2 km from the pad, and that four more pages (Vandenberg, Starbase, Plesetsk, Tanegashima) give
+  the spaceport or the complex in the title, so each pad's own value comes from a list item, a
+  map template, Wikidata or the Japanese article.
+
+### tasks/T34-mission.md: `Status:`
+
+- Was: "Open: a person still has to check the twelve pad coordinates added in #104 against their
+  sources (`docs/sources/T34.md`)."
+- Now the check is done by script (#185), and the table in that pull request lets a person
+  confirm it.
+- Why: the same check.
 
 ## 15 Nov 2026: map layers over the whole Moon (T43)
 
