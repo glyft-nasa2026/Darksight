@@ -1,6 +1,6 @@
 # T42: Date search: the first date with enough sunlight and Earth
 
-Status: not started
+Status: done, in review (MarsRon, branch `t42-date-search`, pull request #167). MarsRon checked the "Done when" list: working
 
 | | |
 |---|---|
@@ -38,10 +38,11 @@ it doesn't compute Sun or Earth angles itself.
 - Hourly samples, as the compare table uses. Twelve months is about 8,800 samples: measure it on
   the real data. If it takes more than about 50 ms on a phone, scan in slices between frames as
   `state.ts`'s never-lit scan does (`LIT_SCAN_SLICE_HOURS`).
-- **Missing rows.** A decade that isn't loaded gives NaN rows. The search must never treat NaN as
-  "hidden" and carry on: it stops there and says how far it got, or `state.ts` loads the decade
-  first, the way a scenario's time does. Agree which in the pull request. The end of the table
-  (2100) is a plain stop: "no window before 2100".
+- **Missing rows.** A decade that isn't loaded does not give NaN: `vectorsAt()` hands back the
+  nearest loaded row, a Sun and Earth standing still. The search asks `eph.missing()` and must
+  never read such an hour as "hidden" and carry on: it stops there and says how far it got, or
+  `state.ts` loads the decade first, the way a scenario's time does. Agree which in the pull
+  request. The end of the table (2100) is a plain stop: "no window before 2100".
 - Pure function, no DOM. Every number shown comes from it.
 
 ## What the user sees
@@ -71,20 +72,20 @@ it doesn't compute Sun or Earth angles itself.
 
 ## Done when
 
-- [ ] Tests on the mock or a synthetic table: a site lit and in view all the time gives a window
+- [x] Tests on the mock or a synthetic table: a site lit and in view all the time gives a window
       starting at `startMs`; a site never lit gives null; a threshold longer than any run gives
       null; the window's start agrees with `nextFlip()`'s sunrise (or Earthrise) to one minute;
       a run that starts inside the scan but ends after it is still found.
-- [ ] A test with a missing decade: the search does not report a window inside the NaN rows.
-- [ ] On real data (skips on mock): from 15 Nov 2026 at `shackleton-rim`, a 48 h Sun-and-Earth
+- [x] A test with a missing decade: the search does not report a window inside the NaN rows.
+- [x] On real data (skips on mock): from 15 Nov 2026 at `shackleton-rim`, a 48 h Sun-and-Earth
       search over 6 months finds a window, and the countdowns at that time say the Sun and Earth
       are both up; at `shackleton-floor` it finds none.
-- [ ] In the browser: the button moves the live time, the readout, strips, timeline and 3D follow,
+- [x] In the browser: the button moves the live time, the readout, strips, timeline and 3D follow,
       and no console errors. The scan time on the real data, 12 months, is written in the pull
       request.
-- [ ] No colour code, font or pixel size in the module; at 1280 and 390 px wide nothing overlaps
+- [x] No colour code, font or pixel size in the module; at 1280 and 390 px wide nothing overlaps
       or scrolls sideways.
-- [ ] `npm test` and `npm run build` pass.
+- [x] `npm test` and `npm run build` pass.
 
 ## Notes
 

@@ -24,6 +24,7 @@ seconds, and showing how much a 1 km move or a 1 day slip changes the answer.
 | | F16 animated 2D to 3D transition | Thermal models |
 | | F20 mission simulation, launch to touchdown | Server, database, accounts |
 | | F21 mission report, print and download | |
+| | F22 date search | |
 
 ## 3. Screen
 
@@ -57,7 +58,7 @@ can be pinned.
 |---|---|---|---|
 | F1 | Pick a site | Click the map, choose from the curated list, or type latitude and longitude | All three set the same live site |
 | F2 | Pick a time | UTC date and time box, plus dragging on the timeline. Range 1900 to 2100 | A time outside the range shows a message, not a crash |
-| F3 | Readout | For the selected scenario. Sun: altitude, azimuth, degrees above the skyline, fraction of disc visible. Earth: altitude, azimuth, visible or hidden. Ground slope at the site, "Ground slope 7° (over 240 m)", or why there is none (no height map north of 80° S) | Matches the fixtures to 0.02 degrees |
+| F3 | Readout | For the selected scenario. Sun: altitude, azimuth, degrees above the skyline, fraction of disc visible. Earth: altitude, azimuth, visible or hidden. Ground slope at the site, with the distance it is measured over: "Ground slope 7° (over 240 m)" on the south-pole height map, a coarser distance elsewhere (SPEC section 6) | Matches the fixtures to 0.02 degrees |
 | F4 | Countdowns | "Sunset in 3 d 4 h" or "Sunrise in ..."; same for Earth. Special wording: "No sunset in the next 60 days", "No sunrise in the next 60 days", "Earth always visible", "Earth never visible", "Permanently shadowed (until 2100)". The exact table is in contract section 3 | The countdown ends where the strip ends |
 | F5 | Scenarios | Pin the live scenario (max 3). Colours: A `#E69F00`, B `#0072B2`, C `#009E73`. Click a card to select it; remove with x | Pin, select, remove work; the same colour appears on pin, card and strips |
 | F6 | Compare table | A Live column first, then one column per pinned scenario, same rows in the same order: Sun now, sunset in, Earth now, Earthset in, lit % (next 30 days), longest unbroken light, longest dark, Earth contact %, longest gap in contact. Best value per row highlighted | Two pinned scenarios show three columns (Live plus two) with every row filled |
@@ -76,6 +77,7 @@ can be pinned.
 | F19 | Example on first open | A link with no scenarios in it opens on a ready comparison: the crater rim (live) against the crater floor (pinned as A), at the current hour. A link with scenarios in it opens exactly those | The plain link shows two different columns in the compare table, Live and A; unpinning A and reloading leaves nothing pinned |
 | F20 | Mission simulation (if time) | "Land here" on a scenario card makes its site and time the landing point. A mission card shows the flight from a chosen launch pad to touchdown at that site and time: an animation, the five flight-sequence phases, Δv and propellant per phase, and the Sun and Earth at the site at touchdown. A planning model (patched conics, a simulated powered descent), not a flight-dynamics solution | Touchdown is at the scenario's site and time; the numbers match `core/mission.test.ts`; a shared link reopens the same mission |
 | F21 | Mission report (if time) | The planned mission as a report that can be printed, saved as PDF and downloaded as data files, built in the browser from the same plan as the mission card | The report and the mission card show the same numbers |
+| F22 | Date search (if time) | "Find a date" in the scenario panel: from the live scenario's site and time, the first window within 1, 3, 6 or 12 months in which the Sun and Earth (or the Sun only, or Earth only) stay up together for at least 24 h, 48 h, 96 h or 7 days. It moves the live time to the window's start and says how long the window lasts, or that there is none | The window starts where the countdown's rise is, to the minute, and the readout then shows both up |
 
 ## 5. How it works
 
@@ -102,6 +104,16 @@ the same for every site. Only the site's own "up" differs. So one table serves e
 |---|---|
 | South of 85 S | Real, from LOLA, looking out to 150 km |
 | Anywhere else | Smooth Moon (0 degrees). The app says so on screen |
+
+Map layers (F14) cover the whole Moon, on every map view (decision of 15 Nov 2026, T43). The
+finest source applies where it reaches; a coarser one fills in the rest, and the page says which
+source applies at the point shown. A layer limited to part of the Moon needs a decision first.
+
+| Layer | Near the poles | Elsewhere |
+|---|---|---|
+| Lit %, Earth-visible % | The LOLA team's maps, with terrain (south; north where published) | Smooth Moon, from the Sun and Earth directions: "no terrain shadows" |
+| Never lit | The LOLA team's permanent-shadow maps | None on a smooth Moon: shown as 0, saying so |
+| Height, slope | `dem.bin` (240 m) south of 80 S; `north.bin` (1200 m) north of 80 N | `globe.bin`, 0.125° a cell (3.8 km at the equator) |
 
 ## 7. Accuracy
 
