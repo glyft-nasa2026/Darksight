@@ -16,7 +16,8 @@ export const WINDOW_H = 30 * 24;
 export const MEANINGFUL_H = 6;
 
 /** One step. Bearings are clockwise from north, as for destination(). */
-export type Nudge = { id: string; text: string; bearing?: number; days?: number };
+/** A step: a bearing (moved the slider's distance), a number of days, or straight to a latitude (a pole). */
+export type Nudge = { id: string; text: string; bearing?: number; days?: number; lat?: number };
 export const NUDGES: readonly Nudge[] = [
   { id: 'n', text: 'N', bearing: 0 },
   { id: 'w', text: 'W', bearing: 270 },
@@ -24,6 +25,12 @@ export const NUDGES: readonly Nudge[] = [
   { id: 'e', text: 'E', bearing: 90 },
   { id: 'minus-day', text: '−1 day', days: -1 },
   { id: 'plus-day', text: '+1 day', days: 1 },
+];
+
+/** Straight to a pole (issue #126), beside the N step: the live site's latitude becomes ±90. */
+export const POLES: readonly Nudge[] = [
+  { id: 'n-pole', text: 'N pole', lat: 90 },
+  { id: 's-pole', text: 'S pole', lat: -90 },
 ];
 
 /** The distance slider, km. */
@@ -46,7 +53,9 @@ export const stepText = (n: Nudge, km: number): string =>
 /** The same, spelled out for a screen reader. */
 const WORDS: Record<string, string> = { n: 'north', s: 'south', e: 'east', w: 'west' };
 export const stepLabel = (n: Nudge, km: number): string =>
-  n.bearing === undefined
+  n.lat !== undefined
+    ? `Move the live site to the ${n.lat > 0 ? 'north' : 'south'} pole`
+    : n.bearing === undefined
     ? `Move the live time ${n.text.replace('−', 'back ').replace('+', 'forward ')}`
     : `Move the live site ${kmText(km)} ${WORDS[n.id]}`;
 
@@ -72,6 +81,19 @@ export function freeCorner(wanted: Corner, taken: ReadonlySet<Corner>): Corner |
     if (!taken.has(c)) return c;
   }
   return null;
+}
+
+/** The one corner button's order (issue #126): top left, top right, bottom left, bottom right, round again. */
+export const CYCLE: readonly Corner[] = ['tl', 'tr', 'bl', 'br'];
+
+/** The corner after `at` in that order that the map's own controls leave free; `at` if none is. */
+export function nextCorner(at: Corner, taken: ReadonlySet<Corner>): Corner {
+  const i = CYCLE.indexOf(at);
+  for (let k = 1; k <= CYCLE.length; k++) {
+    const c = CYCLE[(i + k) % CYCLE.length];
+    if (!taken.has(c)) return c;
+  }
+  return at;
 }
 
 /** A corner name read back from the page (a data attribute), or null if it isn't one. */
@@ -117,26 +139,26 @@ type Words = { set: [string, string]; rise: [string, string]; upNow: string; dow
 const SUN: Words = {
   set: ['sunset {t} later', 'sunset {t} earlier'],
   rise: ['sunrise {t} sooner', 'sunrise {t} later'],
-  upNow: 'Sun up there now (hidden here)',
-  downNow: 'Sun hidden there now (up here)',
-  noSet: 'no sunset there in the next 60 days',
-  noRise: 'no sunrise there in the next 60 days',
-  setSoon: 'sunset there within 60 days (none here)',
-  riseSoon: 'sunrise there within 60 days (none here)',
+  upNow: 'Sun up now (hidden before)',
+  downNow: 'Sun hidden now (up before)',
+  noSet: 'no sunset now in the next 60 days',
+  noRise: 'no sunrise now in the next 60 days',
+  setSoon: 'sunset now within 60 days (none before)',
+  riseSoon: 'sunrise now within 60 days (none before)',
 };
 const EARTH: Words = {
   set: ['keeps Earth {t} longer', 'loses Earth {t} earlier'],
   rise: ['sees Earth {t} sooner', 'sees Earth {t} later'],
-  upNow: 'Earth in view there now (hidden here)',
-  downNow: 'Earth hidden there now (in view here)',
+  upNow: 'Earth in view now (hidden before)',
+  downNow: 'Earth hidden now (in view before)',
   noSet: 'keeps Earth for the next 60 days',
-  noRise: 'no Earth there in the next 60 days',
-  setSoon: 'loses Earth there within 60 days (keeps it here)',
-  riseSoon: 'sees Earth there within 60 days (not here)',
+  noRise: 'no Earth now in the next 60 days',
+  setSoon: 'loses Earth now within 60 days (kept it before)',
+  riseSoon: 'sees Earth now within 60 days (not before)',
 };
 
 /**
- * The next rise or set at the ghost against the one here. The events are compared as moments in
+ * The next rise or set now against the one before the step (issue #126: the step is taken at once). The events are compared as moments in
  * time, so a ±1 day nudge, which sees the same sunset from a day nearer or further, reports no
  * change here; the countdown lines show the day.
  */

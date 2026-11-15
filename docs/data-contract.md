@@ -475,7 +475,7 @@ missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'ready'; pl
 **Selected and live.** `selectedId` is the live scenario's id or a pinned one's. The readout,
 timeline, sky panorama and the 3D scene's Sun all show the selected scenario. Pinned scenarios
 never change. `setLiveSite` and `setLiveTime` change the live scenario and select it. So an
-edit made anywhere (map click, coordinate boxes, time box, timeline drag, nudge "Keep") lands
+edit made anywhere (map click, coordinate boxes, time box, timeline drag, a nudge step) lands
 on live, and the view follows.
 
 **First open (F19, T25).** When the page address names no scenario (no live one, none pinned)
@@ -552,7 +552,7 @@ and `#readout` sits under `#scene`; on a phone `#panel` comes after `#readout`.
 `position: relative` box that holds the map canvas), before `main.ts` reaches it, so the nudge
 panel is ordinary HTML floating over the map, never drawn in the canvas. The nudge places itself
 in one of the viewport's four corners (`data-corner="tl" | "tr" | "bl" | "br"`, bottom left to
-start). Any map control the scene puts inside the viewport marks its corner with
+start); one button moves it on, top left, top right, bottom left, bottom right (issue #126). Any map control the scene puts inside the viewport marks its corner with
 `data-map-corner="tl"` (and so on); the nudge then skips that corner for the next free one,
 clockwise. The scene's toolbar sits above the viewport and claims no corner.
 
