@@ -129,6 +129,23 @@ describe('Powered descent', () => {
     }
   });
 
+  it('eases into and out of the approach: the height never climbs back and the speed only falls after the high gate', () => {
+    for (const lander of [EXAMPLE_LANDER, { ...EXAMPLE_LANDER, thrustN: 9000 }, { ...EXAMPLE_LANDER, thrustN: 15000 }]) {
+      for (const m0 of [900, 1420]) {
+        const d = simulateGuidedDescent(15, m0, lander.thrustN, lander.ispS, true);
+        let lowest = Infinity;
+        for (const s of d.samples) {
+          lowest = Math.min(lowest, s.altKm);
+          expect(s.altKm - lowest, `${lander.thrustN} N, ${m0} kg at ${s.tS} s`).toBeLessThan(0.001);
+        }
+        const after = d.samples.filter((s) => s.tS >= d.brakingS);
+        for (let i = 1; i < after.length; i++) {
+          expect(after[i].speedKmS - after[i - 1].speedKmS, `${lander.thrustN} N, ${m0} kg at ${after[i].tS} s`).toBeLessThan(0.0005);
+        }
+      }
+    }
+  });
+
   it('a strong engine and the example lander both start at 15 km, at full thrust, and touch down under 3 m/s', () => {
     for (const lander of [{ ...EXAMPLE_LANDER, thrustN: 9000 }, EXAMPLE_LANDER]) {
       const p = planDescent(1474, lander)!;

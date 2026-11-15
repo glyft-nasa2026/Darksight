@@ -400,7 +400,7 @@ const ALT_LOOP = 0.03;
  */
 export const LOW_GATE_KM = 0.15;
 /** The approach's fastest sink rate, km/s. */
-const APPROACH_SINK_KMS = 0.03;
+const APPROACH_SINK_KMS = 0.02;
 /** The approach's braking, as a share of the engine's full acceleration at the high gate. */
 const APPROACH_BRAKING = 0.5;
 /** The landing phase's descent rate: altitude over this many seconds, between 1 and 30 m/s. */
@@ -442,7 +442,7 @@ export function simulateGuidedDescent(
   const span = startAltKm - HIGH_GATE_KM;
   let braking = true;
   let brakingS = 0;
-  let approach: { tS: number; h: number; drop: number; vt: number; spanS: number } | null = null;
+  let approach: { tS: number; h: number; vt: number; spanS: number; sinkIn: number; sinkOut: number } | null = null;
   let landing = false;
   let t = 0;
   // The thrust force held through a step, radial and along-track, and the mass flow.
@@ -467,15 +467,26 @@ export function simulateGuidedDescent(
         // The high gate: plan the approach from here. Long enough to sink no faster than
         // APPROACH_SINK_KMS and to brake at APPROACH_BRAKING of full thrust.
         braking = false;
+        // A smooth profile's fastest sink is about 1.5 times its average.
         const drop = Math.max(0, hNow - LOW_GATE_KM);
-        const spanS = Math.max(10, (2 * drop) / APPROACH_SINK_KMS, Math.max(0, vt) / (APPROACH_BRAKING * aMax));
-        approach = { tS: t, h: hNow, drop, vt: Math.max(0, vt), spanS };
+        const spanS = Math.max(10, (1.5 * drop) / APPROACH_SINK_KMS, Math.max(0, vt) / (APPROACH_BRAKING * aMax));
+        approach = {
+          tS: t, h: hNow, vt: Math.max(0, vt), spanS,
+          sinkIn: Math.min(APPROACH_SINK_KMS, Math.max(0, -vr)),
+          sinkOut: Math.min(0.03, LOW_GATE_KM / LANDING_RATE_S),   // the landing's first sink rate
+        };
       }
       const g = approach!;
       const f = Math.min(1, (t - g.tS) / g.spanS);
-      // Along a straight line: the height falls with the distance gone, (2f - f^2) of it.
-      const hRef = g.h - g.drop * (2 * f - f * f);
-      const vrRef = (-g.drop * (2 - 2 * f)) / g.spanS;
+      // The height as a cubic in f (Hermite): from the gate at the sink rate the lander has
+      // there, to the low gate at the sink rate the landing starts with, so neither handover
+      // jerks (issue #192 follow-up: a straight line started at full sink and lurched).
+      const m0 = -g.sinkIn * g.spanS;
+      const m1 = -g.sinkOut * g.spanS;
+      const f2 = f * f;
+      const f3 = f2 * f;
+      const hRef = (2 * f3 - 3 * f2 + 1) * g.h + (f3 - 2 * f2 + f) * m0 + (-2 * f3 + 3 * f2) * LOW_GATE_KM + (f3 - f2) * m1;
+      const vrRef = ((6 * f2 - 6 * f) * g.h + (3 * f2 - 4 * f + 1) * m0 + (-6 * f2 + 6 * f) * LOW_GATE_KM + (3 * f2 - 2 * f) * m1) / g.spanS;
       const vtRef = g.vt * (1 - f);
       at = -g.vt / g.spanS + (vtRef - vt) / LANDING_TAU_S;
       ar = gNet + (hRef - hNow) / (LANDING_TAU_S * LANDING_TAU_S) + (2 * (vrRef - vr)) / LANDING_TAU_S;

@@ -11,4 +11,4 @@
 
 Model choices, not from a source: the lunar orbit's plane is the one through the site at touchdown that holds the arrival direction (so LOI needs no plane change), crossed heading south; the wait in lunar orbit stays within half a lap of Apollo 11's; the Moon's axis is taken upright to the transfer's plane (really about 1.5° from the ecliptic's normal and 6.7° from its orbit's).
 
-Also a model choice: the departure plane is the one inclined by the pad's latitude (a launch due east) to Earth's equator that holds the arrival; of the two, the one nearer the Moon's orbit plane. Earth's pole is taken as ICRF's z (J2000; precession since then, about 0.3°, ignored). The approach's 30 m/s sink limit and half-thrust braking are the model's choices.
+Also a model choice: the departure plane is the one inclined by the pad's latitude (a launch due east) to Earth's equator that holds the arrival; of the two, the one nearer the Moon's orbit plane. Earth's pole is taken as ICRF's z (J2000; precession since then, about 0.3°, ignored). The approach's 20 m/s sink limit, its cubic height profile and half-thrust braking are the model's choices.
