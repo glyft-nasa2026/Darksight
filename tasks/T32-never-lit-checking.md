@@ -1,6 +1,6 @@
 # T32: A dark site says it is still checking to 2100
 
-Status: in review (an agent for Yi Hung, branch `t32-never-lit-checking-b`, pull request #186): every "Done when" line passes. Line 5 on the preview first found a bug: Compare's floor column stayed on "checking to 2100…" after the scan ended; #186 fixes it in `ui/compare/index.ts` and adds the page test `web/e2e/never-lit-checking.spec.ts`. The code merged in #138 (Fabian) and #148. The mission card's "Working period" says "checking" too (`ui/mission/conditions.ts`, #173)
+Status: done (pull requests #138 and #148; line 5 and its fix in #186, by an agent for Yi Hung): every "Done when" line passes. No person has checked line 5 by hand; the Fast 4G timelines are in #186. Line 5 on the preview first found a bug: Compare's floor column stayed on "checking to 2100…" after the scan ended; #186 fixes it in `ui/compare/index.ts` and adds the page test `web/e2e/never-lit-checking.spec.ts`. The code merged in #138 (Fabian) and #148. The mission card's "Working period" says "checking" too (`ui/mission/conditions.ts`, #173)
 
 | | |
 |---|---|
