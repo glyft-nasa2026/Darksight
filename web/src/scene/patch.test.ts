@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Color, Vector3 } from 'three';
-import { moonCentre, sphereSite } from './coordinates';
+import { moonCentre, sitePosition, siteUp, sphereSite } from './coordinates';
 import { globeNormalAt, globeNormalNear, parseGlobe, type GlobeMeta } from './globe';
 import {
-  cellSite, parseTile, PATCH_HALF_DEG, patchGeometry, patchWindow, tileFile, tileHeights, windowTiles,
-  type TileIndex,
+  cellSite, groundAngle, parseTile, PATCH_HALF_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch, tileFile,
+  tileHeights, viewGround, windowTiles, type TileIndex,
 } from './patch';
 
 const index: TileIndex = { cells_per_deg: 32, tile_deg: 15, height_scale: 0.5, source: 'test' };
@@ -125,6 +125,57 @@ describe('patch mesh', () => {
     expect(n.fromBufferAttribute(faded.getAttribute('normal'), mid).toArray())
       .toEqual(new Vector3().fromBufferAttribute(own.getAttribute('normal'), mid).toArray());
   });
+
+  // Rising 40 m a row southward and 20 m a column eastward, lowest at the north-west corner.
+  const tilted = (row: number, col: number): number => 500 + 40 * (row - win.row0) + 20 * (col - win.col0) / win.stride;
+  const rows = win.row1 - win.row0 + 1, cols = (win.col1 - win.col0) / win.stride + 1;
+  const inner = (r: number, c: number): boolean =>
+    Math.min(r, rows - 1 - r) / (rows - 1) >= 0.15 && Math.min(c, cols - 1 - c) / (cols - 1) >= 0.15;
+  const border = (r: number, c: number): boolean => r === 0 || c === 0 || r === rows - 1 || c === cols - 1;
+
+  it('is raised by the stretch along each radius, from the lowest ground, to nothing at its edge', () => {
+    const geometry = patchGeometry(win, small, tilted, low, high, [0, 1], 1);
+    const position = geometry.getAttribute('position');
+    const flat = Array.from({ length: position.count }, (_, i) => new Vector3().fromBufferAttribute(position, i));
+    const top = stretchPatch(geometry, 3);
+    let highest = 0, checked = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c, p = up.fromBufferAttribute(position, i), above = p.length() - 1737.4;
+        expect(above).toBeGreaterThan(-1e-3);                         // never under the globe
+        expect(p.clone().normalize().dot(flat[i].clone().normalize())).toBeCloseTo(1, 9);
+        if (inner(r, c)) { expect(above).toBeCloseTo(3 * (40 * r + 20 * c) / 1000, 3); checked++; }
+        if (border(r, c)) expect(Math.abs(above)).toBeLessThan(1e-3);
+        highest = Math.max(highest, above);
+        expect(geometry.boundingBox!.containsPoint(p)).toBe(true);
+      }
+    }
+    expect(checked).toBeGreaterThan(100);
+    expect(top).toBeCloseTo(highest, 3);
+    // A second stretch starts again from the flat ground.
+    stretchPatch(geometry, 1);
+    const mid = Math.floor(rows / 2) * cols + Math.floor(cols / 2);
+    expect(up.fromBufferAttribute(position, mid).length() - 1737.4)
+      .toBeCloseTo((40 * Math.floor(rows / 2) + 20 * Math.floor(cols / 2)) / 1000, 3);
+  });
+
+  it('gives the lift at any point: exact on a cell centre, blended between, 0 outside, across 180 degrees', () => {
+    const geometry = patchGeometry(win, small, tilted, low, high, [0, 1], 1);
+    const at = (r: number, c: number) => cellSite(small, win.row0 + r, win.col0 + c * win.stride);
+    const rm = Math.floor(rows / 2), cm = Math.floor(cols / 2);
+    expect(patchLiftAt(geometry, at(rm, cm).lat, at(rm, cm).lon)).toBeCloseTo((40 * rm + 20 * cm) / 1000, 6);
+    const between = { lat: (at(rm, cm).lat + at(rm + 1, cm).lat) / 2, lon: (at(rm, cm).lon + at(rm, cm + 1).lon) / 2 };
+    expect(patchLiftAt(geometry, between.lat, between.lon)).toBeCloseTo((40 * (rm + 0.5) + 20 * (cm + 0.5)) / 1000, 6);
+    // The window runs from 172 E across 180 degrees to 174 W; this cell is west of 180 W in name only.
+    const east = at(rm, cm + 6);
+    expect(east.lon).toBeLessThan(-179);
+    expect(patchLiftAt(geometry, east.lat, east.lon)).toBeCloseTo((40 * rm + 20 * (cm + 6)) / 1000, 6);
+    expect(patchLiftAt(geometry, east.lat, east.lon + 360)).toBeCloseTo((40 * rm + 20 * (cm + 6)) / 1000, 6);
+    expect(patchLiftAt(geometry, at(0, cm).lat, at(0, cm).lon)).toBeCloseTo(0, 9);
+    expect(patchLiftAt(geometry, -30, 150)).toBe(0);
+    expect(patchLiftAt(geometry, 10, 179)).toBe(0);
+    expect(patchLiftAt(patchGeometry(win, small, () => 0, low, high, [0, 1], 1), -30, 179)).toBe(0);
+  });
 });
 
 describe('globe normal at a point', () => {
@@ -143,5 +194,36 @@ describe('globe normal at a point', () => {
     near.forEach((v, k) => expect(v).toBeCloseTo(mid[k], 6));
     globeNormalNear(globe, 12, 179.99, 6, near);                    // across 180 degrees: no jump, unit length
     expect(Math.hypot(near[0], near[1], near[2])).toBeCloseTo(1, 6);
+  });
+});
+
+describe('ground in the middle of the view (issue #85)', () => {
+  const close = (a: { lat: number; lon: number }, b: { lat: number; lon: number }): void => {
+    expect(groundAngle(a, b)).toBeLessThan(1e-6);
+  };
+
+  it('is where the line of sight meets the sphere, looking straight down or at a slant', () => {
+    const site = { lat: 23.5, lon: -140 };
+    const above = sitePosition(site, 0, 1).addScaledVector(siteUp(site), 500);
+    close(viewGround(above, siteUp(site).negate()), site);
+    // From far out, aimed at another site: the near side of the Moon, not the far side.
+    const other = { lat: -10, lon: 30 }, from = sitePosition(other).addScaledVector(siteUp(other), 4000).add(new Vector3(800, 0, 0));
+    close(viewGround(from, sitePosition(other).sub(from)), other);
+  });
+
+  it('is the point nearest the line of sight when it misses the Moon, never behind the camera', () => {
+    const centre = moonCentre();
+    // Looking along +X past the Moon, 2000 km to its south (+Y): the nearest point is the Moon's southmost.
+    const from = centre.clone().add(new Vector3(-5000, 2000, 0));
+    close(viewGround(from, new Vector3(1, 0, 0)), { lat: -90, lon: 0 });
+    // Looking straight away from the Moon: the point under the camera.
+    const site = { lat: 40, lon: 100 }, away = sitePosition(site).addScaledVector(siteUp(site), 300);
+    close(viewGround(away, siteUp(site)), site);
+  });
+
+  it('measures the angle between two places, across 180 degrees', () => {
+    expect(groundAngle({ lat: 0, lon: 179 }, { lat: 0, lon: -179 })).toBeCloseTo(2, 9);
+    expect(groundAngle({ lat: -90, lon: 0 }, { lat: -80, lon: 123 })).toBeCloseTo(10, 9);
+    expect(groundAngle({ lat: 10, lon: 20 }, { lat: 10, lon: 20 })).toBe(0);
   });
 });

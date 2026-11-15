@@ -167,6 +167,24 @@ describe('shadeGlobal and subPoint', () => {
     expect(north[15]).toBeLessThan(0);
   });
 
+  it('works out only the rows asked for, the same as in the whole grid', () => {
+    const sun: Vec3 = [0.3, -0.5, 0.8];
+    const whole = shadeGlobal(sun, 72, 36), part = shadeGlobal(sun, 72, 36, 30, 36);
+    expect(part.length).toBe(6 * 72);
+    for (let k = 0; k < part.length; k++) expect(part[k]).toBe(whole[30 * 72 + k]);
+  });
+
+  it('writes into an array it is given, if that is long enough', () => {
+    const sun: Vec3 = [0.3, -0.5, 0.8];
+    const whole = shadeGlobal(sun, 72, 36);
+    const given = new Float32Array(72 * 36).fill(9);
+    const part = shadeGlobal(sun, 72, 36, 30, 36, given);
+    expect(part).toBe(given);
+    for (let k = 0; k < 6 * 72; k++) expect(part[k]).toBe(whole[30 * 72 + k]);
+    const short = new Float32Array(10);
+    expect(shadeGlobal(sun, 72, 36, 0, 36, short)).not.toBe(short);
+  });
+
   it('finds the point under a direction', () => {
     const p = subPoint([0, 2, 2]);
     expect(p.lat).toBeCloseTo(45, 9);

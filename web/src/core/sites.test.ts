@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { parseDem, type Dem, type DemMeta } from './dem';
 import { skylineAt } from './horizon';
 import { readRealTable } from './realTable.testutil';
-import type { CuratedSite } from './types';
+import { MOON_RADIUS_KM, type CuratedSite } from './types';
 import { series, summary } from './windows';
 
 const dataFile = (name: string): string => fileURLToPath(new URL(`../../public/data/${name}`, import.meta.url));
@@ -104,4 +104,84 @@ describe.skipIf(!dem || !eph)('sites.json on the real height map', () => {
   it('keeps the crater floor point in the dark all year', () => {
     expect(litPct('shackleton-floor')).toBe(0);
   }, 60_000);
+});
+
+// T36: every planned site sits on the IAU feature its mission owner names as the target. The
+// feature's centre and size are the USGS gazetteer's, written into the fixture by
+// data-prep/check_features.py. A sign dropped, a longitude left in 0..360 or a figure mistyped
+// puts a pin tens or hundreds of km off its feature, and this catches it; whether the pin is on
+// the right spot of the feature is the person's QuickMap check (docs/sources/T36.md). Skips on
+// mock data.
+type Feature =
+  | { feature: string; gazetteer_id: number; lat: number; lon: number; diameter_km: number;
+      margin_km?: number; margin_reason?: string }
+  | { feature: null; reason: string };
+type Features = { file_date: string; radius_km: number; sites: Record<string, Feature> };
+
+const features: Features = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./__fixtures__/features.json', import.meta.url)), 'utf8'));
+
+/** Great-circle distance in km between two points on the Moon's 1737.4 km sphere (haversine). */
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const rad = Math.PI / 180;
+  const h = Math.sin(((lat2 - lat1) * rad) / 2) ** 2
+    + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lon2 - lon1) * rad) / 2) ** 2;
+  return 2 * MOON_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+describe('distanceKm, the test\'s own great-circle distance', () => {
+  it('gives a quarter of the way round for 90 degrees, and one degree as 30.32 km', () => {
+    expect(distanceKm(0, 0, 0, 90)).toBeCloseTo((Math.PI / 2) * MOON_RADIUS_KM, 6);
+    expect(distanceKm(0, 0, 1, 0)).toBeCloseTo(30.3233, 3);
+    expect(distanceKm(-89, 0, -89, 180)).toBeCloseTo(2 * 30.3233, 3);   // over the south pole
+  });
+
+  it('measures the short way across the 180 degree meridian', () => {
+    expect(distanceKm(0, 179.5, 0, -179.5)).toBeCloseTo(30.3233, 3);
+  });
+});
+
+describe.skipIf(!realList)('planned sites against the gazetteer (T36)', () => {
+  const planned = realSites.filter((s) => s.status === 'planned');
+
+  it('holds at most 25 sites, of which at most 5 are planned (decision of 15 Nov 2026)', () => {
+    expect(realSites.length).toBeLessThanOrEqual(25);
+    expect(planned.length).toBeGreaterThan(0);
+    expect(planned.length).toBeLessThanOrEqual(5);
+  });
+
+  it('has a fixture entry for every planned site, and none for any other site', () => {
+    expect(Object.keys(features.sites).sort()).toEqual(planned.map((s) => s.id).sort());
+    expect(features.radius_km).toBe(MOON_RADIUS_KM);
+  });
+
+  it('gives a reason for every margin and for every target on no named feature', () => {
+    for (const [id, f] of Object.entries(features.sites)) {
+      if (f.feature === null) expect(f.reason, id).toMatch(/\S/);
+      else if (f.margin_km !== undefined) {
+        expect(f.margin_km, id).toBeGreaterThan(0);
+        expect(f.margin_reason, id).toMatch(/\S/);
+      }
+    }
+  });
+
+  it('keeps each feature centre in the contract\'s longitude range', () => {
+    for (const [id, f] of Object.entries(features.sites)) {
+      if (f.feature === null) continue;
+      expect(f.lon, `${id}: ${f.feature}`).toBeGreaterThanOrEqual(-180);
+      expect(f.lon, `${id}: ${f.feature}`).toBeLessThanOrEqual(180);
+      expect(f.diameter_km, `${id}: ${f.feature}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('puts every planned site within half its feature\'s diameter of the centre, plus any margin', () => {
+    for (const site of planned) {
+      const f = features.sites[site.id];
+      if (!f || f.feature === null) continue;   // the QuickMap check covers it alone
+      const d = distanceKm(site.lat, site.lon, f.lat, f.lon);
+      const allowed = f.diameter_km / 2 + (f.margin_km ?? 0);
+      expect(d, `${site.id}: km from the centre of ${f.feature} (allowed ${allowed.toFixed(1)})`)
+        .toBeLessThanOrEqual(allowed);
+    }
+  });
 });

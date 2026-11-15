@@ -10,16 +10,19 @@
     "dev": "vite",
     "test": "vitest run",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:page": "playwright test"
   },
   "dependencies": {
-    "plotly.js-dist-min": "^4.3.0",
+    "plotly.js-basic-dist-min": "^4.3.0",
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "^22.20.5",
     "@types/plotly.js-dist-min": "^2.3.4",
     "@types/three": "^0.187.0",
+    "plotly.js-dist-min": "^4.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"

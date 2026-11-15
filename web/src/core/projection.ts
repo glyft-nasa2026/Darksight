@@ -14,21 +14,29 @@ export function wrapLon(lon: number): number {
   return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
+/** Which pole a polar stereographic map is centred on. */
+export type Pole = 'south' | 'north';
+
 /**
- * South polar stereographic, the height map's own grid (contract section 2), in metres.
- * Longitude 0 points up (+y), 90 E points right (+x).
+ * Polar stereographic, in metres, seen from above the pole. South: the height map's own grid
+ * (dem.bin, contract section 2), longitude 0 up (+y), 90 E right (+x). North: longitude 0 down,
+ * 180 up, 90 E right. north.bin's grid is the mirror image of this (longitude 0 up), so a map
+ * drawing it turns it upside down: y here is minus north.bin's y.
  */
-export function polarForward(lat: number, lon: number): MapPoint {
-  const r = 2 * R_M * Math.tan(((90 + lat) / 2) * RAD);
-  return { x: r * Math.sin(lon * RAD), y: r * Math.cos(lon * RAD) };
+export function polarForward(lat: number, lon: number, pole: Pole = 'south'): MapPoint {
+  const fromPole = pole === 'south' ? 90 + lat : 90 - lat;
+  const r = 2 * R_M * Math.tan((fromPole / 2) * RAD);
+  const up = pole === 'south' ? 1 : -1;
+  return { x: r * Math.sin(lon * RAD), y: up * r * Math.cos(lon * RAD) };
 }
 
-/** Inverse of `polarForward`. The south pole itself comes back as longitude 0. */
-export function polarInverse(x: number, y: number): LatLon {
+/** Inverse of `polarForward`. The pole itself comes back as longitude 0. */
+export function polarInverse(x: number, y: number, pole: Pole = 'south'): LatLon {
   const r = Math.hypot(x, y);
+  const fromPole = (2 * Math.atan(r / (2 * R_M))) / RAD;
   return {
-    lat: (2 * Math.atan(r / (2 * R_M))) / RAD - 90,
-    lon: r === 0 ? 0 : Math.atan2(x, y) / RAD,
+    lat: pole === 'south' ? fromPole - 90 : 90 - fromPole,
+    lon: r === 0 ? 0 : Math.atan2(x, pole === 'south' ? y : -y) / RAD,
   };
 }
 

@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { Color, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { parseDem, projectToGrid, type DemMeta } from '../core/dem';
 import { MOON_RADIUS_KM } from '../core/types';
-import { gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
-import { detailBounds, edgeHeight, globeGeometry, setTerrainHole, terrainGeometry } from './terrain';
+import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
+import {
+  CAP_FADE_DEG, capWeight, detailBounds, drawnDemHeight, edgeHeight, globeGeometry, restretchTerrain, setTerrainHole,
+  terrainGeometry,
+} from './terrain';
 
 const meta: DemMeta = {
   size: 65, pixel_m: 2000, x_min_m: -64_000, y_max_m: 64_000,
@@ -110,6 +113,22 @@ describe('scene coordinates and picking', () => {
     expect(ahead.lat).toBeGreaterThan(site.lat);
   });
 
+  it('carries a camera offset to another site, as far east, north and up of it', () => {
+    const a = { lat: 0.674, lon: 23.473 }, b = { lat: 20.19, lon: 30.77 };
+    const upA = siteUp(a), northA = siteNorth(upA), eastA = northA.clone().cross(upA);
+    // East, as north × up, walks toward higher longitudes.
+    expect(sphereSite(sitePosition(a).addScaledVector(eastA, 10)).lon).toBeGreaterThan(a.lon);
+    const offset = eastA.clone().multiplyScalar(90).addScaledVector(upA, 135).addScaledVector(northA, -165);
+    const upB = siteUp(b), northB = siteNorth(upB), eastB = northB.clone().cross(upB);
+    const moved = carryOffset(offset, upA, upB);
+    expect(moved.length()).toBeCloseTo(offset.length(), 9);
+    expect(moved.dot(eastB)).toBeCloseTo(90, 9);
+    expect(moved.dot(upB)).toBeCloseTo(135, 9);
+    expect(moved.dot(northB)).toBeCloseTo(-165, 9);
+    expect(carryOffset(moved, upB, upA).distanceTo(offset)).toBeLessThan(1e-9);
+    expect(carryOffset(offset, upA, upA).distanceTo(offset)).toBeLessThan(1e-9);
+  });
+
   it('leaves the globe open over the terrain cap with no gap at its edge', () => {
     // A coarse grid that still reaches past 80 S, so the test stays quick.
     const m = { ...meta, size: 160, pixel_m: 3840, x_min_m: -305_280, y_max_m: 305_280 };
@@ -137,6 +156,44 @@ describe('scene coordinates and picking', () => {
     expect(globeGeometry(null).parameters.thetaStart).toBe(0);
     globe.geometry.dispose(); coarse.geometry.dispose(); material.dispose();
   }, 20_000);
+
+  it('eases the polar ground to the sphere at the globe opening, so no step or crack shows (issue #114)', () => {
+    // The real cap's layout: 10 degrees round the pole, every cell 2 km below the sphere.
+    const m = { ...meta, size: 160, pixel_m: 3840, x_min_m: -305_280, y_max_m: 305_280 };
+    const low2km = parseDem(m, new Int16Array(m.size ** 2).fill(-2000).buffer);
+    const open = 90 - globeGeometry(m).parameters.thetaStart * 180 / Math.PI;
+    expect(capWeight(m, -open)).toBe(0);
+    expect(capWeight(m, -79)).toBe(0);
+    expect(capWeight(m, -(open + CAP_FADE_DEG))).toBe(1);
+    expect(capWeight(m, -88)).toBe(1);
+    expect(drawnDemHeight(low2km, -88, 30)).toBe(-2000);
+    const half = capWeight(m, -(open + CAP_FADE_DEG / 2));
+    expect(half).toBeGreaterThan(0.4); expect(half).toBeLessThan(0.6);
+    // The mirrored north cap (parseNorth) has the same weights.
+    expect(capWeight({ ...m, min_lat: 80 }, -(open + CAP_FADE_DEG / 2))).toBe(half);
+
+    const geometry = terrainGeometry(low2km, low, high, 3);
+    const check = (g: typeof geometry, stretch: number): void => {
+      const { valid } = g.userData.layout as { valid: Uint8Array };
+      const position = g.getAttribute('position'), point = new Vector3();
+      let edge = 0;
+      for (let i = 0; i < position.count; i++) {
+        if (!valid[i]) continue;
+        point.fromBufferAttribute(position, i);
+        const lat = sphereSite(point).lat;
+        const above = point.sub(moonCentre()).length() - MOON_RADIUS_KM;
+        expect(above).toBeCloseTo(-2 * stretch * capWeight(m, lat), 4);
+        if (lat > -open) { expect(Math.abs(above)).toBeLessThan(1e-4); edge++; }
+      }
+      expect(edge).toBeGreaterThan(0);
+    };
+    check(geometry, 3);
+    restretchTerrain(geometry, 7);
+    check(geometry, 7);
+    // Colours still follow the real heights.
+    expect(geometry.userData.heightRange).toEqual([-2000, -2000]);
+    geometry.dispose();
+  });
 
   it('takes the globe colour from the height along the terrain edge, not the middle', () => {
     // A 4 km deep bowl at the pole inside a plain at 1,000 m.

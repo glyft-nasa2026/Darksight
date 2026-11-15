@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkLat, checkLon, checkUtc, coordText, groupName, toBoxValue, toPickerValue, utcText } from './input';
+import { checkLat, checkLon, checkUtc, coordText, groupName, siteOptionText, toBoxValue, toPickerValue, utcText } from './input';
 
 const table = { startMs: Date.parse('2026-01-01T00:00:00Z'), endMs: Date.parse('2036-01-01T00:00:00Z') };
 
@@ -95,5 +95,10 @@ describe('formatting', () => {
     expect(groupName('south-pole')).toBe('South pole');
     expect(groupName('apollo')).toBe('Apollo');
     expect(groupName('other')).toBe('other');
+  });
+  it('marks a planned site in the dropdown and leaves the others as they are (T36)', () => {
+    expect(siteOptionText({ name: 'IM-3 Trinity', status: 'planned' })).toBe('IM-3 Trinity (planned)');
+    expect(siteOptionText({ name: 'IM-2 Athena', status: 'landed' })).toBe('IM-2 Athena');
+    expect(siteOptionText({ name: 'Shackleton crater rim', status: 'reference' })).toBe('Shackleton crater rim');
   });
 });

@@ -55,9 +55,11 @@
   vertical-align: middle;
 }
 
+/* The hidden band: --muted at the chart's HIDDEN_OPACITY (ui/timeline/index.ts) over the card. */
 #timeline .timeline-swatch-area {
   height: var(--space-2);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 20%, var(--panel));
+  border: thin solid var(--border);
 }
 
 @media (max-width: 800px) {

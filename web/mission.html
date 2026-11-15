@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Mission simulation · Darksight</title>
+  </head>
+  <body>
+    <!-- The mission planner page (T34). "Open mission" in the Scenarios panel opens it with
+         the same page address, so it plans the mission to the same landing point.
+         web/src/missionPage/main.ts fills it; ui/mission/index.ts draws the card. -->
+    <div class="mp">
+      <header class="mp-bar">
+        <a class="btn mp-back" href="index.html">‹ Back to landing sites</a>
+        <span id="mp-status" class="mp-status" role="status"></span>
+      </header>
+      <section id="mission" class="card" aria-label="Mission simulation"></section>
+    </div>
+    <script type="module" src="/src/missionPage/main.ts"></script>
+  </body>
+</html>

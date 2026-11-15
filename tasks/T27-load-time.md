@@ -1,6 +1,6 @@
 # T27: Load time on the real data
 
-Status: not started
+Status: done: all four "Done when" lines pass. Merged: the laptop numbers, measured on commit 961b65c (Leon, #83); the height map measured again after #109 (#122: 16.44 s, pass); the phone column (#131: Realme 6, 15 Nov); and on t27-load-time-d the Sun and Earth numbers measured again after #143 (1.73 s, pass, closes #95) and the phone's Shackleton floor freeze after #132 (311 to 534 ms, accepted as is by Leon in issue #32). Not a budget line: the 1.1 s freeze when `globe.bin` arrives (issue #118).
 
 | | |
 |---|---|

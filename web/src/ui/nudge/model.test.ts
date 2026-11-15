@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACROSS_EDGE, amountText, asCorner, clampKm, compare, freeCorner, kmText, NUDGE_KM, NUDGES, stepLabel, stepText,
+  ACROSS_EDGE, amountText, asCorner, clampKm, compare, freeCorner, kmText, nextCorner, NUDGE_KM, NUDGES, POLES, stepLabel,
+  stepText,
   WINDOW_H, type Corner, type Facts,
 } from './model';
 
@@ -75,6 +76,31 @@ describe('freeCorner', () => {
   });
 });
 
+describe('nextCorner (issue #126: one button cycles the corners)', () => {
+  it('goes top left, top right, bottom left, bottom right, and round again', () => {
+    const none = new Set<Corner>();
+    expect(nextCorner('tl', none)).toBe('tr');
+    expect(nextCorner('tr', none)).toBe('bl');
+    expect(nextCorner('bl', none)).toBe('br');
+    expect(nextCorner('br', none)).toBe('tl');
+  });
+  it('skips a corner the map’s own controls hold', () => {
+    expect(nextCorner('tl', new Set<Corner>(['tr']))).toBe('bl');
+    expect(nextCorner('br', new Set<Corner>(['tl', 'tr']))).toBe('bl');
+  });
+  it('stays put when every other corner is taken', () => {
+    expect(nextCorner('bl', new Set<Corner>(['tl', 'tr', 'br']))).toBe('bl');
+  });
+});
+
+describe('POLES (issue #126)', () => {
+  it('goes straight to 90° N and 90° S, and says so for a screen reader', () => {
+    expect(POLES.map((p) => p.lat)).toEqual([90, -90]);
+    expect(stepText(POLES[0], 3)).toBe('N pole');
+    expect(stepLabel(POLES[1], 3)).toBe('Move the live site to the south pole');
+  });
+});
+
 describe('asCorner', () => {
   it('reads the four corner names and nothing else', () => {
     expect(asCorner('tr')).toBe('tr');
@@ -125,17 +151,17 @@ describe('compare', () => {
     expect(compare(facts(down), facts({ ...down, sunFlip: { type: 'rise', tMs: T + 10 * H } }))[0])
       .toEqual({ text: 'sunrise 10 h sooner', tone: 'ok' });
     expect(compare(facts(down), facts({ ...down, sunFlip: null }))[0])
-      .toEqual({ text: 'no sunrise there in the next 60 days', tone: 'bad' });
+      .toEqual({ text: 'no sunrise now in the next 60 days', tone: 'bad' });
   });
 
   it('says when the Sun is up at one and not the other now', () => {
     expect(compare(facts(), facts({ sunUp: false, sunFlip: { type: 'rise', tMs: T + H } }))[0])
-      .toEqual({ text: 'Sun hidden there now (up here)', tone: 'bad' });
+      .toEqual({ text: 'Sun hidden now (up before)', tone: 'bad' });
   });
 
   it('handles no sunset at one of the two', () => {
-    expect(compare(facts(), facts({ sunFlip: null }))[0]).toEqual({ text: 'no sunset there in the next 60 days', tone: 'ok' });
-    expect(compare(facts({ sunFlip: null }), facts())[0]).toEqual({ text: 'sunset there within 60 days (none here)', tone: 'bad' });
+    expect(compare(facts(), facts({ sunFlip: null }))[0]).toEqual({ text: 'no sunset now in the next 60 days', tone: 'ok' });
+    expect(compare(facts({ sunFlip: null }), facts())[0]).toEqual({ text: 'sunset now within 60 days (none before)', tone: 'bad' });
   });
 
   it('compares events as moments, so the same sunset seen a day later is no change', () => {

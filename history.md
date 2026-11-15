@@ -4,6 +4,270 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the timeline plays, and the solar panel card has a battery (T40)
+
+P5 asked for both.
+
+### SPEC.md: F8 Timeline
+
+- Was: "For the selected scenario: degrees above the skyline against time, one line for Sun, one for Earth, shaded below zero. Range buttons: 30 days, 90 days, 1 year; earlier and later buttons. Dragging sets the live time, and the chart stays still while the marker moves", ending at the drag.
+- Now a Timeline tab beside Scenarios also plays the live time forward, and says whether the Sun and
+  Earth are in view, whether the radio link is blocked, and the battery's charge.
+- Why: the challenge statement asks for animations over a lunar day; nothing played by itself.
+
+### SPEC.md: F15 Panel choice
+
+- Was: "Flat panel or upright panel that turns to face the Sun; shows relative power".
+- Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
+- Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
+
+## 15 Nov 2026: map layers over the whole Moon (T43)
+
+### docs/data-contract.md: 2. `globe.bin` and `north.bin`
+
+- Was: "for pictures"; no number shown to the user came from them, and nothing in `core/` loaded them.
+- Now: the height and slope layers and the readout's slope line take heights from them where
+  `dem.bin` does not reach, through `core/globe.ts` (moved from `web/src/scene/`, which re-exports it).
+- Why: the decision of 15 Nov 2026 (`docs/decisions.md`): every map layer covers the whole Moon, and
+  these were the only whole-Moon heights.
+
+### docs/data-contract.md: 2. `layers/layers.json`
+
+- Was: one south-polar grid at the top level (`size`, `pixel_m`, ... and `layers.{sun,earth,psr}`).
+- Now: `polar.south` and `polar.north`, each with its grid, `min_lat`, `files` and `products`;
+  `meanings` at the top. The south files keep their names and bytes; the north ones are new
+  (`north_*.bin`), and a new `layers/smooth.json` gives the smooth-Moon Sun and Earth elsewhere.
+- Why: T43 step 1 found that the LOLA team publishes the north maps too (PGDA product 69, PDS
+  `AVGVISIB_65N_240M_201608`, `..._EARTH`, `LPSR_65N_240M_201608`), so the north uses them as the south does.
+
+### docs/data-contract.md: 5. Map layers
+
+- Was: drawn on the south-polar map only (`kind === 'south'`), with `drawLayers(ctx, toScreen)`; the
+  controls said "pick a site south of 80° S" elsewhere.
+- Now: drawn on the south polar, north polar and whole-Moon maps, `drawLayers(ctx, { kind, view,
+  reachDeg, unitPx })`, with a dashed seam where sources meet and a legend naming the source at the
+  selected site. That message is gone.
+- Why: T43, SPEC section 6.
+
+### SPEC.md: 6. Where real terrain applies
+
+- Was: Lit % and Earth-visible % near the poles: "south; north where published".
+- Now: south and north, both published.
+- Why: T43 step 1 (above).
+
+### web/src/ui/readout (F3)
+
+- Was: "Ground slope: no height map here (it covers 80° S to the pole)" north of 80 S.
+- Now: a slope at every site: "Ground slope 2° (over 3.8 km)" on `globe.bin`, "(over 1.2 km)" on `north.bin`.
+- Why: T43; the slope line follows the slope layer.
+
+## 15 Nov 2026: date search (T42)
+
+### tasks/T42-date-search.md
+
+- Was: "A decade that isn't loaded gives NaN rows. The search must never treat NaN as hidden".
+- Now: a decade not in memory is found with `eph.missing()`, and the search stops there.
+- Why: `vectorsAt()` hands back the nearest loaded row for a decade not in memory, so the Sun and
+  Earth would read as standing still, not NaN (`core/ephemeris.ts`; NaN only when no decade is
+  loaded at all). Found while writing T42.
+
+### SPEC.md: 2. Cut line and 4. Features
+
+- Was: no F22.
+- Now: F22, date search (if time).
+- Why: a planner asks "when is it good enough here?", the reverse of what the page answered.
+
+## 15 Nov 2026: ground slope as a map layer and a readout line (T41)
+
+### SPEC.md: 4. Features, F3 and F14
+
+- Was: F3 listed the Sun's and Earth's rows only; F14 had four layers (lit %, Earth-visible %,
+  never lit, height).
+- Now: F3 adds the ground slope at the site; F14 adds a fifth layer, slope.
+- Why: the challenge statement asks how to represent steep slopes at the south pole. Slope showed
+  only as shading on the map and in 3D, and nothing measured it.
+
+### docs/data-contract.md: section 3
+
+- Was: `dem.cell()` read a `nodata` cell as 0, and nothing could tell a hole from a 0 m height.
+- Now: `dem.hasData(row, col)`, and `core/slope.ts` (method in its table row).
+- Why: a slope next to a hole would be a cliff that isn't there; T41 gives it null instead.
+
+## 15 Nov 2026: map layers cover the whole Moon (T43)
+
+Placed below T41's entry, not at the top, so it does not collide with pull request #164's new
+entry there. MarsRon decided on 15 Nov 2026.
+
+### CLAUDE.md: Facts this project depends on
+
+- Was: nothing said where a map layer applies.
+- Now: "Every map layer covers the whole Moon"; a layer limited to part of it needs a decision.
+- Why: with no stated reach, T14 and T41 each took the reach of their data file, `dem.bin`,
+  which T04 cut at 80 S to stay inside its 15 MB budget. Every layer stopped at 80 S.
+
+### SPEC.md: section 6 and F3
+
+- Was: section 6 covered the skyline only. F3: "Ground slope 7° (over 240 m)", "or why there is
+  none (no height map north of 80° S)".
+- Now: section 6 has a table of each layer's source near the poles and elsewhere. F3 gives the
+  slope everywhere, with the distance it is measured over.
+- Why: as above. The readout's slope is the slope layer's number at the site.
+
+### docs/data-contract.md: section 2, `globe.bin`; section 5, the layers paragraph
+
+- Was: `globe.bin` and `north.bin` were "for pictures only": no number shown came from them and
+  `core/` never loaded them. Layers were drawn "on the south-polar map only".
+- Now: map layers may take heights from them through a reader in `core/` (T43 adds it); T43
+  extends the layers to the north polar and whole-Moon maps.
+- Why: without this, `dem.bin` was the only source a layer could use. The pictures-only rule
+  kept rough pictures from passing as measurements; a layer and the readout say which grid and
+  cell size a value comes from, which answers that.
+
+## 15 Nov 2026: the curated list may hold 25 sites (T36)
+
+The team agreed on 15 Nov 2026.
+
+### SPEC.md: 4. Features, F12
+
+- Was: "15-20 sites: Apollo, recent landers, south-pole candidates. Each has a source link".
+- Now: "15-25 sites: …, and up to 5 upcoming mission targets (`planned`)".
+- Why: the challenge asks for future CLPS targets, and each current group answers another category
+  it names, so swapping sites out would open a new gap. The 20 had no recorded reason. The cap of
+  5 limits the per-site source and QuickMap checks before the freeze. `tasks/T07-sites.md` keeps
+  "15-20": it records what T07 did.
+
+### tasks/T36-planned-sites.md
+
+- Was: step 1 (the count) open; the targets and the QuickMap check by hand.
+- Now: step 1 done (25). A gazetteer check (`data-prep/check_features.py`, a fixture and a test)
+  proves each target sits on its named feature, and a Playwright contact sheet of QuickMap views
+  makes the person's check quick. The person still signs off: F12 needs a person's check.
+- Why: Yi Hung asked for the script and the automation to be in the ticket, so the work can start
+  in a new session.
+
+## 15 Nov 2026: a decade that failed to download is tried again (T33, issue #32 row 4)
+
+Issue #32, row 4: after a failed download the readout said the time was outside the table,
+although it was inside 1900 to 2100, and only a reload asked for the decade again.
+
+### docs/data-contract.md: 4. State, "Decades"
+
+- Was: "`state.ts` fetches each decade once; one that fails to download reads as outside the
+  table."
+- Now a failed decade is asked for again after a wait (10 s, doubling to 60 s) or when the
+  browser is back online, and `tableGap` tells a failed decade from a time outside the table, so
+  the modules can say which.
+- Why: a dropped connection is usually brief; saying "outside the table" for a time inside it
+  was wrong, and only a reload brought the numbers back.
+
+### docs/data-contract.md: 4. State, "Still checking"
+
+- Was: `neverLitPendingFor` "false when one of them failed to download (… no verdict can come
+  before a reload)".
+- Now false only while the failed decade waits for its next try, true again while it downloads.
+- Why: the verdict no longer needs a reload once the retry gets the decade.
+
+### docs/data-contract.md: 4. State, `missionFor`
+
+- Was: `{ status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan }`, with `'outside'`
+  also for a decade that did not download; the mission page then said the landing time was "too
+  near the edge of the Sun and Earth table (1900 to 2100)".
+- Now `{ status: 'failed'; decadeMs }` for a failed decade, and `'outside'` only before 1900 or
+  after 2100.
+- Why: the same mistake as the other modules, on the mission and launch simulation pages.
+
+## 15 Nov 2026: freeze checklist (T26)
+
+### SPEC.md: 10. Open decisions
+
+- Was: eight rows with a decision, who and importance, and no answer. The load-time row said
+  "proposed, not yet agreed".
+- Now each row has an Answer column, taken from `docs/decisions.md`, T17's `pitch/checklist.md`
+  (pull request #130), T22's status and `docs/load-time.md`. The deadline is 22:00, from Yi
+  Hung; the checklist's 23:59 (NASA's guide) was written in first and corrected the same day.
+  The Figma seat row is struck out: T22 made its pictures with no Figma file.
+- Why: T26 step 5. At the freeze no decision stays open.
+
+### tasks/T32-never-lit-checking.md, tasks/T34-mission.md: `Status:`
+
+- Was: T32 "in review … draft pull request"; T34 "seventh delivery in progress (P5, branch
+  `t34-mission-g` …)", written by #151 before it merged.
+- Now T32 says merged in #138 with line 5 not checked on a preview; T34 says done, seven
+  deliveries merged, the last #151.
+- Why: T26 step 4 found both behind what merged (#138, #151). Yi Hung asked T26 to fix them.
+
+## 15 Nov 2026: the mission card gets its own page (T34)
+
+P5 asked for it.
+
+### docs/data-contract.md: 5. Page slots, `#mission`
+
+- Was: "`#mission` (T34) is a full-width card after `#sky`, and last on a phone", on the site's
+  page; the launch simulation's "Back" went to `index.html`.
+- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" beside
+  "Copy share link" in the Scenarios panel, once a landing point is chosen; the simulation's "Back" goes to `mission.html`.
+- Why: the card is long and sat at the very bottom of the site, far from the "Land here" that
+  fills it.
+
+## 15 Nov 2026: a nudge moves at once (issue #126)
+
+MarsRon raised it; P5 asked for it, with the pole steps, transparency and corner button.
+
+### SPEC.md: F11 Nudge
+
+- Was: "Buttons: 1 km north, south, east, west; +1 day, -1 day. Makes a ghost scenario and states
+  the difference in words", with Keep and Discard to take or drop the ghost.
+- Now a press moves the live scenario at once; where it was stays grey on the map as "Before";
+  Undo goes back. Two more steps go straight to a pole. The panel starts folded.
+- Why: the confirmation got in the way of trying several steps, and most visits never nudge.
+
+### docs/data-contract.md: 5. Page slots, `#nudge`
+
+- Was: the nudge sits in one of four corners, picked with four buttons.
+- Now one button moves it round the corners: top left, top right, bottom left, bottom right.
+
+## 15 Nov 2026: T16's status line after #93
+
+### tasks/T16-about.md: `Status:`
+
+- Was: "in review (first delivery, branch t16-about; draft pull request). Second delivery at M3
+  on t16-about-b."
+- Now: the first delivery is done (#93 merged). The second delivery, the M3 collection on
+  `t16-about-b`, stays: sources and AI-use notes are still added up to the freeze, and M3 has
+  not happened (T26 is not started).
+
+## 15 Nov 2026: status lines checked against what merged
+
+Asked for on 15 Nov 2026: bring the status lines up to date, and call a task done only if its
+"Done when" list really passes. Checked on `main` at `af1766e`: `npm test` (553 passed),
+`npm run build`, and `npm run test:page` (7 passed, map labels included).
+
+### tasks/: `Status:` lines
+
+| Task | Was | Why it changed |
+|---|---|---|
+| T14 | "done on t14-layers, waiting for review: …" | #135 merged; its three "Done when" lines pass on `main` |
+| T18 | "in progress: first delivery (M1) report in qa/m1.md, draft pull request open on t18-qa. Pending: the 60-second test with a person, the Firefox and real-phone passes, Quickmap checks of six sites (F12), the team decision D1 (F18), and posting the bugs in the team chat." | #99, #101 and #102 merged, and M2 did Firefox, the phone, F12 and D1. Still not done: the 60-second test (with the set question and a time) and a full feature list are missing, so three of four lines fail |
+| T19 | "… `t19-ui-design-b` (pull request #94, in review) … #panel placed beside scenarios …" | #94 merged. `#panel` sits under Scenarios since #94, and the nudge panel over the map since #61, so line 5's wording is older than the layout |
+| T27 | "ready for review, phone measured (Realme 6, 15 Nov, branch t27-load-time-c) (Leon, branch t27-load-time, pull request #83). …" | #83, #122 and #131 merged. Not done: line 3 needs a fix or the team's acceptance for #95, and a second row for the phone freeze after #132 |
+| T34 | "fifth delivery in progress (P5, branch `t34-mission-e`, draft pull request #133: …)" | #133 merged. The twelve pad coordinates from #104 are still unchecked. "Not after the M3 freeze" had lost its full stop and ran into the next sentence |
+| T32 | Unchanged: "not started" | Pull request #138 rewrites this line itself; changing it on `main` would conflict with it |
+
+## 15 Nov 2026: landing trajectories move from Out to If time (#100)
+
+The team agreed the change on 15 Nov 2026, after P5 built T34 in pull request #100.
+
+### SPEC.md: 2. Cut line
+
+- Was: the Out column's third row read "Landing trajectories, thermal models", and the If time
+  column ended at "F16 animated 2D to 3D transition".
+- Now the Out row reads "Thermal models", and If time adds "F20 mission simulation, launch to
+  touchdown" (T34) and "F21 mission report, print and download" (T35). Section 4 has the two
+  feature rows.
+- Why: the brief draws a launch pad list, a flight sequence and mission telemetry (pages 4 to 7,
+  and the report on page 8) that no feature covered (`docs/design.md`, "Needs team decision",
+  item 5). The model is a planning model, not a flight-dynamics solution, and says so on screen.
+
 ## 14 Nov 2026: slot list moves to site.ts (#88)
 
 P1 agreed the change on 14 Nov 2026.

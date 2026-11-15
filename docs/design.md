@@ -27,6 +27,8 @@ exists, paste its link here: _(link to come)_.
 | `components.png` | Every state: button (secondary, hover, pressed, focus, selected, disabled), primary, tab, toggle, site chip (filled, selected, empty), info pill, field (focus, error), toast, tooltip on disabled Proceed |
 | `loading.png`, `hero.png` | Brief frames 1 and 2. **Proposals only**: they aren't slots (see "Needs team decision") |
 | `cvd.png` | Scenario, Sun and Earth colours under protanopia, deuteranopia, tritanopia |
+| `mission.png` `mission-phone.png` | **Proposal (T34), pending the team's agreement.** The mission card from brief pages 4 to 7: launch and landing cards, pad and lander inputs, the animation with its live line and controls, the five flight-sequence cards, the telemetry table and the landing site at touchdown. On a phone the animation comes first. Its numbers are `core/mission.ts`'s for one example mission. `scenarios.png` now also shows the "Land here" button and the pressed "Landing site" one |
+| `report.png` | **T35.** The mission report's first printed page: A4, in the print colours (`theme.css` under `@media print`), the page header with the mission's name and the page number at the foot. Title block, then the flight schedule with each phase's "where" under its name and T+ under its start. The brief's page 8 is only a placeholder, so this is the design. On screen the report is the same layout on the dark theme, one column on a phone |
 
 Mock-up numbers are made up. Nobody copies an angle or a time from a picture into code.
 
@@ -134,7 +136,10 @@ Values the design needs that the contract doesn't name. Nothing below was given 
    - Tabs "01 Explore · 02 Comparison · 03 Launch Site · 04 Simulation". The picture shows them
      in `#about` as links that scroll to `#scene`, `#compare` and `#timeline`. "Launch Site"
      (picking an Earth launch pad, PDF page 6), the flight-sequence page (PDF page 7) and the
-     report/print page (PDF page 8) have no feature in the spec.
+     report/print page (PDF page 8) had no feature in the spec. The team agreed on 15 Nov 2026
+     to add them as "if time" features: F20 (T34, launch pad and flight sequence, as the
+     `mission` card) and F21 (T35, the report). The tabs themselves stay out. The `mission` frame uses contract section 6 names only; its line widths and dash
+     lengths in the diagram are literals, like the other charts in the mock-up.
    - Loading screen and hero (brief frames 1 and 2) with their animations. They would live in
      `main.ts` or `index.html`.
    - A toast area for messages ("Maximum 4 sites…").

@@ -1,6 +1,6 @@
 # T18: Testing with a real person, bug list
 
-Status: not started
+Status: in progress, not done: three of the four "Done when" lines fail. Merged: the M1 report `qa/m1.md` (#99), the F18 specification (#101) and the M2 report `qa/m2.md` (#102); M2 did the Firefox and real-phone passes, the six Quickmap sites (F12) and the team decision D1 (F18). The M1 delivery's line 1 passes (F12, partial at M1, passed in M2). The 60-second test has not been run with the set question and a time in either round (line 2 of both deliveries): `qa/m1.md` says pending, and `qa/m2.md` records a first-time user's exploration without the question or a time. `qa/m2.md` doesn't list every feature as pass or fail (the M2 delivery's line 1): it rechecked F12 and F18 only, and F14 and F20 have been built since M1. `qa/m2.md` still says "Pending" for its date, build and tester, and calls map-label contrast (B5) unresolved, but #116 fixed it and `web/e2e/contrast.spec.ts` checks it in CI. Posting B1 to B5 in the team chat isn't recorded. Next delivery on `t18-qa-c`.
 
 | | |
 |---|---|

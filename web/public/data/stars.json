@@ -1,0 +1,15 @@
+{
+  "count": 9096,
+  "columns": [
+    "x",
+    "y",
+    "z",
+    "vmag",
+    "bv"
+  ],
+  "unit_scale": 32767,
+  "mag_scale": 1000,
+  "frame": "ICRF (J2000 equator and equinox)",
+  "epoch": 2000.0,
+  "source": "Yale Bright Star Catalogue, 5th revised ed. (Hoffleit and Warren 1991), VizieR V/50"
+}

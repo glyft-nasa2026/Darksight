@@ -2,25 +2,19 @@
 // over days 0-30 since each scenario's own time. Every number comes from state.ts accessors,
 // which call core/; model.ts only groups, ranks and formats them.
 import './compare.css';
-import type { Data, Layout } from 'plotly.js-dist-min';
+import type { Data, Layout } from 'plotly.js-basic-dist-min';
+import { plotlyIfLoaded, whenPlotly } from '../plotly';
 import type { Body, Sample } from '../../core/types';
 import { countdownText } from '../../core/windows';
 import {
   flipFor, getState, neverLitFor, samplesFor, skylineFor, subscribe, summaryFor, type AppState, type Scenario,
 } from '../../state';
-import { plotLayout, themeColor } from '../plotTheme';
+import { axisTitle, plotLayout, themeColor } from '../plotTheme';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
+// A line of its own, so the state import above stays as other branches edit it (T32).
+import { neverLitPendingFor } from '../../state';
 
 const SPAN_DAYS = 30;
-
-type PlotlyLib = (typeof import('plotly.js-dist-min'))['default'];
-// Plotly is large; loading it on first use lets the table show before it arrives.
-let plotly: Promise<PlotlyLib> | null = null;
-const loadPlotly = (): Promise<PlotlyLib> => {
-  // The package is a UMD bundle: the bundler hands it over as the default export.
-  plotly ??= import('plotly.js-dist-min').then((m) => m.default ?? (m as unknown as PlotlyLib));
-  return plotly;
-};
 
 function make<K extends keyof HTMLElementTagNameMap>(
   tag: K, className = '', text = '',
@@ -57,7 +51,8 @@ function countdownRow(name: string, body: Body, cols: Column[]): Row {
     if (!c.now) { cells.push('–'); values.push(null); continue; }
     const up = body === 'sun' ? c.sunUp : c.earthUp;
     const flip = flipFor(c.sc, body);
-    cells.push(countdownText(body, up, flip, c.sc.tMs, body === 'sun' && neverLitFor(c.sc)));
+    const sun = body === 'sun';
+    cells.push(countdownText(body, up, flip, c.sc.tMs, sun && neverLitFor(c.sc), sun && neverLitPendingFor(c.sc)));
     values.push(countdownScore(up, flip, c.sc.tMs));
   }
   return { name, cells, values, higherIsBetter: true };
@@ -203,7 +198,7 @@ function stripLayout(rows: string[], width: number): Partial<Layout> {
     showlegend: false,
     xaxis: {
       ...base.xaxis, range: [0, SPAN_DAYS], dtick: 5, fixedrange: true,
-      title: { text: "Days since each scenario's own time" },
+      title: axisTitle("Days since each scenario's own time"),
     },
     yaxis: {
       ...base.yaxis, type: 'category', categoryorder: 'array', categoryarray: rows,
@@ -239,11 +234,12 @@ export function mount(el: HTMLElement): void {
   // the old one, so the strips stuck at one width and spilled over the page (#49). Every draw
   // therefore passes the box's width as measured now.
   const plot = (id: number): void => {
-    void loadPlotly().then((P) => {
+    // Plotly loads on first use (ui/plotly.ts): the table shows before it arrives.
+    whenPlotly().then((P) => {
       if (id !== drawId || !plotted || strips.hidden) return;
       plottedWidth = Math.floor(strips.getBoundingClientRect().width);
       void P.react(strips, plotted.data, stripLayout(plotted.rows, plottedWidth), { displayModeBar: false });
-    });
+    }, () => undefined);
   };
 
   const showParts = (on: boolean): void => {
@@ -269,7 +265,9 @@ export function mount(el: HTMLElement): void {
       showParts(false);
       tableWrap.replaceChildren();
       plotted = null;
-      void loadPlotly().then((P) => { if (id === drawId) P.purge(strips); });
+      // Only if Plotly is already in: asking for it here started its 1.4 MB download while the
+      // page still waited for the Sun and Earth table (issue #95).
+      plotlyIfLoaded()?.purge(strips);
       return;
     }
 

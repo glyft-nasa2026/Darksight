@@ -1,0 +1,154 @@
+/* Styles for the map-layer controls (T14). Use only the variables and classes of ui/theme.css.
+
+   The controls float over the map in its top right corner, like the nudge panel (issues #58,
+   #126): 30 % see-through, with a blur so the text reads over lit ground. The section marks its
+   corner with data-map-corner="tr" (scene/index.ts), so the nudge panel takes another one. */
+.scene-layers {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-2);
+  right: var(--space-2);
+  max-width: calc(100% - var(--space-2) * 2);
+  /* Stops short of the bottom corners, so the nudge panel's title bar stays clear below it. */
+  max-height: calc(100% - var(--space-2) * 3 - var(--space-5) * 2);
+  box-sizing: border-box;
+  padding: var(--space-2);
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  backdrop-filter: blur(var(--space-1));
+}
+
+/* Unfolded: wide enough for a label and its slider, as wide as the nudge panel. */
+.scene-layers:has(.ly-box:not([data-folded])) {
+  width: min(calc(var(--space-5) * 12), calc(100% - var(--space-2) * 2));
+}
+
+.ly-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.ly-title {
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Folded: the icon row, the status and the legend only. */
+.ly-box[data-folded] > :not(.ly-title, .ly-head, .ly-status, .ly-legend) {
+  display: none;
+}
+
+.ly-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Each switch, when on, takes its layer's own colour: the high end of its ramp (model.ts). */
+.ly-icon {
+  --ly-on: var(--accent);
+  display: inline-flex;
+  padding: var(--space-1);
+  color: var(--muted);
+  line-height: 0;
+}
+
+.ly-icon[data-layer='sun'] { --ly-on: var(--sun); }
+.ly-icon[data-layer='earth'] { --ly-on: var(--earth); }
+.ly-icon[data-layer='height'] { --ly-on: var(--terrain-hi); }
+.ly-icon[data-layer='slope'] { --ly-on: var(--bad); }
+
+.ly-icon[aria-pressed='true'] {
+  color: var(--ly-on);
+  border-color: var(--ly-on);
+  background: var(--panel-2);
+}
+
+.ly-icon svg {
+  width: calc(var(--space-4) + var(--space-1));
+  height: calc(var(--space-4) + var(--space-1));
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ly-fold {
+  margin-inline-start: auto;
+  padding: 0 var(--space-2);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+
+.ly-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 7rem);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ly-label {
+  font-size: var(--fs-sm);
+}
+
+.ly-opacity {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.ly-opacity:disabled {
+  opacity: 0.4;
+}
+
+.ly-status:empty {
+  display: none;
+}
+
+.ly-status,
+.ly-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+/* T43: each layer that is on, its value and source at the selected site. It shows folded too:
+   it is how the page says which source applies at the point shown (CLAUDE.md). */
+.ly-legend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+/* Folded, a message wraps to the width of the icon row instead of widening the panel. */
+.ly-box[data-folded] .ly-status,
+.ly-box[data-folded] .ly-legend {
+  width: 0;
+  min-width: 100%;
+}
+
+.ly-legend[hidden] {
+  display: none;
+}
+
+.ly-at-name {
+  font-weight: 600;
+}
+
+.ly-at {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .ly-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

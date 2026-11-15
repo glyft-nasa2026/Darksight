@@ -1,12 +1,15 @@
 # Darksight
 
+**Live site: [https://darksight.space](https://darksight.space)**. Mirror, the same build:
+[https://rickphobia.com/projects/darksight/](https://rickphobia.com/projects/darksight/).
+
 Team GLYFT's submission for [NASA Space Apps Challenge 2026: Lunar Landing Site Navigator](https://www.spaceappschallenge.org/2026/challenges/lunar-landing-site-navigator/),
 Kuala Lumpur. The repo is `glyft-nasa2026/Darksight`.
 
 **What it is:** pick lunar landing sites and dates, and see side by side when each has sunlight
 (power) and a line to Earth (radio), measured against the real terrain skyline.
 
-**Product name:** Darksight. **Site:** [darksight.space](https://darksight.space).
+**Product name:** Darksight.
 
 ## Where things are
 

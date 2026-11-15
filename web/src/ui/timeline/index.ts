@@ -3,14 +3,14 @@
 // time. Clicking or dragging on the chart sets the live time. Every number comes from core/
 // through state.ts.
 import './timeline.css';
-import Plotly from 'plotly.js-dist-min';
-import type { Data, Layout, Shape } from 'plotly.js-dist-min';
+import type { Data, Layout, Shape } from 'plotly.js-basic-dist-min';
 import {
   flipFor, getState, LIVE_ID, selected, setLiveTime, setRange, shiftWindow, subscribe,
   timelineFor, type Range, type Scenario,
 } from '../../state';
 import type { Sample } from '../../core/types';
-import { plotLayout, themeColor } from '../plotTheme';
+import { chartLine, plotLayout, themeColor } from '../plotTheme';
+import { clearChartWait, plotlyIfLoaded, plotlyNow, showChartWait, whenPlotly } from '../plotly';
 import { emptyNote, plotTime, throttle, timeAtPx, timelineModel, type TimelineModel } from './model';
 
 const RANGES: { r: Range; text: string }[] = [
@@ -30,11 +30,14 @@ function button(text: string, onClick: () => void): HTMLButtonElement {
   return b;
 }
 
-function legendItem(colorVar: string, text: string, cls: string): HTMLSpanElement {
+/** How strongly the hidden band is tinted; timeline.css mixes its legend swatch the same way. */
+const HIDDEN_OPACITY = 0.2;
+
+function legendItem(colorVar: string | null, text: string, cls: string): HTMLSpanElement {
   const span = document.createElement('span');
   const swatch = document.createElement('i');
   swatch.className = cls;
-  swatch.style.background = `var(${colorVar})`;
+  if (colorVar) swatch.style.background = `var(${colorVar})`;
   span.append(swatch, text);
   return span;
 }
@@ -47,14 +50,14 @@ function traces(m: TimelineModel): Data[] {
       name: 'Earth',
       x: m.earth.x.map(plotTime), y: m.earth.y,
       type: 'scatter', mode: 'lines',
-      line: { color: themeColor('--earth'), width: 2 },
+      line: { color: themeColor('--earth'), width: chartLine('thick') },
       hovertemplate: 'Earth %{y:.2f}°<extra></extra>',
     },
     {
       name: 'Sun',
       x: m.sun.x.map(plotTime), y: m.sun.y,
       type: 'scatter', mode: 'lines',
-      line: { color: themeColor('--sun'), width: 2 },
+      line: { color: themeColor('--sun'), width: chartLine('thick') },
       hovertemplate: 'Top of the Sun %{y:.2f}°<extra></extra>',
     },
   ];
@@ -65,24 +68,26 @@ function layout(m: TimelineModel, startMs: number, endMs: number, markerMs: numb
   const accent = themeColor('--accent');
   const r = m.yMax;
   const marker = plotTime(markerMs);
+  const dot = chartLine('thick') * 2.5; // the time marker's radius
   const shapes: Partial<Shape>[] = [
-    // Below the skyline: hidden.
+    // Below the skyline: hidden. --muted, faint: --dark is the card's own colour (1.04 to 1).
+    // The legend's swatch is the same mix (timeline.css).
     {
       type: 'rect', layer: 'below', xref: 'paper', yref: 'y',
       x0: 0, x1: 1, y0: -r, y1: 0,
-      fillcolor: themeColor('--dark'), opacity: 0.35, line: { width: 0 },
+      fillcolor: themeColor('--muted'), opacity: HIDDEN_OPACITY, line: { width: 0 },
     },
     {
       type: 'line', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 0, y1: 0,
-      line: { color: themeColor('--muted'), width: 1, dash: 'dash' },
+      line: { color: themeColor('--muted'), width: chartLine('thin'), dash: 'dash' },
     },
     {
       type: 'line', xref: 'x', yref: 'paper', x0: marker, x1: marker, y0: 0, y1: 1,
-      line: { color: accent, width: 2 },
+      line: { color: accent, width: chartLine('thick') },
     },
     {
       type: 'circle', xref: 'x', yref: 'paper', xsizemode: 'pixel', ysizemode: 'pixel',
-      xanchor: marker, yanchor: 1, x0: -5, x1: 5, y0: -5, y1: 5,
+      xanchor: marker, yanchor: 1, x0: -dot, x1: dot, y0: -dot, y1: dot,
       fillcolor: accent, line: { width: 0 },
     },
   ];
@@ -148,7 +153,7 @@ export function mount(el: HTMLElement): void {
   legend.append(
     legendItem('--sun', 'Sun (top of the disc)', 'timeline-swatch'),
     legendItem('--earth', 'Earth', 'timeline-swatch'),
-    legendItem('--dark', 'Hidden (below skyline)', 'timeline-swatch timeline-swatch-area'),
+    legendItem(null, 'Hidden (below skyline)', 'timeline-swatch timeline-swatch-area'),
   );
   el.replaceChildren(head, note, chart, legend);
 
@@ -164,7 +169,7 @@ export function mount(el: HTMLElement): void {
   const clear = (text: string): void => {
     note.textContent = text;
     if (drawn) {
-      Plotly.purge(chart);
+      plotlyIfLoaded()?.purge(chart);
       drawn = false;
     }
     dataKey = lastKey = '';
@@ -203,6 +208,15 @@ export function mount(el: HTMLElement): void {
 
     const fullKey = `${key}|${sc.tMs}|${chart.clientWidth}x${chart.clientHeight}`;
     if (fullKey === lastKey && drawn) return;
+    // Plotly loads on first use (issue #95): the note shows now, the chart once it is in.
+    const Plotly = plotlyNow();
+    if (!Plotly) {
+      lastKey = '';
+      showChartWait(chart);
+      whenPlotly().then(() => render(), () => undefined);
+      return;
+    }
+    clearChartWait(chart);
     lastKey = fullKey;
     void Plotly.react(chart, plotted, layout(model, startMs, endMs, sc.tMs), {
       displayModeBar: false, responsive: true, scrollZoom: false, doubleClick: false,

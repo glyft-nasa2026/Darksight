@@ -29,6 +29,18 @@ export function siteNorth(up: Vector3): Vector3 {
   return north.lengthSq() < 1e-12 ? new Vector3(0, 0, -1) : north.normalize();
 }
 
+/**
+ * An offset from one site (`fromUp`) carried to another (`toUp`): as far east, north and up of
+ * the new site as it was of the first, in each site's own frame (east = north × up). This is how
+ * the orbit camera keeps its zoom and viewing angle when the selected site moves far round the Moon.
+ */
+export function carryOffset(offset: Vector3, fromUp: Vector3, toUp: Vector3): Vector3 {
+  const fromNorth = siteNorth(fromUp), toNorth = siteNorth(toUp);
+  const fromEast = fromNorth.clone().cross(fromUp), toEast = toNorth.clone().cross(toUp);
+  return toEast.multiplyScalar(offset.dot(fromEast))
+    .addScaledVector(toNorth, offset.dot(fromNorth)).addScaledVector(toUp, offset.dot(fromUp));
+}
+
 export function sitePosition(site: Site, heightM = 0, stretch = 1): Vector3 {
   const lat = site.lat * RAD, lon = site.lon * RAD;
   const r = MOON_RADIUS_KM + heightM * stretch / 1000;

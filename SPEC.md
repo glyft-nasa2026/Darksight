@@ -21,8 +21,10 @@ seconds, and showing how much a 1 km move or a 1 day slip changes the answer.
 |---|---|---|
 | F1-F13, F17, F18, F19 below | F14 map layers | Atmospheric refraction (the Moon has none) |
 | | F15 solar panel choice | GPS, relay satellites, constellations |
-| | F16 animated 2D to 3D transition | Landing trajectories, thermal models |
-| | | Server, database, accounts |
+| | F16 animated 2D to 3D transition | Thermal models |
+| | F20 mission simulation, launch to touchdown | Server, database, accounts |
+| | F21 mission report, print and download | |
+| | F22 date search | |
 
 ## 3. Screen
 
@@ -56,23 +58,26 @@ can be pinned.
 |---|---|---|---|
 | F1 | Pick a site | Click the map, choose from the curated list, or type latitude and longitude | All three set the same live site |
 | F2 | Pick a time | UTC date and time box, plus dragging on the timeline. Range 1900 to 2100 | A time outside the range shows a message, not a crash |
-| F3 | Readout | For the selected scenario. Sun: altitude, azimuth, degrees above the skyline, fraction of disc visible. Earth: altitude, azimuth, visible or hidden | Matches the fixtures to 0.02 degrees |
+| F3 | Readout | For the selected scenario. Sun: altitude, azimuth, degrees above the skyline, fraction of disc visible. Earth: altitude, azimuth, visible or hidden. Ground slope at the site, with the distance it is measured over: "Ground slope 7° (over 240 m)" on the south-pole height map, a coarser distance elsewhere (SPEC section 6) | Matches the fixtures to 0.02 degrees |
 | F4 | Countdowns | "Sunset in 3 d 4 h" or "Sunrise in ..."; same for Earth. Special wording: "No sunset in the next 60 days", "No sunrise in the next 60 days", "Earth always visible", "Earth never visible", "Permanently shadowed (until 2100)". The exact table is in contract section 3 | The countdown ends where the strip ends |
 | F5 | Scenarios | Pin the live scenario (max 3). Colours: A `#E69F00`, B `#0072B2`, C `#009E73`. Click a card to select it; remove with x | Pin, select, remove work; the same colour appears on pin, card and strips |
 | F6 | Compare table | A Live column first, then one column per pinned scenario, same rows in the same order: Sun now, sunset in, Earth now, Earthset in, lit % (next 30 days), longest unbroken light, longest dark, Earth contact %, longest gap in contact. Best value per row highlighted | Two pinned scenarios show three columns (Live plus two) with every row filled |
 | F7 | Strips | Two bars per scenario (Sun, Earth), Live included, on one shared axis: days since each scenario's own time, 0 to 30. Filled where up, empty where hidden | Strips agree with the countdowns |
-| F8 | Timeline | For the selected scenario: degrees above the skyline against time, one line for Sun, one for Earth, shaded below zero. Range buttons: 30 days, 90 days, 1 year; earlier and later buttons. Dragging sets the live time, and the chart stays still while the marker moves | Dragging updates readout and 3D view |
+| F8 | Timeline | For the selected scenario: degrees above the skyline against time, one line for Sun, one for Earth, shaded below zero. Range buttons: 30 days, 90 days, 1 year; earlier and later buttons. Dragging sets the live time, and the chart stays still while the marker moves. A Timeline tab beside Scenarios plays the live time forward at 2 h/s, 6 h/s, 12 h/s or 1 day/s (T40) and says, as it plays, whether the Sun and Earth are in view, whether the direct radio link to Earth is blocked, and the battery's charge (F15) | Dragging updates readout and 3D view; playing moves them the same way, and any other change pauses it |
 | F9 | Sky panorama | Azimuth 0-360 across, elevation up. The terrain skyline as a filled shape, the Sun's and Earth's paths over the next 30 days, and their positions now | The Sun marker sits below the skyline exactly when the readout says "hidden" |
 | F10 | 3D scene | South-pole terrain from LOLA. The Sun is the light, placed from the computed direction. Earth is drawn in the sky. Pins for scenarios and curated sites. Two views: a flat "2D map" (polar stereographic on the height map, equidistant cylindrical elsewhere, with a latitude-longitude grid) and an orbit "3D" scene. Clicking the terrain sets the live site | Click returns latitude and longitude within one grid cell of the true point |
-| F11 | Nudge | Buttons: 1 km north, south, east, west; +1 day, -1 day. Makes a ghost scenario and states the difference in words: "+31 h of sunlight", "loses Earth 2 days earlier" | A nudge off a crater rim onto its floor shows a large loss of sunlight |
-| F12 | Curated sites | 15-20 sites: Apollo, recent landers, south-pole candidates. Each has a source link | Every pin checked on Quickmap |
+| F11 | Nudge | Buttons: 1 km north, south, east, west (distance on a slider); +1 day, -1 day; straight to the north or south pole. A press moves the live scenario at once, leaves where it was on the map as a grey "Before" scenario, and states the difference in words: "+31 h of sunlight", "loses Earth 2 days earlier"; Undo goes back. The panel starts folded | A nudge off a crater rim onto its floor shows a large loss of sunlight |
+| F12 | Curated sites | 15-25 sites: Apollo, recent landers, south-pole candidates, and up to 5 upcoming mission targets (`planned`). Each has a source link | Every pin checked on Quickmap |
 | F13 | About and checks | "Checked against JPL Horizons, largest difference X degrees", known limits, data sources, how AI was used | Page shows the number from `validation.json` |
-| F14 | Layers (if time) | Coloured map overlays with on/off and transparency: lit %, Earth-visible %, never lit, height | |
-| F15 | Panel choice (if time) | Flat panel or upright panel that turns to face the Sun; shows relative power | |
+| F14 | Layers (if time) | Coloured map overlays with on/off and transparency: lit %, Earth-visible %, never lit, height, slope (T41) | |
+| F15 | Panel choice (if time) | Flat panel or upright panel that turns to face the Sun; shows relative power. A battery (T40): capacity, panel size and power use, set by the user; an upright Sun-facing panel charges it hour by hour on the same Sun samples, and the card shows how long it lasts in the dark and how often it runs flat in the next 30 days | The battery numbers match `core/battery.test.ts` |
 | F16 | Transition (if time) | The flat map and the 3D scene cross-fade, the 3D camera easing onto the site | |
 | F17 | Share link | Scenarios are stored in the page address, so a link reopens the same comparison | Reloading the page keeps the pinned scenarios |
-| F18 | Look and feel | One dark theme, one layout and one chart style across every module, from shared variables. Works from 1280 px desktop down to a phone | Text contrast 4.5 to 1; no colour code outside the theme files; nothing overlaps at 1280 px or 390 px |
+| F18 | Look and feel | One dark theme, one layout and one chart style across every module, from shared variables. Works from 1280 px desktop down to a phone | Text contrast 4.5 to 1; no colour code outside the theme files; no unintended UI overlap at 1280 px or 390 px, except for the intentionally floating Nudge panel. |
 | F19 | Example on first open | A link with no scenarios in it opens on a ready comparison: the crater rim (live) against the crater floor (pinned as A), at the current hour. A link with scenarios in it opens exactly those | The plain link shows two different columns in the compare table, Live and A; unpinning A and reloading leaves nothing pinned |
+| F20 | Mission simulation (if time) | "Land here" on a scenario card makes its site and time the landing point. A mission card shows the flight from a chosen launch pad to touchdown at that site and time: an animation, the five flight-sequence phases, Δv and propellant per phase, and the Sun and Earth at the site at touchdown. A planning model (patched conics, a simulated powered descent), not a flight-dynamics solution | Touchdown is at the scenario's site and time; the numbers match `core/mission.test.ts`; a shared link reopens the same mission |
+| F21 | Mission report (if time) | The planned mission as a report that can be printed, saved as PDF and downloaded as data files, built in the browser from the same plan as the mission card | The report and the mission card show the same numbers |
+| F22 | Date search (if time) | "Find a date" in the scenario panel: from the live scenario's site and time, the first window within 1, 3, 6 or 12 months in which the Sun and Earth (or the Sun only, or Earth only) stay up together for at least 24 h, 48 h, 96 h or 7 days. It moves the live time to the window's start and says how long the window lasts, or that there is none | The window starts where the countdown's rise is, to the minute, and the readout then shows both up |
 
 ## 5. How it works
 
@@ -99,6 +104,16 @@ the same for every site. Only the site's own "up" differs. So one table serves e
 |---|---|
 | South of 85 S | Real, from LOLA, looking out to 150 km |
 | Anywhere else | Smooth Moon (0 degrees). The app says so on screen |
+
+Map layers (F14) cover the whole Moon, on every map view (decision of 15 Nov 2026, T43). The
+finest source applies where it reaches; a coarser one fills in the rest, and the page says which
+source applies at the point shown. A layer limited to part of the Moon needs a decision first.
+
+| Layer | Near the poles | Elsewhere |
+|---|---|---|
+| Lit %, Earth-visible % | The LOLA team's maps, with terrain, south and north (both published; T43) | Smooth Moon over the same 18.6 years, from the Sun and Earth directions: "no terrain shadows" |
+| Never lit | The LOLA team's permanent-shadow maps | None on a smooth Moon: shown as 0, saying so |
+| Height, slope | `dem.bin` (240 m) south of 80 S; `north.bin` (1200 m) north of 80 N | `globe.bin`, 0.125° a cell (3.8 km at the equator) |
 
 ## 7. Accuracy
 
@@ -136,12 +151,15 @@ Fill in the clock times once the submission deadline is known.
 
 ## 10. Open decisions
 
-| Decision | Who | Importance |
-|---|---|---|
-| Submission deadline and Saturday start time, Malaysia time | Team | blocks the schedule |
-| Team agrees the cut line (refraction and GPS removed) | All | blocks T08 onward |
-| Project name | Team | cosmetic |
-| Repo made public (GitHub refuses the branch rule and Pages on a private repo in a free organisation) | Whoever takes T21, with repository settings access | blocks T21 |
-| Figma seat when using Figma: Full or Dev on Professional or Education | Whoever takes the design task | costs time (a fallback is in `docs/mcp-and-skills.md`) |
-| Demo format and length, read from the submission form | Whoever takes T17 | blocks T17 |
-| Load-time budgets in T27 (numbers in 3 s, height map in 20 s, no freeze over 0.5 s, on "Fast 4G"): proposed, not yet agreed | Team, informed by T27's measurements | costs time |
+Every decision below has its answer (checked 15 Nov 2026, T26).
+
+| Decision | Who | Importance | Answer |
+|---|---|---|---|
+| Submission deadline and Saturday start time, Malaysia time | Team | blocks the schedule | Submit by Sunday 15 Nov 2026, 22:00 Kuala Lumpur time (UTC+8), so M3 is 17:00 that day (Yi Hung, 15 Nov 2026). Don't work to 23:59, the time T17's `pitch/checklist.md` (pull request #130) read from NASA's Project Submission Guide. The Saturday start time is no longer needed: work started on Saturday 14 Nov |
+| Team agrees the cut line (refraction and GPS removed) | All | blocks T08 onward | Agreed on 14 Nov 2026: refraction and GPS removed (`docs/decisions.md`). On 15 Nov landing trajectories moved from Out to If time as F20 and F21; thermal models stay Out (section 2) |
+| Project name | Team | cosmetic | Darksight, at darksight.space (`docs/decisions.md`, 14 Nov 2026) |
+| Repo made public (GitHub refuses the branch rule and Pages on a private repo in a free organisation) | Whoever takes T21, with repository settings access | blocks T21 | Public, with the MIT licence (`gh repo view`, 15 Nov 2026) |
+| ~~Figma seat when using Figma: Full or Dev on Professional or Education~~ | Whoever takes the design task | costs time (a fallback is in `docs/mcp-and-skills.md`) | Struck out: not needed. T22 made the pictures from the brief, with no Figma file |
+| Demo format and length, read from the submission form | Whoever takes T17 | blocks T17 | A video of 30 seconds or less, or at most 7 slides including the title and intro slides. Over the limit isn't eligible for global judging. Source: the same guide, in T17's `pitch/checklist.md` (pull request #130) |
+| Load-time budgets in T27 (numbers in 3 s, height map in 20 s, no freeze over 0.5 s, on "Fast 4G") | Team, informed by T27's measurements | costs time | Kept as proposed. T27 measured them (`docs/load-time.md`): on the laptop all pass after the fixes in #109 and #143. On a phone the longest freeze after #132 is 534 ms on Shackleton's floor, which the team accepted as is (Leon, issue #32) |
+| 3D view zoomed right out: a drag orbits the selected site, so only the half of the Moon round it is in view (since issue #77, pull request #84). Or, past the distance where the whole Moon fits, a drag turns the whole Moon like a globe, as pull request #18 had, and close in it orbits the site | P1 and the team, after trying pull request #84 | cosmetic | Both: the 3D view offers either drag, orbit the selected site or turn the whole Moon (`docs/decisions.md`, 15 Nov 2026, issue #126) |

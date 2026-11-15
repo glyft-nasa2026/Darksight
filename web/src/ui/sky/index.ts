@@ -2,10 +2,11 @@
 // shape, the Sun's and Earth's paths over the next 30 days, and where they are at the selected
 // scenario's time. Every number comes from core/ through state.ts.
 import './sky.css';
-import Plotly from 'plotly.js-dist-min';
-import type { Data, Layout } from 'plotly.js-dist-min';
-import { getState, samplesFor, selected, skylineFor, subscribe } from '../../state';
-import { plotLayout, themeColor } from '../plotTheme';
+import type { Data, Layout } from 'plotly.js-basic-dist-min';
+import { getState, samplesFor, selected, skylineFor, subscribe, tableGap } from '../../state';
+import { axisTitle, chartLine, plotLayout, themeColor } from '../plotTheme';
+import { clearChartWait, plotlyIfLoaded, plotlyNow, showChartWait, whenPlotly } from '../plotly';
+import { noRowText } from '../tableGap';
 import { skyModel, sunMarkerPx, Y_BOTTOM, type SkyModel, type SunState } from './model';
 
 const SUN_WORDS: Record<SunState, string> = {
@@ -22,12 +23,16 @@ function themeNumber(name: string): number {
 
 const fmt = (v: number): string => v.toFixed(2);
 
-function caption(m: SkyModel, terrain: boolean): string {
+function caption(m: SkyModel, terrain: boolean, tMs: number): string {
   const ground = terrain ? 'Terrain skyline from LOLA heights' : 'No terrain here: smooth Moon horizon';
-  if (!m.now) return `${ground}. This time is outside the table.`;
+  if (!m.now) {
+    const gap = tableGap(tMs);
+    return `${ground}. ${gap === 'failed' ? noRowText(gap, tMs) : 'This time is outside the table.'}`;
+  }
   const sun = SUN_WORDS[m.now.sunState];
   const earth = m.now.earthUp ? 'Earth up' : 'Earth hidden';
-  return `${ground}. ${sun} · ${earth}. Paths: next 30 days.`;
+  return `${ground}. ${sun} · ${earth}. Paths: next 30 days.` +
+    (m.earthInView ? ' Earth\'s loop is the Moon\'s libration, its slow rocking (see About).' : '');
 }
 
 function traces(m: SkyModel, sunSizePx: number): Data[] {
@@ -39,21 +44,21 @@ function traces(m: SkyModel, sunSizePx: number): Data[] {
       x: m.ground.x, y: m.ground.y,
       type: 'scatter', mode: 'lines',
       fill: 'toself', fillcolor: themeColor('--dark'),
-      line: { color: themeColor('--muted'), width: 1 },
+      line: { color: themeColor('--muted'), width: chartLine('thin') },
       hoverinfo: 'skip',
     },
     {
       name: 'Sun, 30 days',
       x: m.sunPath.x, y: m.sunPath.y,
       type: 'scatter', mode: 'lines',
-      line: { color: sun, width: 1 }, opacity: 0.6,
+      line: { color: sun, width: chartLine('thin') }, opacity: 0.6,
       hovertemplate: 'Sun path<br>az %{x:.1f}°, alt %{y:.2f}°<extra></extra>',
     },
     {
       name: 'Earth, 30 days',
       x: m.earthPath.x, y: m.earthPath.y,
       type: 'scatter', mode: 'lines',
-      line: { color: earth, width: 1 }, opacity: 0.6,
+      line: { color: earth, width: chartLine('thin') }, opacity: 0.6,
       hovertemplate: 'Earth path<br>az %{x:.1f}°, alt %{y:.2f}°<extra></extra>',
     },
   ];
@@ -67,7 +72,7 @@ function traces(m: SkyModel, sunSizePx: number): Data[] {
         type: 'scatter', mode: 'markers',
         marker: {
           color: earth, size: themeNumber('--space-3'),
-          symbol: n.earthUp ? 'circle' : 'circle-open', line: { color: earth, width: 2 },
+          symbol: n.earthUp ? 'circle' : 'circle-open', line: { color: earth, width: chartLine('thick') },
         },
         hovertemplate: `${n.earthUp ? 'Earth up' : 'Earth hidden'}<br>az ${fmt(n.earth.az)}°, ` +
           `alt ${fmt(n.earth.alt)}°<br>skyline there ${fmt(n.skylineAtEarth)}°<extra></extra>`,
@@ -78,7 +83,7 @@ function traces(m: SkyModel, sunSizePx: number): Data[] {
         type: 'scatter', mode: 'markers',
         marker: {
           color: sun, size: sunSizePx,
-          symbol: n.sunState === 'hidden' ? 'circle-open' : 'circle', line: { color: sun, width: 2 },
+          symbol: n.sunState === 'hidden' ? 'circle-open' : 'circle', line: { color: sun, width: chartLine('thick') },
         },
         hovertemplate: `${SUN_WORDS[n.sunState]} (${Math.round(n.sunFrac * 100)} % of the disc)` +
           `<br>az ${fmt(n.sun.az)}°, alt ${fmt(n.sun.alt)}°<br>skyline there ` +
@@ -104,7 +109,7 @@ function layout(m: SkyModel): Partial<Layout> {
     yaxis: {
       ...base.yaxis,
       range: [Y_BOTTOM, m.yTop],
-      title: { text: 'Elevation (°)' },
+      title: axisTitle('Elevation (°)'),
       fixedrange: true,
     },
     showlegend: false,
@@ -128,7 +133,7 @@ export function mount(el: HTMLElement): void {
     if (!st.eph) {
       note.textContent = 'Loading';
       if (drawn) {
-        Plotly.purge(chart);
+        plotlyIfLoaded()?.purge(chart);
         drawn = false;
       }
       lastKey = '';
@@ -142,12 +147,21 @@ export function mount(el: HTMLElement): void {
 
     const skyline = skylineFor(sc);
     const m = skyModel(samplesFor(sc, '30d'), skyline, sc.tMs);
-    note.textContent = caption(m, skyline.terrain);
+    note.textContent = caption(m, skyline.terrain, sc.tMs);
 
     const lay = layout(m);
     const margin = lay.margin ?? {};
     const plotH = chart.clientHeight - (margin.t ?? 0) - (margin.b ?? 0);
     const sunPx = sunMarkerPx(plotH, m.yTop, themeNumber('--space-2'));
+    // Plotly loads on first use (issue #95): the caption shows now, the chart once it is in.
+    const Plotly = plotlyNow();
+    if (!Plotly) {
+      lastKey = '';
+      showChartWait(chart);
+      whenPlotly().then(() => render(true), () => undefined);
+      return;
+    }
+    clearChartWait(chart);
     void Plotly.react(chart, traces(m, sunPx), lay, { displayModeBar: false, responsive: true });
     drawn = true;
   };

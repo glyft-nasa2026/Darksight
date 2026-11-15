@@ -127,6 +127,8 @@
   height: var(--space-3);
   border-radius: 50%;
   background: var(--scn-color);
+  /* Scenario B's blue is 2.97 to 1 on the card; the ring keeps every dot 3 to 1 or better. */
+  border: thin solid var(--muted);
 }
 
 .scn-name {
@@ -170,4 +172,54 @@
   width: 100%;
   font-family: var(--font-num);
   font-size: var(--fs-sm);
+}
+
+/* T34: "Land here" on each card, pressed ("Landing site") on the mission's landing point. */
+.scn-land {
+  align-self: center;
+  flex: none;
+  font-size: var(--fs-sm);
+  padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
+}
+
+.scn-land[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+/* T34: "Open mission" beside "Copy share link", once a landing point is chosen. The two wrap
+   to the next line together, never apart. */
+.scn-share {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.scn-open[hidden] {
+  display: none;
+}
+
+/* T42: "Find a date" under the time box: three choices and the button, wrapping on a phone. */
+.scn-find {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.scn-find-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.scn-find-menu {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.scn-find-note {
+  font-family: var(--font-num);
 }

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Color, Vector3 } from 'three';
 import type { DemMeta } from '../core/dem';
 import { moonCentre, sitePosition, sphereSite } from './coordinates';
-import { globeColors, globeNormals, globeSlopes, mapGlobeUv, parseGlobe, parseNorth, uvSite, type GlobeMeta } from './globe';
-import { globeGeometry, northGeometry } from './terrain';
+import { globeColors, globeNormalAt, globeNormalRows, globeNormals, globeSlopes, mapGlobeUv, parseGlobe, parseNorth, uvSite, type GlobeMeta } from './globe';
+import { capWeight, globeGeometry, northGeometry, restretchTerrain } from './terrain';
 
 const meta: GlobeMeta = { width: 72, height: 36, height_scale: 0.5, source: 'test' };
 
@@ -182,7 +182,8 @@ describe('north cap', () => {
       const site = sphereSite(point);
       expect(site.lat).toBeGreaterThan(79.9);
       const radiusM = point.sub(moonCentre()).length() * 1000 - R_M;
-      expect(Math.abs(radiusM - heights.getX(i))).toBeLessThan(1);
+      // Eased to the sphere toward the edge (issue #114).
+      expect(Math.abs(radiusM - heights.getX(i) * capWeight(north.meta, -site.lat))).toBeLessThan(1);
       if (Math.abs(site.lon) < 3 || Math.abs(site.lon) > 177 || site.lat > 89.5) continue;
       if (site.lon > 0) { expect(heights.getX(i)).toBe(2000); east++; }
       else { expect(heights.getX(i)).toBe(-1000); west++; }
@@ -223,6 +224,33 @@ describe('north cap', () => {
     expect(leanDrawn).toBeGreaterThan(leanReal * 1.5);
   });
 
+  it('raises the ground with the stretch but keeps its shading', () => {
+    const north = northGrid((_lat, lon) => 500 * Math.sin(lon * Math.PI / 30));
+    const real = northGeometry(north, low, high, 2, 1), raised = northGeometry(north, low, high, 2, 3);
+    const position = raised.getAttribute('position'), heights = raised.getAttribute('height');
+    const { valid } = raised.userData.layout as { valid: Uint8Array };
+    const point = new Vector3();
+    let checked = 0;
+    for (let i = 0; i < position.count; i++) {
+      if (!valid[i]) continue;
+      point.fromBufferAttribute(position, i);
+      const w = capWeight(north.meta, -sphereSite(point).lat);
+      const radiusM = point.sub(moonCentre()).length() * 1000 - R_M;
+      expect(Math.abs(radiusM - 3 * heights.getX(i) * w)).toBeLessThan(1);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(1000);
+    expect(Array.from(raised.getAttribute('normal').array)).toEqual(Array.from(real.getAttribute('normal').array));
+    // Moved to the new stretch without a rebuild, it lands where a rebuild puts it.
+    restretchTerrain(real, 3);
+    const moved = real.getAttribute('position'), a = new Vector3(), b = new Vector3();
+    let worst = 0;
+    for (let i = 0; i < moved.count; i++) worst = Math.max(worst, a.fromBufferAttribute(moved, i).distanceTo(b.fromBufferAttribute(position, i)));
+    expect(worst).toBeLessThan(1e-3);
+    expect(real.userData.stretch).toBe(3);
+    expect(real.boundingSphere!.radius).toBeCloseTo(raised.boundingSphere!.radius, 3);
+  });
+
   it('opens the globe under the cap, by less than the cap covers', () => {
     const globe = globeGeometry(null, northMeta);
     const position = globe.getAttribute('position'), point = new Vector3();
@@ -234,6 +262,29 @@ describe('north cap', () => {
     expect(north).toBeGreaterThan(80);       // the globe runs on under the cap's edge: no gap
     expect(north).toBeLessThan(81);          // and stops soon after: the cap is not buried
     expect(south).toBeCloseTo(-90, 3);       // the other pole is closed without a south height map
+  });
+});
+
+describe('normals a row at a time (issue #118)', () => {
+  const bumpy = () => grid((lat, lon) => 3000 * Math.sin(lat * 0.21) * Math.cos(lon * 0.13) + lat * lon);
+  it('gives globeNormalAt for every cell', () => {
+    const g = bumpy(), n = [0, 0, 0];
+    let cells = 0;
+    globeNormalRows(g, 6, 0, meta.height, (k, x, y, z) => {
+      globeNormalAt(g, Math.floor(k / meta.width), k % meta.width, 6, n);
+      expect(x).toBeCloseTo(n[0], 12); expect(y).toBeCloseTo(n[1], 12); expect(z).toBeCloseTo(n[2], 12);
+      cells++;
+    });
+    expect(cells).toBe(meta.width * meta.height);
+  });
+
+  it('works out only the rows asked for, into the array given', () => {
+    const g = bumpy(), whole = globeSlopes(g), out = new Int8Array(whole.length);
+    expect(globeSlopes(g, undefined, 3, 5, out)).toBe(out);
+    for (let k = 0; k < meta.width * meta.height * 3; k++) {
+      const row = Math.floor(k / 3 / meta.width);
+      expect(out[k]).toBe(row >= 3 && row < 5 ? whole[k] : 0);
+    }
   });
 });
 

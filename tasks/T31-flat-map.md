@@ -1,6 +1,6 @@
 # T31: A true flat 2D map
 
-Status: done (first delivery #59; zoom and pan limits for issue #65, #69; the whole Moon's relief, #71; browser check past the main page, #76); 18 of 18 browser checks pass on fixture and real data
+Status: done (first delivery #59; zoom and pan limits for issue #65, #69; the whole Moon's relief, #71; browser check past the main page, #76; faster south polar redraw, `t31-flat-map-e`; faster whole-Moon redraw, `t31-flat-map-f`); browser checks pass: 20 of 20 on fixture data, 21 of 21 with `--public`
 
 | | |
 |---|---|

@@ -33,6 +33,11 @@ export type SkyModel = {
     skylineAtEarth: number;
   };
   yTop: number;
+  /**
+   * Some of Earth's 30-day path is on the chart (at or above the axis bottom). On the far side it
+   * never is; elsewhere the path is the loop the Moon's libration draws (T38).
+   */
+  earthInView: boolean;
 };
 
 /**
@@ -120,6 +125,7 @@ export function skyModel(samples: Sample[], skyline: Skyline, tMs: number): SkyM
     earthPath: pathOf(samples, 'earth'),
     now,
     yTop: yTopOf(heights()),
+    earthInView: samples.some((s) => s.earth.alt >= Y_BOTTOM),
   };
 }
 

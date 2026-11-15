@@ -4,11 +4,12 @@
 // The cards are updated in place, never rebuilt, so a click that follows an edit is not lost.
 import './scenarios.css';
 import type { CuratedSite, Site } from '../../core/types';
+import { makeDateSearch } from './dateSearch';   // T42
 import {
-  getState, LIVE_ID, MAX_PINNED, pin, select, setLiveSite, setLiveTime, stateToAddress, subscribe,
-  unpin, type Scenario,
+  getState, isLanding, LIVE_ID, MAX_PINNED, pin, select, setLanding, setLiveSite, setLiveTime,
+  stateToAddress, subscribe, unpin, type Scenario,
 } from '../../state';
-import { checkLat, checkLon, checkUtc, coordText, groupName, toBoxValue, toPickerValue, utcText, type Checked } from './input';
+import { checkLat, checkLon, checkUtc, coordText, groupName, siteOptionText, toBoxValue, toPickerValue, utcText, type Checked } from './input';
 
 const SAME_DEG = 1e-6; // state keeps 6 decimals, so this is "the same point"
 
@@ -84,6 +85,7 @@ export function mount(el: HTMLElement): void {
   coords.append(latField.wrap, lonField.wrap);
   const editor = make('div', 'scn-editor');
   editor.append(siteField.wrap, coords, timeField.wrap);
+  editor.append(makeDateSearch());   // T42: "Find a date", under the time box
 
   // --- Cards and buttons ------------------------------------------------------------------
   const list = make('ul', 'scn-list');
@@ -93,8 +95,17 @@ export function mount(el: HTMLElement): void {
   pinButton.type = 'button';
   const shareButton = make('button', 'btn', 'Copy share link');
   shareButton.type = 'button';
+  // T34: once "Land here" has chosen a landing point, the mission planner on a page of its own.
+  const missionButton = make('button', 'btn btn-primary scn-open', 'Open mission ›');
+  missionButton.type = 'button';
+  missionButton.title = 'Plan and watch the mission to the landing site, on its own page';
+  missionButton.hidden = true;
+  // Share and mission side by side: when the row is too narrow for all three, they move to the
+  // next line together, so "Open mission" stays beside "Copy share link".
+  const shareGroup = make('div', 'scn-share');
+  shareGroup.append(shareButton, missionButton);
   const actions = make('div', 'scn-actions');
-  actions.append(pinButton, shareButton);
+  actions.append(pinButton, shareGroup);
 
   const shareNote = make('p', 'scn-note muted');
   shareNote.setAttribute('role', 'status');
@@ -159,6 +170,13 @@ export function mount(el: HTMLElement): void {
   });
 
   pinButton.addEventListener('click', () => pin());
+  // A new tab, so this page and its scenarios stay as they are (as "Proceed" does, issue #105).
+  // Not 'noopener': a blocked tab must be told apart, and the page's "Back" uses the opener.
+  missionButton.addEventListener('click', () => {
+    const url = `mission.html#${stateToAddress()}`;
+    const tab = window.open(url, '_blank');
+    if (!tab) window.location.assign(url);   // a pop-up blocker stopped it: this tab instead
+  });
 
   // A box applies its value on the mouse press that takes the focus away. If that makes a
   // message line appear or go, everything below it moves, the release lands beside the button
@@ -227,7 +245,7 @@ export function mount(el: HTMLElement): void {
       const og = make('optgroup');
       og.label = groupName(group);
       for (const s of members) {
-        const o = make('option', '', s.name);
+        const o = make('option', '', siteOptionText(s));
         o.value = s.id;
         og.append(o);
       }
@@ -242,7 +260,7 @@ export function mount(el: HTMLElement): void {
   // card or its × would be lost.
   type Card = {
     li: HTMLLIElement; body: HTMLButtonElement; label: HTMLSpanElement; where: HTMLSpanElement;
-    when: HTMLSpanElement; remove: HTMLButtonElement | null;
+    when: HTMLSpanElement; land: HTMLButtonElement; remove: HTMLButtonElement | null;
   };
   const cards = new Map<string, Card>();
 
@@ -259,6 +277,18 @@ export function mount(el: HTMLElement): void {
     body.addEventListener('click', () => select(id));
     li.append(body);
 
+    // T34: this scenario's site and time become the mission's landing point. Pressed again on
+    // the landing site, it clears it.
+    const land = make('button', 'btn scn-land', 'Land here');
+    land.type = 'button';
+    land.addEventListener('click', () => {
+      const s = getState();
+      const sc = [s.live, ...s.pinned].find((x) => x.id === id);
+      if (!sc) return;
+      setLanding(isLanding(sc) ? null : sc);
+    });
+    li.append(land);
+
     let remove: HTMLButtonElement | null = null;
     if (id !== LIVE_ID) {
       remove = make('button', 'btn scn-remove', '×');
@@ -266,7 +296,7 @@ export function mount(el: HTMLElement): void {
       remove.addEventListener('click', () => unpin(id));
       li.append(remove);
     }
-    return { li, body, label, where, when, remove };
+    return { li, body, label, where, when, land, remove };
   };
 
   const setText = (node: HTMLElement, text: string): void => {
@@ -280,6 +310,12 @@ export function mount(el: HTMLElement): void {
     setText(c.label, sc.id === LIVE_ID ? 'Live' : sc.label);
     setText(c.where, siteAt(sites, sc.site)?.name ?? coordText(sc.site.lat, sc.site.lon));
     setText(c.when, `${utcText(sc.tMs)} UTC`);
+    const landing = isLanding(sc);
+    setText(c.land, landing ? 'Landing site' : 'Land here');
+    c.land.setAttribute('aria-pressed', String(landing));
+    c.land.title = landing
+      ? 'The mission lands here. Press again to clear it.'
+      : `Land the mission at ${sc.id === LIVE_ID ? 'the live scenario' : `scenario ${sc.label}`}: its site and time`;
     if (c.remove) {
       c.remove.title = `Remove ${sc.label}`;
       c.remove.setAttribute('aria-label', `Remove scenario ${sc.label}`);
@@ -319,6 +355,9 @@ export function mount(el: HTMLElement): void {
     sync(timeBox, 'time', toBoxValue(live.tMs), timeField.setError);
 
     drawCards([live, ...s.pinned], s.selectedId, s.sites);
+
+    const landing = s.landing !== null;
+    if (missionButton.hidden === landing) missionButton.hidden = !landing;
 
     const full = s.pinned.length >= MAX_PINNED;
     pinButton.disabled = full;

@@ -5,13 +5,18 @@
 
 #nudge {
   position: absolute;
-  z-index: 1;
+  /* Above the map-layer icons (ui/layers, top right): on a narrow map the two can meet, and the
+     nudge's own corner and fold buttons must stay reachable. */
+  z-index: 2;
   display: flex;
   flex-direction: column;
   width: min(calc(var(--space-5) * 12), calc(100% - var(--space-2) * 2));
   max-height: calc(100% - var(--space-2) * 2);
   padding: var(--space-3);
   overflow: hidden;
+  /* Issue #126: 30 % see-through, so the map shows under it; the blur keeps the text readable over lit ground. */
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  backdrop-filter: blur(var(--space-1));
 }
 
 #nudge[data-corner='tl'] { top: var(--space-2); left: var(--space-2); }
@@ -28,12 +33,6 @@
 #nudge h2 {
   margin: 0 auto 0 0;
   font-size: var(--fs-md);
-}
-
-#nudge .nudge-corners {
-  display: grid;
-  grid-template-columns: repeat(4, auto);
-  gap: var(--space-1);
 }
 
 #nudge .nudge-corner,
@@ -114,7 +113,7 @@
   gap: var(--space-1);
   margin-top: var(--space-3);
   padding-top: var(--space-3);
-  border-top: 1px solid var(--border);
+  border-top: thin solid var(--border);
 }
 
 #nudge .nudge-out p {
@@ -149,11 +148,16 @@
 
 #nudge .nudge-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: var(--space-2);
   margin-top: var(--space-3);
 }
 
 #nudge .nudge-actions[hidden] {
   display: none;
+}
+
+/* Issue #126: straight to a pole, either side of the N step. */
+#nudge .nudge-grid .nudge-pole {
+  color: var(--muted);
 }
