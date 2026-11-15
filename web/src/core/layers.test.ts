@@ -210,11 +210,11 @@ describe('layerAt: every layer over the whole Moon (made-up grids)', () => {
     expect(layerAt('psr', 45, 90, inputs)).toEqual({ value: 0, source: { id: 'smooth', cellM: null } });
   });
 
-  it('names the cell size each value comes from', () => {
+  it('names the cell size each value comes from, and for a slope the two cells it spans', () => {
     expect(layerAt('sun', -89, 0, inputs)!.source.cellM).toBe(6000);
     expect(layerAt('sun', 0, 0, inputs)!.source.cellM).toBeCloseTo((Math.PI * 1737400) / 36, 6);
-    expect(layerAt('slope', -85, 0, inputs)!.source.cellM).toBe(6000);
-    expect(layerAt('slope', 0, 0, inputs)!.source.cellM).toBeCloseTo((Math.PI * 1737400) / 36, 6);
+    expect(layerAt('slope', -85, 0, inputs)!.source.cellM).toBe(12000);
+    expect(layerAt('slope', 0, 0, inputs)!.source.cellM).toBeCloseTo((2 * Math.PI * 1737400) / 36, 6);
   });
 
   it('reads the north cap\'s slope the right way round, and the south one\'s', () => {
@@ -362,7 +362,7 @@ describe.skipIf(skip !== null)('real layers (web/public/data)', () => {
       return max;
     };
     const a15 = steepest('apollo-15'), a11 = steepest('apollo-11');
-    console.log(`steepest within 20 km: Apollo 15 ${a15.toFixed(1)} degrees, Apollo 11 ${a11.toFixed(1)} degrees (over 3.8 km)`);
+    console.log(`steepest within 20 km: Apollo 15 ${a15.toFixed(1)} degrees, Apollo 11 ${a11.toFixed(1)} degrees (over 7.6 km)`);
     expect(a15).toBeGreaterThan(a11);
   });
 });

@@ -21,8 +21,9 @@ map layer and as a line in the readout.
 - `core/slope.ts`: the slope at a point, in degrees, from the height map's neighbouring cells
   (central differences on the polar stereographic grid, corrected for the projection's scale at
   that latitude). Agree the method in the pull request.
-- A slope over 240 m cells is a baseline slope, not the slope under the lander's feet: a boulder or
-  a 10 m crater doesn't show. The readout says "over 240 m".
+- A slope from 240 m cells is a baseline slope, not the slope under the lander's feet: a boulder or
+  a 10 m crater doesn't show. It compares the heights one cell either side of the point, so the
+  readout says "over 480 m".
 - It works wherever `dem.bin` has heights: south of 80 S, or further if T37 extends it.
 
 ## What the user sees
@@ -30,7 +31,7 @@ map layer and as a line in the readout.
 - **Layers:** "Slope", a colour ramp from flat to steep, with on/off, transparency and fading like
   T14's layers. Build it from the loaded height map, as the height layer is built; take its colours
   from theme variables.
-- **Readout:** "Ground slope 7° (over 240 m)" for the selected scenario. North of 80 S it says
+- **Readout:** "Ground slope 7° (over 480 m)" for the selected scenario. North of 80 S it says
   there is no height map there.
 
 ## Files in scope

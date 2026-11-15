@@ -32,7 +32,7 @@ export type SlopeInfo =
   | { kind: 'nodata' }                                // a hole in the height map
   | { kind: 'ok'; deg: number; baselineM: number };   // from core/layers.ts (layerAt 'slope')
 
-/** The readout's slope line: "Ground slope 7° (over 240 m)", "Ground slope 2° (over 3.8 km)", or why there is none. */
+/** The readout's slope line: "Ground slope 7° (over 480 m)", "Ground slope 2° (over 7.6 km)", or why there is none. */
 export function slopeText(info: SlopeInfo): string {
   switch (info.kind) {
     case 'loading': return 'Ground slope: waiting for the height map';

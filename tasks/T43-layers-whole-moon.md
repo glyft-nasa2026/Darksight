@@ -39,7 +39,7 @@ future layer that doesn't.
 - Where a polar map meets a global one, the values jump: terrain shadow against none. That's
   correct. Draw the seam, and have the legend name the source under the cursor or pin: "LOLA, 240 m,
   with terrain" or "Smooth Moon, no terrain shadows".
-- The readout's slope line (F3) follows the slope layer: "Ground slope 2° (over 3.8 km)" on
+- The readout's slope line (F3) follows the slope layer: "Ground slope 2° (over 7.6 km)" on
   `globe.bin`. Name the distance the slope is measured over at that latitude (it shrinks with
   `cos φ` east to west), or state the larger of the two.
 
