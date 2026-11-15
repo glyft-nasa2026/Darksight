@@ -307,7 +307,12 @@ export function mount(el: HTMLElement): void {
       confirmLabel: 'Confirm launch pad · begin simulation',
       onConfirm: (id) => {
         setPad(id);
-        window.location.assign(`simulation.html#${stateToAddress()}`);
+        // A new tab, so the planner and its landing scenario stay open here (issue #105). Not
+        // 'noopener': with it window.open always returns null, so a blocked tab couldn't be told
+        // apart, and the simulation's "Back" uses the opener to return to this tab. Same site.
+        const url = `simulation.html#${stateToAddress()}`;
+        const tab = window.open(url, '_blank');
+        if (!tab) window.location.assign(url);   // a pop-up blocker stopped it: this tab instead
       },
     });
   });
