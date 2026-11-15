@@ -29,7 +29,7 @@ export const ABOUT: Section = {
     'Every number is worked out in your browser, from a table of Sun and Earth positions ' +
       '(JPL DE421, through Skyfield) and a height map of the south pole (NASA LRO LOLA). ' +
       'The Moon has no atmosphere, so no refraction is applied.',
-    'Built in 48 hours by Team GLYFT, Kuala Lumpur, for the NASA Space Apps Challenge 2026.',
+    'Built in 48 hours by Team GLYFT from Kuala Lumpur, for the NASA Space Apps Challenge 2026.',
   ],
   links: [
     { label: 'The challenge: Lunar Landing Site Navigator', href: CHALLENGE_URL },

@@ -78,7 +78,7 @@ function team(): HTMLElement {
     li.append(img, name);
     list.append(li);
   }
-  el.append(h, make('p', 'landing-p', 'Team GLYFT, Kuala Lumpur.'), list);
+  el.append(h, make('p', 'landing-p', 'Team GLYFT from Kuala Lumpur.'), list);
   return el;
 }
 
