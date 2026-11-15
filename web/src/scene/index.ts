@@ -15,7 +15,8 @@ import { noRowText } from '../ui/tableGap';
 import { moonFromIcrf, multiply, type Mat3 } from '../core/sky';
 import { makeStarField } from './stars';
 import { hiddenByMoon, poleLines, POLES, poleStub, viewportFraction } from './poles';
-import { mount as mountMap, unmount as unmountMap } from '../map';
+import { mount as mountMap, unmount as unmountMap, viewOf } from '../map';
+import { abovePose, blendPose, fadeDone, startFade, stepFade, type Fade } from './transition';
 import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import {
   detailBounds, drawnDemHeight, edgeHeight, globeGeometry, NORTH_RELIEF, northGeometry, recolorTerrain, restretchTerrain, setTerrainHole,
@@ -147,6 +148,10 @@ export function mount(el: HTMLElement): void {
 
   let frame = 0, disposed = false, lost = false, framed = false;
   let mode: AppState['mode'] = getState().mode;
+  // T29: how much of the 3D view shows, 0 (the map only) to 1 (the 3D view only), and the fade
+  // between the two after a change of mode. The map lies over the 3D canvas and fades over it.
+  let shown = mode === '3d' ? 1 : 0;
+  let fade: Fade | null = null;
   let polar = false, stretch = 1, drawnStretch = 1, pinPx = 1;
   // What a drag does in 3D: orbit the selected site (as since issue #77), or turn the whole Moon
   // like a ball about its centre, north up (the choice SPEC section 10 left open).
@@ -240,8 +245,12 @@ export function mount(el: HTMLElement): void {
     // Orbiting the site: never below its horizon. Turning the Moon: all the way round, pole to pole.
     controls.maxPolarAngle = drag === 'globe' ? Math.PI : Math.PI * 0.49;
     controls.enablePan = drag !== 'globe';
-    controls.enabled = mode === '3d';
+    controls.enabled = controlsOn();
     return controls;
+  }
+  /** The orbit controls work in 3D, but not while a fade moves the camera (T29). */
+  function controlsOn(): boolean {
+    return mode === '3d' && !fade;
   }
 
   /** Pins keep the same size on screen at every zoom, sitting on the surface. */
@@ -263,7 +272,9 @@ export function mount(el: HTMLElement): void {
   }
   function render(): void {
     // In 2D the flat map shows instead: nothing is drawn here, so no shadow map is rendered.
-    if (mode === '2d') { placePoleLabels(); return; }
+    // During a fade (T29) both show, and the camera is on its way between the two views.
+    if (!fade && shown === 0) { placePoleLabels(); return; }
+    const putBack = fade ? fadeCamera() : null;
     // The camera moves from metres above a crater to beyond the whole Moon: keep the depth
     // range tight around what can be seen, or near surfaces fight and far ones vanish.
     const fromCentre = orbitCamera.position.distanceTo(globe.position);
@@ -274,14 +285,37 @@ export function mount(el: HTMLElement): void {
     fitShadow();
     renderer.render(world, orbitCamera);
     placePoleLabels();
+    // Where this frame was drawn from, for the page test (web/e2e/transition.spec.ts).
+    canvas.dataset.camera = orbitCamera.position.toArray().map((v) => v.toFixed(3)).join(',');
+    putBack?.();
+  }
+  /**
+   * T29: puts the camera, for this frame only, part of the way from straight above the selected
+   * site (turned and zoomed like the 2D map) to its orbit view: as far as the 3D view shows.
+   * Returns what puts it back, so picking, the patch and the controls keep the orbit view.
+   */
+  function fadeCamera(): () => void {
+    const look = viewOf(mapHost);
+    // Before the map has a size: as much ground as the orbit view shows at the site.
+    const kmTall = look?.kmTall ?? 2 * Math.tan(orbitCamera.fov * RAD / 2) * orbitCamera.position.distanceTo(target);
+    const above = abovePose(target, selected().site, look?.kind ?? (polar ? 'south' : 'global'), kmTall, orbitCamera.fov);
+    const orbit = { position: orbitCamera.position.clone(), target: orbitControls.target.clone(), up: orbitCamera.up.clone() };
+    const turn = orbitCamera.quaternion.clone();
+    const pose = blendPose(above, orbit, shown);
+    orbitCamera.position.copy(pose.position); orbitCamera.up.copy(pose.up); orbitCamera.lookAt(pose.target);
+    return () => {
+      orbitCamera.position.copy(orbit.position); orbitCamera.up.copy(orbit.up); orbitCamera.quaternion.copy(turn);
+      orbitCamera.updateMatrixWorld();
+    };
   }
   /** Each pole's label at its stub's tip, hidden when the tip is off screen or behind the Moon. */
   function placePoleLabels(): void {
     orbitCamera.updateMatrixWorld();
     poleTips.forEach((tip, i) => {
       const label = poleLabels[i];
-      const at = mode === '3d' && !hiddenByMoon(orbitCamera.position, tip) ? viewportFraction(orbitCamera, tip) : null;
+      const at = shown > 0 && !hiddenByMoon(orbitCamera.position, tip) ? viewportFraction(orbitCamera, tip) : null;
       label.hidden = !at;
+      label.style.opacity = fade ? String(shown) : '';   // fading with the 3D view (T29)
       if (at) { label.style.left = `${at.x * 100}%`; label.style.top = `${at.y * 100}%`; }
     });
   }
@@ -303,13 +337,47 @@ export function mount(el: HTMLElement): void {
     sun.shadow.bias = -0.04 / (light.far - light.near);
     sun.shadow.normalBias = Math.max(0.002, (box.max.y - box.min.y) / sun.shadow.mapSize.y);
   }
-  // No continuous animation while idle. Controls, state changes and resize schedule a frame.
+  // No continuous animation while idle. Controls, state changes and resize schedule a frame; a
+  // fade (T29) schedules one after another until it ends.
   function invalidate(): void {
     if (frame || disposed || lost) return;
-    frame = requestAnimationFrame(() => {
+    frame = requestAnimationFrame((now) => {
       frame = 0;
-      if (!disposed && !lost) render();
+      if (disposed || lost) return;
+      advanceFade(now);
+      render();
+      if (fade) invalidate();
     });
+  }
+  /** T29: the system asks for reduced motion, so a change of view jumps, as before T29. */
+  function reduceMotion(): boolean {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  /** T29: a change of mode fades to the new view, from wherever the view is now, or jumps. */
+  function beginFade(): void {
+    const goal = mode === '3d' ? 1 : 0;
+    fade = reduceMotion() || lost ? null : startFade(shown, goal);
+    if (!fade) shown = goal;
+  }
+  /** T29: moves a fade on to this frame. The first build of the 3D view holds it at its start. */
+  function advanceFade(now: number): void {
+    if (!fade) return;
+    shown = stepFade(fade, now, buildQueued);
+    if (fadeDone(fade)) { shown = fade.to; fade = null; }
+    showViews();
+  }
+  /**
+   * Which view shows (T29). The map lies over the 3D canvas: while they fade, both are there, the
+   * map at 1 - shown, and neither takes a click (scene.css); after it, only one.
+   */
+  function showViews(): void {
+    // scene.css gives the canvas display: block, which the hidden attribute would not override.
+    canvas.style.display = fade || shown > 0 ? '' : 'none';
+    mapHost.hidden = !fade && shown >= 1;
+    mapHost.style.opacity = fade ? String(1 - shown) : '';
+    viewport.classList.toggle('scene-fading', !!fade);
+    viewport.dataset.fade = shown.toFixed(3);   // for the page test (web/e2e/transition.spec.ts)
+    orbitControls.enabled = controlsOn();
   }
   function resize(): void {
     const width = viewport.clientWidth, height = viewport.clientHeight;
@@ -587,6 +655,7 @@ export function mount(el: HTMLElement): void {
     const changedDem = dem !== s.dem, changedView = polar !== nextPolar, changedSite = siteKey !== key;
     const changedMode = mode !== s.mode, changedStretch = drawnStretch !== stretch;
     dem = s.dem; polar = nextPolar; mode = s.mode; siteKey = key; drawnStretch = stretch;
+    if (changedMode) beginFade();
     if (changedSite) patchCentre = sc.site;
     // The 3D meshes and textures are built the first time a 3D view shows, not behind the 2D map
     // the page opens on: building them there froze the page for about 2 s after it looked ready,
@@ -612,13 +681,11 @@ export function mount(el: HTMLElement): void {
     const changedTarget = !target.equals(lastTarget);
     // Stretch is drawn only in 3D, wherever the site is; the flat map shows heights as colours.
     slider.disabled = !dem || mode === '2d';
-    // scene.css gives the canvas display: block, which the hidden attribute would not override.
-    canvas.style.display = mode === '2d' ? 'none' : '';
+    showViews();
     for (const button of buttons) {
       const active = button.dataset.mode === mode;
       button.classList.toggle('btn-primary', active); button.setAttribute('aria-pressed', String(active));
     }
-    orbitControls.enabled = mode === '3d';
     if (!framed || changedDem || changedView) { framed = true; centre(); }
     else if (changedSite || changedMode || changedStretch) follow();
     // The ground under the site was redrawn (a patch came or went): the view moves with the site,
@@ -687,7 +754,8 @@ export function mount(el: HTMLElement): void {
   }
   function pick(event: PointerEvent): void {
     const start = pointerDown; pointerDown = null;
-    if (!start || start.id !== event.pointerId || maxDrag > 5 || event.button !== 0 || lost) return;
+    // During a fade (T29) the camera on screen isn't the orbit camera: the click is ignored.
+    if (!start || start.id !== event.pointerId || maxDrag > 5 || event.button !== 0 || lost || fade) return;
     const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return;
     pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
     sizePins(); world.updateMatrixWorld(true); orbitCamera.updateMatrixWorld(true);
@@ -711,7 +779,12 @@ export function mount(el: HTMLElement): void {
   };
   const move = (event: PointerEvent): void => { if (pointerDown) maxDrag = Math.max(maxDrag, Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y)); };
   const cancel = (): void => { pointerDown = null; };
-  const onLost = (event: Event): void => { event.preventDefault(); lost = true; message.hidden = false; message.textContent = 'Graphics paused. Waiting for the browser to restore the Moon explorer…'; };
+  const onLost = (event: Event): void => {
+    // A fade can't go on without frames: finish it, so the map isn't left half faded.
+    if (fade) { shown = fade.to; fade = null; showViews(); }
+    event.preventDefault(); lost = true; message.hidden = false;
+    message.textContent = 'Graphics paused. Waiting for the browser to restore the Moon explorer…';
+  };
   const onRestored = (): void => { lost = false; update(getState()); };
   canvas.addEventListener('pointerdown', down); canvas.addEventListener('pointermove', move);
   canvas.addEventListener('pointerup', pick); canvas.addEventListener('pointercancel', cancel);

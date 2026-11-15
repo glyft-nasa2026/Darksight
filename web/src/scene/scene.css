@@ -30,3 +30,5 @@
   font-family: var(--font-num); font-size: var(--fs-sm); pointer-events: none;
 }
 .scene-drag[hidden] { display: none; }
+/* T29: while the map and the 3D view fade into each other, neither takes a click; it is ignored. */
+.scene-fading .map, .scene-fading .scene-canvas { pointer-events: none; }
