@@ -106,7 +106,7 @@
 /* T23: on a phone Sun and Earth stack, so a line divides them, as in the picture. */
 @media (max-width: 800px) {
   .ro-earth {
-    border-top: 1px solid var(--border);
+    border-top: thin solid var(--border);
     padding-top: var(--space-3);
   }
 }
