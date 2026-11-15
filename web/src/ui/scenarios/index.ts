@@ -91,7 +91,8 @@ export function mount(el: HTMLElement): void {
   const list = make('ul', 'scn-list');
   list.setAttribute('aria-label', 'Scenarios: click one to show it in the readout');
 
-  const pinButton = make('button', 'btn btn-primary', '+ Pin this');
+  // T23: styled as the design's empty slot (scenarios.css, .scn-pin), not a primary button.
+  const pinButton = make('button', 'btn scn-pin', '+ Pin this');
   pinButton.type = 'button';
   const shareButton = make('button', 'btn', 'Copy share link');
   shareButton.type = 'button';

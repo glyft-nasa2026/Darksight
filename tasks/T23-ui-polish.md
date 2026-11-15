@@ -1,6 +1,6 @@
 # T23: UI polish: every module matches the design
 
-Status: in progress (Fabian): Readout done, merged into main in pull request #174. Checked in a browser by a person on 15 Nov 2026 at 1280 px (desktop) and 390 px (phone); `npm test`, `npm run build` and CI passed on the merged code. Next, one at a time: scenarios, compare (after #91), timeline, sky, scene, nudge
+Status: in progress. Readout done (Fabian), merged into main in pull request #174 and checked in a browser by a person at 1280 and 390 px. Scenarios (Leon, branch `t23-ui-polish-c`): CSS done, `npm test`, `npm run build` and the page checks pass; waiting for a person's check in the browser and review. Next, one at a time: compare, timeline, sky, scene, nudge
 
 | | |
 |---|---|

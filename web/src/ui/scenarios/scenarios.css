@@ -87,19 +87,20 @@
   gap: var(--space-2);
 }
 
+/* T23: each card is a site chip, as in docs/design/scenarios.png: a round-ended outline on the
+   page colour, the scenario's dot and letter, the accent outline on the selected one. 100vmax
+   is "fully round", the pill of theme.css's .btn (docs/design.md, "Needs team decision" 1). */
 .scn-card {
   display: flex;
   align-items: stretch;
   gap: var(--space-1);
-  background: var(--panel-2);
+  background: var(--bg);
   border: thin solid var(--border);
-  border-left: var(--space-1) solid var(--scn-color);
-  border-radius: var(--radius);
+  border-radius: 100vmax;
 }
 
 .scn-card.scn-selected {
   border-color: var(--accent);
-  border-left-color: var(--scn-color);
 }
 
 .scn-pick {
@@ -112,12 +113,14 @@
     '.   when when';
   align-items: center;
   column-gap: var(--space-2);
-  padding: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   font: inherit;
   color: var(--text);
   text-align: left;
   background: none;
   border: none;
+  /* Round like the chip, so the focus outline follows its ends. */
+  border-radius: 100vmax;
   cursor: pointer;
 }
 
@@ -127,13 +130,12 @@
   height: var(--space-3);
   border-radius: 50%;
   background: var(--scn-color);
-  /* Scenario B's blue is 2.97 to 1 on the card; the ring keeps every dot 3 to 1 or better. */
-  border: thin solid var(--muted);
+  /* On --bg every dot is 3 to 1 or better (scenario B, the lowest, 3.65 to 1; docs/design.md),
+     so it needs no ring, as in the picture. */
 }
 
 .scn-name {
   grid-area: name;
-  font-weight: 600;
 }
 
 .scn-where {
@@ -149,15 +151,40 @@
   font-size: var(--fs-sm);
 }
 
-.scn-remove {
+/* T23: the × as in the picture, a bare muted mark rather than an outlined button. It brightens on
+   hover; the focus outline still comes from theme.css. */
+.btn.scn-remove {
   align-self: center;
-  margin-right: var(--space-2);
+  margin-right: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  color: var(--muted);
+  background: none;
+  border-color: transparent;
+}
+
+.btn.scn-remove:hover:not(:disabled) {
+  color: var(--text);
+  background: none;
+  border-color: transparent;
 }
 
 .scn-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* T23: "+ Pin this" as the picture's empty slot: a dashed chip as wide as the cards, straight
+   under them; "Copy share link" and "Open mission" go to the next line. */
+.btn.scn-pin {
+  flex: 1 1 100%;
+  color: var(--muted);
+  background: none;
+  border-style: dashed;
+}
+
+.btn.scn-pin:hover:not(:disabled) {
+  color: var(--text);
 }
 
 .scn-note {
@@ -185,6 +212,7 @@
 
 .scn-land[aria-pressed='true'] {
   color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* T34: "Open mission" beside "Copy share link", once a landing point is chosen. The two wrap

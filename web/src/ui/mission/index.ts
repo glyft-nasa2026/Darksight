@@ -479,8 +479,8 @@ export function mount(el: HTMLElement): void {
   bottom.append(tableWrap, condsBox);
   const model = make('p', 'ms-note muted',
     `${LAUNCH_DV_NOTE} Model: patched conics from Earth to the Moon, ` +
-    'instant burns but the descent, a 100 km circular polar lunar orbit, a guided powered descent from 15 km in Apollo’s phases, ' +
-    'phase times from Apollo 11 (NASA SP-4029). The launch time is touchdown less the phases: no launch window is solved.');
+    'instant burns but the descent, a 100 km circular lunar orbit in the plane the arrival leads into, a guided powered descent from 15 km in Apollo’s phases, ' +
+    'phase times from Apollo 11 (NASA SP-4029), the wait in lunar orbit moved by under half a lap so LOI is where the arrival leads. The launch time is touchdown less the phases: no launch window is solved.');
   const message = make('p', 'muted');
 
   // --- Playback state --------------------------------------------------------------------------
