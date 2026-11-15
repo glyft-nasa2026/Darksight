@@ -11,9 +11,9 @@
 
 .landing-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
-  max-width: calc(var(--space-5) * 48);
+  max-width: calc(var(--space-5) * 40);
   width: 100%;
   margin: 0 auto;
 }
@@ -55,38 +55,43 @@
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-5) * 5), 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(calc(var(--space-5) * 6), 1fr));
+  gap: var(--space-4);
 }
 
+/* A card per person: round photo with a ring, name in capitals under it. */
 .landing-member {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-3);
   background: var(--panel-2);
-  border-radius: var(--radius);
-  padding: var(--space-2);
+  border-radius: calc(var(--radius) * 2);
+  padding: var(--space-4) var(--space-3) var(--space-5);
+  text-align: center;
 }
 
-.landing-avatar {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: calc(var(--space-5) * 1.5);
-  height: calc(var(--space-5) * 1.5);
+.landing-photo {
+  display: block;
+  width: 100%;
+  max-width: calc(var(--space-5) * 6);
+  aspect-ratio: 1;
+  object-fit: cover;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--bg);
-  font-size: var(--fs-sm);
-  font-weight: 700;
+  border: var(--space-1) solid var(--accent);
+  background: var(--panel);
 }
 
 .landing-name {
-  font-weight: 500;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+  color: var(--accent);
 }
 
 .landing-footer {
-  max-width: calc(var(--space-5) * 48);
+  max-width: calc(var(--space-5) * 40);
   width: 100%;
   margin: 0 auto;
   border-top: thin solid var(--border);
@@ -176,8 +181,8 @@
     padding: var(--space-5);
   }
 
-  .landing-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .landing-team {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .landing-more {

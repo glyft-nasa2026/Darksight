@@ -58,11 +58,6 @@ function section(s: Section, extra?: HTMLElement): HTMLElement {
   return el;
 }
 
-/** The avatar's letter: the first of the name, so the list reads G, L, Y, F, T. */
-function initials(name: string): string {
-  return name.charAt(0).toUpperCase();
-}
-
 function team(): HTMLElement {
   const el = make('section', 'card landing-section');
   el.id = 'landing-team';
@@ -70,11 +65,14 @@ function team(): HTMLElement {
   const h = make('h2', 'landing-h', 'Meet the team');
   h.id = 'landing-team-h';
   const list = make('ul', 'landing-team');
-  for (const name of TEAM) {
+  for (const m of TEAM) {
     const li = make('li', 'landing-member');
-    const badge = make('span', 'landing-avatar', initials(name));
-    badge.setAttribute('aria-hidden', 'true');
-    li.append(badge, make('span', 'landing-name', name));
+    const img = make('img', 'landing-photo');
+    img.src = import.meta.env.BASE_URL + m.photo;
+    img.alt = `Photo of ${m.name}`;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    li.append(img, make('span', 'landing-name', m.name));
     list.append(li);
   }
   el.append(h, make('p', 'landing-p', 'Team GLYFT, Kuala Lumpur.'), list);

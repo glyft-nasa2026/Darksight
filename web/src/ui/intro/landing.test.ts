@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ABOUT, FOOTER_LINKS, LICENSE, PRIVACY, REPO_URL, TEAM } from './landing';
 
@@ -30,11 +30,18 @@ describe('landing sections', () => {
       .map((m) => m[1])
       .filter((n) => n !== 'Name' && !n.startsWith('-'));
     expect(TEAM).toHaveLength(names.length);
-    for (const n of names) expect(TEAM.some((full) => full.includes(n))).toBe(true);
+    for (const n of names) expect(TEAM.some((m) => m.name.includes(n))).toBe(true);
   });
 
   it('list the team in the order that spells GLYFT', () => {
-    expect(TEAM.map((n) => n[0]).join('')).toBe('GLYFT');
+    expect(TEAM.map((m) => m.name[0]).join('')).toBe('GLYFT');
+  });
+
+  it('have a photo file in web/public for everyone', () => {
+    for (const m of TEAM) {
+      expect(m.photo.startsWith('/')).toBe(false);
+      expect(existsSync(new URL(`../../../public/${m.photo}`, import.meta.url))).toBe(true);
+    }
   });
 
   it('say the licence the LICENSE file has', () => {
