@@ -137,6 +137,8 @@ export type Transfer = {
   apogeeKm: number;      // apogee distance from Earth's centre
   dvKmS: number;         // TLI, from the circular parking orbit
   vInfKmS: number;       // speed relative to the Moon on arrival
+  vInfRadialKmS: number; // its part away from Earth (along the Earth-Moon line)
+  vInfAlongKmS: number;  // its part along the Moon's motion (negative: the craft is slower)
   arriveNu: number;      // true anomaly on arrival, radians
   coastS: number;
 };
@@ -183,6 +185,8 @@ export function transferFor(rPark: number, rMoon: number, coastS: number): Trans
     a, e, apogeeKm: ra,
     dvKmS: visViva(MU_EARTH, rPark, a) - circularSpeed(MU_EARTH, rPark),
     vInfKmS: Math.hypot(vr, vMoon - vt),
+    vInfRadialKmS: vr,
+    vInfAlongKmS: vt - vMoon,
     arriveNu: Math.acos(clamp1((p / rMoon - 1) / e)),
     coastS,
   };
@@ -206,6 +210,36 @@ export function captureDv(vInfKmS: number, r: number): number {
 /** Descent orbit insertion: from a circular orbit of radius rOrbit to periapsis radius rPeri. */
 export function descentOrbitDv(rOrbit: number, rPeri: number): number {
   return circularSpeed(MU_MOON, rOrbit) - visViva(MU_MOON, rOrbit, (rOrbit + rPeri) / 2);
+}
+
+type V3 = [number, number, number];
+const dot3 = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit3 = (a: V3): V3 => { const n = Math.sqrt(dot3(a, a)); return [a[0] / n, a[1] / n, a[2] / n]; };
+
+/**
+ * The lunar orbit the arrival leads into (issue #192), in the Moon-fixed frame at touchdown.
+ * LOI burns along the motion, so the arrival hyperbola and the orbit share a plane. That plane
+ * holds the Moon's centre, the site at touchdown and the arrival direction (vInf, the craft's
+ * velocity relative to the Moon far out). `travel` is the orbit's direction of motion over the
+ * site, at right angles to it in that plane, taken heading south (or, for an orbit along the
+ * equator, the way vInf goes). In the plane a point is cos(θ)·site + sin(θ)·travel, θ growing
+ * with time; `periapsisAngle` is θ at the hyperbola's periapsis, the LOI point, where the craft
+ * comes in from -vInf and the hyperbola turns it through its asymptote angle. Null when vInf
+ * points along the site, where the plane is not defined.
+ */
+export function arrivalOrbit(site: V3, vInf: V3, rOrbit: number, vInfKmS: number): { travel: V3; periapsisAngle: number } | null {
+  const s = unit3(site);
+  const v = unit3(vInf);
+  const across: V3 = [v[0] - dot3(v, s) * s[0], v[1] - dot3(v, s) * s[1], v[2] - dot3(v, s) * s[2]];
+  if (Math.hypot(...across) < 1e-9) return null;
+  let travel = unit3(across);
+  if (travel[2] > 1e-12) travel = [-travel[0], -travel[1], -travel[2]];
+  const beta = Math.atan2(dot3(v, travel), dot3(v, s));      // vInf's angle in the plane
+  const e = 1 + (rOrbit * vInfKmS ** 2) / MU_MOON;
+  const nuInf = Math.acos(-1 / e);                            // the asymptote's true anomaly
+  const periapsisAngle = Math.atan2(Math.sin(beta + Math.PI + nuInf), Math.cos(beta + Math.PI + nuInf));
+  return { travel, periapsisAngle };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -582,6 +616,7 @@ export type MissionPlan =
       parkingAltKm: number; parkingIncDeg: number;
       transferApogeeKm: number; vInfKmS: number; earthMoonKm: number; coastS: number;
       lunarOrbitAltKm: number; lunarOrbitIncDeg: number; lunarOrbitPeriodS: number;
+      lunarOrbitS: number;               // the wait from LOI to DOI: the given one, moved to put LOI where the arrival leads
       descentStartAltKm: number; throttle: number; descentRangeKm: number;
       touchdownSpeedKmS: number;
     };
@@ -633,11 +668,46 @@ export function planMission(input: MissionInput): MissionPlan {
   const descentA = (rOrbit + R_MOON + dp.startAltKm) / 2;
   const descentE = (rOrbit - (R_MOON + dp.startAltKm)) / (rOrbit + R_MOON + dp.startAltKm);
 
+  // The orbit's plane and the wait in it (issue #192). The arrival chooses the plane: the one
+  // through the site that holds the arrival direction, so the craft is captured into it. The
+  // wait from LOI to DOI is then whatever puts LOI at the hyperbola's periapsis, as close to
+  // the given wait (Apollo 11's) as whole orbits allow. Moon-fixed frame at touchdown: the
+  // Moon keeps one face to Earth (longitude 0 towards it) and its axis stands at right angles
+  // to the transfer's plane.
+  const lat = rad(site.lat);
+  const lon = rad(site.lon);
+  const siteVec: V3 = [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+  const nOrbit = Math.sqrt(MU_MOON / rOrbit ** 3);
+  const orbitS = (2 * Math.PI) / nOrbit;
+  const nMoon = Math.sqrt(MU_EARTH / input.earthMoonKm ** 3);
+  const thetaDoi = -d.angle - Math.PI;
+  const doiToTdS = d.durationS + halfPeriod(MU_MOON, descentA);
+  let travel: V3 = [Math.sin(lat) * Math.cos(lon), Math.sin(lat) * Math.sin(lon), -Math.cos(lat)];
+  let waitS = times.lunarOrbitS;
+  let k: number | null = null;
+  for (let i = 0; i < 6; i++) {
+    // The Earth-Moon line has turned by nMoon (td - loi) between LOI and touchdown.
+    const a = -nMoon * (doiToTdS + waitS) - Math.PI;   // the Moon's outward direction at LOI, in that frame
+    const vInf: V3 = [
+      transfer.vInfRadialKmS * Math.cos(a) - transfer.vInfAlongKmS * Math.sin(a),
+      transfer.vInfRadialKmS * Math.sin(a) + transfer.vInfAlongKmS * Math.cos(a),
+      0,
+    ];
+    const arr = arrivalOrbit(siteVec, vInf, rOrbit, transfer.vInfKmS);
+    if (!arr) break;
+    travel = arr.travel;
+    const base = ((((thetaDoi - arr.periapsisAngle) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) / nOrbit;
+    k ??= Math.max(0, Math.round((times.lunarOrbitS - base) / orbitS));
+    waitS = base + k * orbitS;
+  }
+  const normal = cross3(siteVec, travel);
+  const inclinationDeg = deg(Math.acos(clamp1(normal[2])));
+
   // Times, back from touchdown.
   const td = input.touchdownMs;
   const pdi = td - d.durationS * 1000;
   const doi = pdi - halfPeriod(MU_MOON, descentA) * 1000;
-  const loi = doi - times.lunarOrbitS * 1000;
+  const loi = doi - waitS * 1000;
   const tli = loi - times.coastS * 1000;
   const poi = tli - times.parkingS * 1000;
   const launch = poi - times.ascentS * 1000;
@@ -666,12 +736,6 @@ export function planMission(input: MissionInput): MissionPlan {
     runsOutMs = pdi + (s ? s.tS : d.durationS) * 1000;
   }
 
-  // The orbit plane through the site, heading south over it (a polar orbit).
-  const lat = rad(site.lat);
-  const lon = rad(site.lon);
-  const siteVec: [number, number, number] = [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
-  const travel: [number, number, number] = [Math.sin(lat) * Math.cos(lon), Math.sin(lat) * Math.sin(lon), -Math.cos(lat)];
-
   const loaded = lander.massKg - lander.dryKg;
   const left = massAtTouchdown - lander.dryKg;
   return {
@@ -695,7 +759,8 @@ export function planMission(input: MissionInput): MissionPlan {
       earthMoonKm: input.earthMoonKm,
       coastS: times.coastS,
       lunarOrbitAltKm: LUNAR_ORBIT_ALT_KM,
-      lunarOrbitIncDeg: 90,
+      lunarOrbitIncDeg: inclinationDeg,
+      lunarOrbitS: waitS,
       lunarOrbitPeriodS: 2 * halfPeriod(MU_MOON, rOrbit),
       descentStartAltKm: dp.startAltKm,
       throttle: dp.throttle,
@@ -707,8 +772,8 @@ export function planMission(input: MissionInput): MissionPlan {
       rPark, nPark: Math.sqrt(MU_EARTH / rPark ** 3),
       transfer, nTransfer: Math.sqrt(MU_EARTH / transfer.a ** 3),
       earthMoonKm: input.earthMoonKm, nMoon: Math.sqrt(MU_EARTH / input.earthMoonKm ** 3),
-      rOrbit, nOrbit: Math.sqrt(MU_MOON / rOrbit ** 3),
-      thetaPdi: -d.angle, thetaDoi: -d.angle - Math.PI,
+      rOrbit, nOrbit,
+      thetaPdi: -d.angle, thetaDoi,
       descentA, descentE, nDescent: Math.sqrt(MU_MOON / descentA ** 3),
       descent: d,
       site: siteVec, travel,
@@ -901,6 +966,24 @@ export function moonFixedInPlane(plan: OkPlan, tMs: number, latDeg: number, lonD
   ];
   const dot = (a: number[], b: readonly number[]): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   return [-r * dot(u, travel), r * dot(u, site), r * dot(u, normal)];
+}
+
+/**
+ * How missionAt's two frames sit in 3D (issue #192): the lunar-orbit frame's axes (moonPlane's
+ * x and y, and z along the orbit's normal, as moonFixedInPlane) as unit vectors in the transfer
+ * plane's frame (earthPlane's x and y, and z its normal, the Moon's north). The Moon keeps
+ * longitude 0 towards Earth. The simulation page turns the Moon and its orbits with this, so the
+ * arrival hyperbola carries on from the transfer.
+ */
+export function lunarFrameInEarthPlane(plan: OkPlan): [V3, V3, V3] {
+  const g = plan.geometry;
+  const loi = plan.steps.find((s) => s.id === 'loi')!.startMs;
+  const moonAtTd = Math.PI + g.transfer.arriveNu - g.nMoon * ((loi - plan.touchdownMs) / 1000);
+  const c = Math.cos(moonAtTd);
+  const s = Math.sin(moonAtTd);
+  const toEarth = (v: V3): V3 => [-c * v[0] + s * v[1], -s * v[0] - c * v[1], v[2]];
+  const { site, travel } = g;
+  return [toEarth([-travel[0], -travel[1], -travel[2]]), toEarth(site), toEarth(cross3(site, travel))];
 }
 
 /** Seconds the arrival hyperbola takes from the Moon's sphere of influence to the LOI burn. */
