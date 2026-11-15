@@ -3,7 +3,6 @@
 // time. Clicking or dragging on the chart sets the live time. Every number comes from core/
 // through state.ts.
 import './timeline.css';
-import Plotly from 'plotly.js-dist-min';
 import type { Data, Layout, Shape } from 'plotly.js-dist-min';
 import {
   flipFor, getState, LIVE_ID, selected, setLiveTime, setRange, shiftWindow, subscribe,
@@ -11,6 +10,7 @@ import {
 } from '../../state';
 import type { Sample } from '../../core/types';
 import { chartLine, plotLayout, themeColor } from '../plotTheme';
+import { clearChartWait, plotlyIfLoaded, plotlyNow, showChartWait, whenPlotly } from '../plotly';
 import { emptyNote, plotTime, throttle, timeAtPx, timelineModel, type TimelineModel } from './model';
 
 const RANGES: { r: Range; text: string }[] = [
@@ -169,7 +169,7 @@ export function mount(el: HTMLElement): void {
   const clear = (text: string): void => {
     note.textContent = text;
     if (drawn) {
-      Plotly.purge(chart);
+      plotlyIfLoaded()?.purge(chart);
       drawn = false;
     }
     dataKey = lastKey = '';
@@ -208,6 +208,15 @@ export function mount(el: HTMLElement): void {
 
     const fullKey = `${key}|${sc.tMs}|${chart.clientWidth}x${chart.clientHeight}`;
     if (fullKey === lastKey && drawn) return;
+    // Plotly loads on first use (issue #95): the note shows now, the chart once it is in.
+    const Plotly = plotlyNow();
+    if (!Plotly) {
+      lastKey = '';
+      showChartWait(chart);
+      whenPlotly().then(() => render(), () => undefined);
+      return;
+    }
+    clearChartWait(chart);
     lastKey = fullKey;
     void Plotly.react(chart, plotted, layout(model, startMs, endMs, sc.tMs), {
       displayModeBar: false, responsive: true, scrollZoom: false, doubleClick: false,

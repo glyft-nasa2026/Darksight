@@ -9,18 +9,11 @@ import {
   flipFor, getState, neverLitFor, samplesFor, subscribe, summaryFor, type AppState, type Scenario,
 } from '../../state';
 import { axisTitle, plotLayout, themeColor } from '../plotTheme';
+import { plotlyIfLoaded, whenPlotly } from '../plotly';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
 
 const SPAN_DAYS = 30;
 
-type PlotlyLib = (typeof import('plotly.js-dist-min'))['default'];
-// Plotly is large; loading it on first use lets the table show before it arrives.
-let plotly: Promise<PlotlyLib> | null = null;
-const loadPlotly = (): Promise<PlotlyLib> => {
-  // The package is a UMD bundle: the bundler hands it over as the default export.
-  plotly ??= import('plotly.js-dist-min').then((m) => m.default ?? (m as unknown as PlotlyLib));
-  return plotly;
-};
 
 function make<K extends keyof HTMLElementTagNameMap>(
   tag: K, className = '', text = '',
@@ -235,11 +228,12 @@ export function mount(el: HTMLElement): void {
   // the old one, so the strips stuck at one width and spilled over the page (#49). Every draw
   // therefore passes the box's width as measured now.
   const plot = (id: number): void => {
-    void loadPlotly().then((P) => {
+    // Plotly loads on first use (ui/plotly.ts): the table shows before it arrives.
+    whenPlotly().then((P) => {
       if (id !== drawId || !plotted || strips.hidden) return;
       plottedWidth = Math.floor(strips.getBoundingClientRect().width);
       void P.react(strips, plotted.data, stripLayout(plotted.rows, plottedWidth), { displayModeBar: false });
-    });
+    }, () => undefined);
   };
 
   const showParts = (on: boolean): void => {
@@ -265,7 +259,9 @@ export function mount(el: HTMLElement): void {
       showParts(false);
       tableWrap.replaceChildren();
       plotted = null;
-      void loadPlotly().then((P) => { if (id === drawId) P.purge(strips); });
+      // Only if Plotly is already in: asking for it here started its 1.4 MB download while the
+      // page still waited for the Sun and Earth table (issue #95).
+      plotlyIfLoaded()?.purge(strips);
       return;
     }
 
