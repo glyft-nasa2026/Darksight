@@ -694,6 +694,30 @@ describe('decades of the table (loaded as needed)', () => {
       expect(samplesFor(getState().live, '30d')[0].tMs).toBe(later);
     });
 
+    it('a window cut short at the failed decade is whole again once the decade arrives', async () => {
+      failThenServe(1);
+      setLiveSite({ lat: 0, lon: 0 });
+      setLiveTime(T0 + (DAYS - 20) * DAY);    // 20 days before the file that fails
+      await flush();
+      expect(asked).toHaveLength(1);
+      const live = getState().live;
+      expect(samplesFor(live, '30d')).toHaveLength(20 * 24);   // stops where the failed file starts
+      const cutShort = summaryFor(live);
+      expect(flipFor(live, 'sun')?.type).toBe('set');
+
+      await vi.advanceTimersByTimeAsync(RETRY_MS);              // nobody touches the page
+      await flush();
+      expect(asked).toHaveLength(2);
+      expect(failedDecades()).toEqual([]);
+      expect(getState().live).toBe(live);                       // same site, same time
+      expect(samplesFor(live, '30d')).toHaveLength(30 * 24);
+      // The 30-day figures are worked out again over the whole window, not kept from the short one.
+      const whole = summaryFor(live);
+      expect(whole).not.toBe(cutShort);
+      expect(cutShort.litPct).toBeLessThan(35);                 // 20 days, most of them one night
+      expect(whole.litPct).toBeGreaterThan(45);                 // 30 days: about half lit
+    });
+
     it('a decade that keeps failing is not asked for again before the wait is over', async () => {
       failThenServe(Infinity);
       setLiveTime(later);

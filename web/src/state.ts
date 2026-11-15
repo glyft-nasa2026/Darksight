@@ -411,8 +411,16 @@ function fetchChunk(i: number): void {
   loadEphemerisChunk(asked, i).then(
     (buffer) => {
       if (table?.meta !== asked.meta || !pending.delete(i)) return; // a new table came meanwhile
-      failures.delete(i);
+      const hadFailed = failures.delete(i);
       table = table.withChunk(i, buffer);   // the loader has checked the length: this can't throw
+      // While this decade had failed, a window reaching into it was cut short where the decade
+      // starts, and remembered that way. Forget those, or the strips, the 30-day figures and the
+      // countdowns keep the cut-short answer until the site or the time changes.
+      if (hadFailed) {
+        seriesCache.clear();
+        summaryCache.clear();
+        flipCache.clear();
+      }
       notify(false);
     },
     (err: unknown) => {
