@@ -336,6 +336,36 @@ our table. Tests in T02 compare against them.
 ]
 ```
 
+### Fixtures: `web/src/core/__fixtures__/features.json` (made by T36, `data-prep/check_features.py`)
+
+The IAU feature each `planned` site in `sites.json` sits on, from the USGS Gazetteer of Planetary
+Nomenclature's Moon point file (`MOON_nomenclature_center_pts.kmz`, linked from
+https://planetarynames.wr.usgs.gov/GIS_Downloads; LOLA 2011 control network). A test owned by
+T36 in `sites.test.ts` checks that every planned site is at most half the feature's diameter,
+plus `margin_km`, from the feature's centre, on the `R` sphere.
+
+```json
+{
+  "source": "USGS Gazetteer of Planetary Nomenclature, MOON_nomenclature_center_pts.kmz",
+  "url": "https://asc-planetarynames-data.s3.us-west-2.amazonaws.com/MOON_nomenclature_center_pts.kmz",
+  "file_date": "2026-11-14",
+  "frame": "east longitude (written here as -180..180), planetocentric latitude, LOLA 2011 control network",
+  "radius_km": 1737.4,
+  "sites": {
+    "im-3": { "feature": "Reiner Gamma", "gazetteer_id": 4987, "type": "Albedo Feature",
+              "lat": 7.3853, "lon": -58.9583, "diameter_km": 73.441048,
+              "page": "https://planetarynames.wr.usgs.gov/Feature/4987" }
+  }
+}
+```
+
+The keys of `sites` are exactly the planned site ids. `lon` is in -180..180 (the file gives 0 to
+360 east). `diameter_km` is the gazetteer's "approximate diameter or longest dimension".
+`file_date` is the day the gazetteer made the file (it is regenerated nightly). A region target
+adds `margin_km` and `margin_reason`; a target on no named feature is
+`{ "feature": null, "reason": "..." }`, and the QuickMap contact sheet and a person check it
+alone.
+
 ## 3. TypeScript: `web/src/core/`
 
 `types.ts` (T00):
