@@ -161,7 +161,7 @@ describe('emptyNote', () => {
   });
 
   it('inside the table with no samples (a decade that did not download): outside the table, no years', () => {
-    expect(emptyNote(0, Date.UTC(2055, 5, 1), START, END)).toBe('This window is outside the Sun and Earth table.');
+    expect(emptyNote(0, Date.UTC(2055, 5, 1), START, END)).toBe('The Sun and Earth table for the 2050s did not download. Trying again…');
   });
 
   it('one sample: the table ends before a second one', () => {

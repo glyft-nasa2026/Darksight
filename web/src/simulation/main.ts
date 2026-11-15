@@ -11,6 +11,7 @@ import { padById } from '../core/pads';
 import { moonOrbitIcrf } from '../core/sky';
 import type { CuratedSite } from '../core/types';
 import { getState, landingScenario, missionFor, setData, stateToAddress, subscribe } from '../state';
+import { noRowText } from '../ui/tableGap';
 import { prefersReducedMotion } from '../ui/launch/earth';
 import {
   coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, speedText, utcText,
@@ -344,6 +345,7 @@ function render(): void {
       ? 'No landing site chosen. Go back to the mission planner and press “Land here” on a scenario card.'
       : m.status === 'loading' ? 'Loading'
       : m.status === 'outside' ? 'This landing time is too near the edge of the Sun and Earth table (1900 to 2100) for the mission.'
+      : m.status === 'failed' ? noRowText('failed', m.decadeMs)
       : m.status === 'ready' && !m.plan.ok ? ERRORS[m.plan.error] : 'Loading';
     return;
   }
