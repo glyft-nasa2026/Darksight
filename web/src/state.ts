@@ -1,6 +1,7 @@
 // App state, as docs/data-contract.md section 4.
 // UI modules read state and call actions. They never call each other.
 
+import { EXAMPLE_BATTERY, validBattery, type Battery } from './core/battery';
 import type { Dem } from './core/dem';
 import { loadEphemerisChunk, type Ephemeris } from './core/ephemeris';
 import { sunAltAzAtSite } from './core/geometry';
@@ -27,6 +28,8 @@ export type AppState = {
   landing: { site: Site; tMs: number } | null;
   padId: string;
   lander: Lander;
+  // The battery that the solar panel card and the timeline playback run (T40).
+  battery: Battery;
 };
 
 export const LIVE_ID = 'live';
@@ -60,6 +63,7 @@ const EXAMPLE_PAIRS: readonly { rim: string; floor: string }[] = [
 //   #live=-89.5,0,2026-11-14T10:00:00Z&a=-88,45,2027-01-01T00:00:00Z&sel=a&range=90d&mode=3d
 // A scenario is lat,lon,time and, only if it was set, eye height in metres. The mission (T34)
 // adds land= (the same form), pad=<id> and lander=mass,dry,isp,thrust, each only when set.
+// The battery (T40) adds bat=capacityWh,panelW,useW when it differs from the example.
 // ---------------------------------------------------------------------------------------------
 
 const round6 = (v: number): number => Number(v.toFixed(6));
@@ -115,6 +119,18 @@ function textToLander(text: string | null): Lander | null {
   return validLander(l) ? l : null;
 }
 
+function textToBattery(text: string | null): Battery | null {
+  if (!text) return null;
+  const parts = text.split(',');
+  if (parts.length !== 3 || parts.some((x) => x.trim() === '')) return null;
+  const [capacityWh, panelW, useW] = parts.map(Number);
+  const b: Battery = { capacityWh, panelW, useW };
+  return validBattery(b) ? b : null;
+}
+
+const sameBattery = (a: Battery, b: Battery): boolean =>
+  a.capacityWh === b.capacityWh && a.panelW === b.panelW && a.useW === b.useW;
+
 const sameLander = (a: Lander, b: Lander): boolean =>
   a.massKg === b.massKg && a.dryKg === b.dryKg && a.ispS === b.ispS && a.thrustN === b.thrustN;
 
@@ -147,6 +163,7 @@ function stateFromAddress(hash: string, nowMs: number): { next: AppState; named:
     landing: textToSiteTime(q.get('land')),
     padId: padById(q.get('pad')).id,
     lander: textToLander(q.get('lander')) ?? { ...EXAMPLE_LANDER },
+    battery: textToBattery(q.get('bat')) ?? { ...EXAMPLE_BATTERY },
   };
   return { next, named: liveAt !== null || pinned.length > 0 };
 }
@@ -166,6 +183,10 @@ export function stateToAddress(): string {
   if (!sameLander(state.lander, EXAMPLE_LANDER)) {
     const l = state.lander;
     parts.push(`lander=${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}`);
+  }
+  if (!sameBattery(state.battery, EXAMPLE_BATTERY)) {
+    const b = state.battery;
+    parts.push(`bat=${b.capacityWh},${b.panelW},${b.useW}`);
   }
   return parts.join('&');
 }
@@ -540,6 +561,13 @@ export function setPad(id: string): void {
 export function setLander(l: Lander): void {
   if (!validLander(l) || sameLander(l, state.lander)) return;
   state = { ...state, lander: { ...l } };
+  notify();
+}
+
+/** The battery the panel card and the playback run (T40). Ignores values outside BATTERY_LIMITS. */
+export function setBattery(b: Battery): void {
+  if (!validBattery(b) || sameBattery(b, state.battery)) return;
+  state = { ...state, battery: { ...b } };
   notify();
 }
 

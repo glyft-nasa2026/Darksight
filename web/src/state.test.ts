@@ -1104,3 +1104,31 @@ describe('T32: a dark site says it is still checking to 2100 (issue #32, row 3)'
     expect(neverLitPendingFor(getState().live)).toBe(false);
   });
 });
+
+// T40: the battery the panel card and the playback run. Imports on lines of their own.
+import { EXAMPLE_BATTERY } from './core/battery';
+import { setBattery } from './state';
+
+describe('battery settings (T40)', () => {
+  beforeEach(() => restoreFromAddress(''));
+
+  it('start at the example, stay out of the address until changed, and come back from it', () => {
+    expect(getState().battery).toEqual(EXAMPLE_BATTERY);
+    expect(stateToAddress()).not.toContain('bat=');
+    setBattery({ capacityWh: 5000, panelW: 800, useW: 250 });
+    const address = stateToAddress();
+    expect(address).toContain('bat=5000,800,250');
+    restoreFromAddress('');
+    expect(getState().battery).toEqual(EXAMPLE_BATTERY);
+    restoreFromAddress('#' + address);
+    expect(getState().battery).toEqual({ capacityWh: 5000, panelW: 800, useW: 250 });
+  });
+
+  it('ignore values outside the limits, in an action or an address', () => {
+    setBattery({ capacityWh: 0, panelW: 800, useW: 250 });
+    setBattery({ capacityWh: 1000, panelW: -1, useW: 250 });
+    expect(getState().battery).toEqual(EXAMPLE_BATTERY);
+    restoreFromAddress('#bat=1000,abc,5');
+    expect(getState().battery).toEqual(EXAMPLE_BATTERY);
+  });
+});
