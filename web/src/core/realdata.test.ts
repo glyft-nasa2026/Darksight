@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseDem, type Dem, type DemMeta } from './dem';
 import type { Ephemeris } from './ephemeris';
+import { parseGlobe, type GlobeMeta } from './globe';
 import { skylineAt } from './horizon';
 import { readRealTable } from './realTable.testutil';
 import type { CuratedSite, Site } from './types';
@@ -120,4 +121,61 @@ describe.skipIf(skipReason !== null)('real data: terrain checks (spec section 7)
       `lit ${r.lit} of ${r.hours} hours = ${r.litPct.toFixed(1)} %`);
     expect(r.litPct).toBeGreaterThan(50);
   }, 300_000);
+});
+
+// T37 (option C): the coarse skyline on the real globe.bin, north of 85 S. Skips, saying why,
+// while globe.json is missing or says "mock" (the mock data set has none). Needs no table.
+const globeMeta = readJson<GlobeMeta>('globe.json');
+const globeSkip = !globeMeta ? 'web/public/data/globe.json is missing'
+  : globeMeta.source === 'mock' ? 'globe.json says "source": "mock"' : null;
+// A real globe.json without its globe.bin is an error, not a reason to skip (as for dem.bin above).
+if (globeMeta && !globeSkip && !existsSync(dataFile('globe.bin'))) {
+  throw new Error('web/public/data/globe.json is real but globe.bin is not there');
+}
+if (globeSkip) console.log(`realdata.test.ts, T37 skipped: ${globeSkip}.`);
+
+describe.skipIf(globeSkip !== null)('real data: coarse terrain north of 85 S (T37)', () => {
+  const globe = globeSkip ? null : (() => {
+    const bytes = readFileSync(dataFile('globe.bin'));
+    return parseGlobe(globeMeta as GlobeMeta, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+  })();
+  const dem = skipReason || !demMeta ? null : readDem(demMeta);
+  const sites = readJson<CuratedSite[]>('sites.json') ?? [];
+
+  it('Apollo 15: the highest point of its skyline is above 1 degree (Mons Hadley and Hadley Delta)', () => {
+    const a15 = siteById(sites, 'apollo-15');
+    const sky = skylineAt(dem, a15, globe);
+    const v = Array.from(sky.elev);
+    const top = Math.max(...v);
+    console.log(`apollo-15 (${a15.lat}, ${a15.lon}): grid ${sky.grid}, ${sky.cellM?.toFixed(0)} m cells; ` +
+      `highest ${top.toFixed(2)} deg at azimuth ${v.indexOf(top)}, lowest ${Math.min(...v).toFixed(2)} deg`);
+    expect(sky.grid).toBe('globe');
+    expect(top).toBeGreaterThan(1);
+  });
+
+  it('every curated site has terrain: dem.bin at or south of 85 S, globe.bin elsewhere', () => {
+    expect(sites.length).toBeGreaterThan(0);
+    for (const s of sites) {
+      const sky = skylineAt(dem, { lat: s.lat, lon: s.lon }, globe);
+      const want = s.lat <= -85 ? (dem ? 'dem' : null) : 'globe';
+      const v = Array.from(sky.elev);
+      console.log(`${s.id.padEnd(22)} ${String(s.lat).padStart(9)} ${String(sky.grid).padEnd(5)} ` +
+        `highest ${Math.max(...v).toFixed(2)} deg, lowest ${Math.min(...v).toFixed(2)} deg`);
+      expect(sky.grid, s.id).toBe(want);
+      expect(v.every(Number.isFinite), s.id).toBe(true);
+    }
+  });
+
+  it('one real coarse skyline takes under 100 ms', () => {
+    const site = siteById(sites, 'apollo-15');
+    const times: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const t = performance.now();
+      skylineAt(dem, site, globe);
+      times.push(performance.now() - t);
+    }
+    times.sort((a, b) => a - b);
+    console.log(`real coarse skyline (apollo-15): ${times.map((x) => x.toFixed(1)).join(', ')} ms`);
+    expect(times[0]).toBeLessThan(100);
+  });
 });
