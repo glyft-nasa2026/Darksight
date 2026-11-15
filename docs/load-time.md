@@ -28,6 +28,7 @@ the file itself. Every response came over HTTP/3. Every `.bin` file is served as
 | `assets/plotly.min-Bl0pfJvI.js` | 0.6 KB | 58 B | `br` |
 | `data/globe.bin` (issue #66, picture only) | 8.30 MB | 8.29 MB | none |
 | `data/north.bin` (issue #66, picture only) | 0.52 MB | 0.52 MB | none |
+| `data/stars.bin` (issue #80, picture only; added after these measurements) | not measured | 0.09 MB | none |
 
 Total for a first visit: about 24 MB, of which 21.7 MB is the three height files.
 
