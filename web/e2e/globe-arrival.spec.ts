@@ -2,7 +2,8 @@
 // no other change of state. Every card that names the terrain or shows a number from the skyline
 // must follow it. The Compare card, the timeline and the report page once kept the smooth-Moon
 // answer and its label until the next click; the readout and the sky panorama did not.
-// globe.bin is held and then let through, so the order is the same on every machine.
+// globe.bin is held and then let through, so the order is the same on every machine. The built
+// site downloads it as globe.pack (contract section 2), the dev server as globe.bin: both are held.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
 
@@ -11,11 +12,11 @@ const COARSE = 'Coarse terrain: LOLA whole-Moon height map, 3.8 km cells';
 // Apollo 15: Hadley Delta stands 11 degrees above the site, so the coarse skyline changes the numbers.
 const SITE = '26.13239,3.6333,2026-11-20T00:00:00Z';
 
-/** Holds globe.bin (asked for with or without ?v=<hash>) until release() is called. */
+/** Holds globe.bin or globe.pack (asked for with or without ?v=<hash>) until release() is called. */
 async function holdGlobe(page: Page): Promise<{ held: Route[]; release: () => Promise<void> }> {
   const held: Route[] = [];
   let holding = true;
-  await page.route('**/data/globe.bin*', (route) => {
+  await page.route('**/data/globe.{bin,pack}*', (route) => {
     if (holding) held.push(route);
     else void route.continue();
   });
