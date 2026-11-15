@@ -7,16 +7,22 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PADS, padById, type Pad } from '../../core/pads';
 import { themeColor } from '../plotTheme';
 import { coordText } from '../mission/format';
+import { earthFromIcrf, multiply, type Mat3 } from '../../core/sky';
+import { makeStarField } from '../../scene/stars';
 import { disposeScene, earthDirection, makeEarth, prefersReducedMotion, themeLength } from './earth';
 
 export type PickerOptions = {
   padId: string;
   confirmLabel: string;
+  /** The time the stars behind the globe are shown for (the launch); now if not given. */
+  tMs?: number;
   onConfirm: (padId: string) => void;
 };
 
 const MARKER_R = 0.018;   // in Earth radii
 const VIEW_DISTANCE = 3.2;
+/** earthDirection (earth.ts) as a rotation: Earth-fixed to the scene. */
+const EARTH_TO_SCENE: Mat3 = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
 
 function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -70,6 +76,10 @@ export function openPadPicker(options: PickerOptions): void {
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
   const earth = makeEarth(1, false);
   scene.add(earth);
+  // The real sky behind Earth (issue #80), as it lies over Earth at the launch time.
+  const stars = makeStarField();
+  stars.turn(multiply(EARTH_TO_SCENE, earthFromIcrf(options.tMs ?? Date.now())));
+  scene.add(stars.object);
   const markerGeometry = new THREE.SphereGeometry(MARKER_R, 16, 12);
   const idle = new THREE.Color(themeColor('--warn'));
   const active = new THREE.Color(themeColor('--accent'));
@@ -189,6 +199,7 @@ export function openPadPicker(options: PickerOptions): void {
     cancelAnimationFrame(frame);
     sizer.disconnect();
     controls.dispose();
+    stars.dispose();
     disposeScene(scene);
     renderer.dispose();
     renderer.forceContextLoss();

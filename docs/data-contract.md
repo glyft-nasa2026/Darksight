@@ -193,6 +193,34 @@ degrees: 12 rows of 24. A tile is little-endian int16, `(tile_deg * cells_per_de
 values (480 x 480, 0.46 MB), row by row from its north edge. 288 tiles, 132.7 MB in all, of
 which a visit downloads only what it looks at. Budget: 140 MB in all.
 
+### `stars.json` + `stars.bin` (made by `data-prep/make_stars.py`, issue #80)
+
+The star map behind the three 3D views (the Moon explorer's 3D orbit, the launch-site picker and
+the launch simulation). For the picture only: no number shown to the user comes from it, and
+nothing in `core/` loads it. `web/src/scene/stars.ts` fetches it once per page; a view without
+it has a plain background.
+
+```json
+{
+  "count": 9096,
+  "columns": ["x", "y", "z", "vmag", "bv"],
+  "unit_scale": 32767,
+  "mag_scale": 1000,
+  "frame": "ICRF (J2000 equator and equinox)",
+  "epoch": 2000.0,
+  "source": "Yale Bright Star Catalogue, 5th revised ed. (Hoffleit and Warren 1991), VizieR V/50"
+}
+```
+
+`stars.bin`: little-endian int16, 5 values a star, brightest first: the ICRF unit vector to the
+star times `unit_scale`, then V magnitude and B-V colour times `mag_scale`. Every catalogue star
+with a position (14 of the 9,110 have none); B-V is 0.6 where the catalogue gives none. Proper
+motion is left out. 91 KB. File budget: 150 KB.
+
+Each view turns the stars with a rotation from `core/sky.ts`: the Moon explorer by the Moon's
+orientation at the selected scenario's time, the picker by Earth's at the planned launch, the
+simulation by laying the scene's transfer plane on the Moon's real orbit plane at touchdown.
+
 ### `sites.json` (made by T07)
 
 ```json
@@ -294,6 +322,7 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `horizon.ts` | T00 flat skyline, then T05 | `skylineAt(dem: Dem | null, site: Site): Skyline` · `skylineElev(s: Skyline, az: number): number` (interpolated) |
 | `projection.ts` | T31 | `polarForward(lat, lon): { x, y }` and `polarInverse(x, y): { lat, lon }` (section 2's formulas, metres) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
 | `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
+| `sky.ts` | issue #80 | `Mat3` (three rows; `apply(m, v)` takes a vector from the first frame to the second) · `moonFromIcrf(tMs)` (ICRF to the Moon-fixed frame: the IAU WGCCRE lunar model, Archinal et al. 2011; within 0.02 degrees of DE440's mean-Earth frame) · `earthFromIcrf(tMs)` (ICRF to Earth-fixed: IAU 1976 precession and 1982 sidereal time, UTC for UT1, no nutation) · `moonFromEarthIcrf(earthKm, tMs)` · `moonOrbitIcrf(eph, tMs): { toMoon, pole }` · `alignFrames(fromX, fromZ, toX, toZ)` · `apply`, `applyInverse`, `multiply`, `angleBetween`. Turns the star map only; Sun and Earth angles still come from `geometry.ts` |
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
 | `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent`, `planDescent`, `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`. A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent; times run back from touchdown with Apollo 11's phase lengths |
@@ -490,6 +519,7 @@ changes the values; the names stay.
 | `--sun`, `--earth` | Sun and Earth in charts (fixed: `#F0E442`, `#56B4E9`) |
 | `--lit`, `--dark` | Filled and empty parts of the strips |
 | `--terrain-lo`, `--terrain-hi` | The two ends of the height colour ramp in the 3D scene |
+| `--star-hot`, `--star`, `--star-cool` | Star colours behind the 3D views, by B-V: blue-white, Sun-like, orange (issue #80) |
 | `--space-1` … `--space-5` | Gaps: 4, 8, 12, 16, 24 px |
 | `--radius` | Corner rounding |
 | `--font`, `--font-num` | Text; fixed-width digits for numbers |
