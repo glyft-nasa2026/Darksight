@@ -1,6 +1,6 @@
 # T30: Page smoke test in CI
 
-Status: in progress (rickphobia with Claude, branch t30-smoke-test). Planned files: web/e2e/, .github/workflows/ci.yml, web/package.json and web/package-lock.json (adds @playwright/test and the test:page script). Next: the smoke test
+Status: done (pull request #111). `test-and-build` went from 18 to 25 s to 38 s; the Chromium install is 15 s of it and the page test 4 s
 
 | | |
 |---|---|
@@ -39,11 +39,11 @@ and M2 already cover the same ground by hand. Drop it if it isn't working within
 
 ## Done when
 
-- [ ] `npm run test:page` passes on `main`'s build.
-- [ ] On a scratch branch that makes one module throw in `mount`, it fails and names the slot. Don't merge that branch.
-- [ ] `npm test` still starts no browser.
-- [ ] The pull request shows the `test-and-build` time before and after.
-- [ ] `npm test` and `npm run build` pass.
+- [x] `npm run test:page` passes on `main`'s build.
+- [x] On a scratch branch that makes one module throw in `mount`, it fails and names the slot. Don't merge that branch.
+- [x] `npm test` still starts no browser.
+- [x] The pull request shows the `test-and-build` time before and after.
+- [x] `npm test` and `npm run build` pass.
 
 ## Prompt to paste into Claude Code
 
