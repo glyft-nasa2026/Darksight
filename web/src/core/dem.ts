@@ -20,6 +20,8 @@ export type Dem = {
   covers(lat: number, lon: number): boolean;
   /** Height in metres above the R sphere, bilinear between cells. 0 outside the grid. */
   heightAt(lat: number, lon: number): number;
+  /** Height of one stored cell, metres (row 0 at the top, as in the file). A cell with no data is 0. */
+  cell(row: number, col: number): number;
 };
 
 const R_M = MOON_RADIUS_KM * 1000;
@@ -96,7 +98,7 @@ export function parseDem(meta: DemMeta, buffer: ArrayBuffer): Dem {
     return top * (1 - v) + bottom * v;
   }
 
-  return { meta, covers, heightAt };
+  return { meta, covers, heightAt, cell };
 }
 
 /**

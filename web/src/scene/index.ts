@@ -141,6 +141,10 @@ export function mount(el: HTMLElement): void {
   let mode: AppState['mode'] = getState().mode;
   let polar = false, stretch = 1, drawnStretch = 1, pinPx = 1;
   let dem: Dem | null = null, coarse: Mesh | null = null, detail: Mesh | null = null;
+  /** The height map the 3D meshes were last built from (they are built only for a 3D view). */
+  let builtDem: Dem | null = null;
+  /** A switch to 3D is waiting a frame to build its meshes, behind "Building the 3D view…". */
+  let buildQueued = false;
   let bounds: GridBounds | undefined;
   let siteKey = '', coarseKey = '', detailKey = '', pinKey = '', themeKey = '', globeKey = '';
   /** The whole-Moon heights the globe is painted from. Null until they load, or if they are missing. */
@@ -394,6 +398,9 @@ export function mount(el: HTMLElement): void {
    * stays until the new one is ready. The polar meshes cover their own ground.
    */
   function updatePatch(): void {
+    // Not while the 3D build waits a frame: without the north cap yet, the ground under a site
+    // there would look uncovered and get a patch drawn over the cap.
+    if (buildQueued) return;
     const heights = globeHeights, index = tileIndex, centre = patchCentre ?? selected().site;
     const south = dem ? dem.meta.min_lat : -90, top = northMesh && north ? -north.meta.min_lat : 90;
     const win = heights && index && mode === '3d' && !polar ? patchWindow(centre, index, south, top) : null;
@@ -525,9 +532,22 @@ export function mount(el: HTMLElement): void {
     const changedMode = mode !== s.mode, changedStretch = drawnStretch !== stretch;
     dem = s.dem; polar = nextPolar; mode = s.mode; siteKey = key; drawnStretch = stretch;
     if (changedSite) patchCentre = sc.site;
-    updateTerrain(changedDem);
-    buildNorth();
-    paintGlobe();
+    // The 3D meshes and textures are built the first time a 3D view shows, not behind the 2D map
+    // the page opens on: building them there froze the page for about 2 s after it looked ready,
+    // as the height map and then globe.bin arrived (issue #118).
+    if (mode !== '2d' && !buildQueued) {
+      const unbuilt = builtDem !== dem || (!!north && !!globeHeights && !northMesh) || (!!globeHeights && !globeMaterial.map);
+      if (changedMode && unbuilt) {
+        // The first switch to 3D builds for about a second: say so first, so the click answers at
+        // once, and build a frame later.
+        buildQueued = true;
+        requestAnimationFrame(() => setTimeout(() => { buildQueued = false; if (!disposed) update(getState()); }, 0));
+      } else {
+        updateTerrain(builtDem !== dem); builtDem = dem;
+        buildNorth();
+        paintGlobe();
+      }
+    }
     updatePatch();
     stretchPatchMesh();
     // On the ground as drawn, so the camera orbits the site itself and follows it when a patch arrives.
@@ -570,8 +590,9 @@ export function mount(el: HTMLElement): void {
       earth.scale.setScalar(2 * EARTH_RADIUS_KM * EARTH_DRAWN_KM / distance); earth.visible = true;
     } else { sun.intensity = 0; earth.visible = false; sunDisc.visible = sunGlare.visible = false; }
     if (!lost) {
-      message.hidden = tabled;
-      message.textContent = s.eph ? 'This time is outside the Sun and Earth table' : 'Loading Sun and Earth table…';
+      message.hidden = tabled && !buildQueued;
+      message.textContent = buildQueued ? 'Building the 3D view…'
+        : s.eph ? 'This time is outside the Sun and Earth table' : 'Loading Sun and Earth table…';
     }
     // The same cached sample the readout shows, so the two never disagree.
     const now: Sample | undefined = samplesFor(sc, '30d')[0];

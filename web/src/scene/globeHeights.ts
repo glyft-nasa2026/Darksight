@@ -126,21 +126,64 @@ export function globeNormalNear(globe: GlobeHeights, lat: number, lon: number, r
   out[0] = x / len; out[1] = y / len; out[2] = z / len;
 }
 
-/**
- * Every cell's surface normal for the flat map, three signed bytes a cell (n * 127), in the
- * Moon's own frame as core/ uses it: +X toward longitude 0, +Y toward 90 E, +Z north. Slopes
- * are `relief` times steeper than measured, as on the 3D globe.
- */
-export function globeSlopes(globe: GlobeHeights, relief = GLOBE_RELIEF): Int8Array {
-  const { width, height } = globe.meta;
-  const out = new Int8Array(width * height * 3), n = [0, 0, 0];
-  for (let row = 0; row < height; row++) {
+/** Cosine and sine of each column's centre longitude, by grid width (the same for every row). */
+const lonTables = new Map<number, { cos: Float64Array; sin: Float64Array }>();
+function lonTable(width: number): { cos: Float64Array; sin: Float64Array } {
+  let t = lonTables.get(width);
+  if (!t) {
+    t = { cos: new Float64Array(width), sin: new Float64Array(width) };
     for (let col = 0; col < width; col++) {
-      globeNormalAt(globe, row, col, relief, n);
-      const o = (row * width + col) * 3;
-      // Render frame to Moon frame: +X = 90 E, +Y = south, -Z = longitude 0.
-      out[o] = Math.round(-n[2] * 127); out[o + 1] = Math.round(n[0] * 127); out[o + 2] = Math.round(-n[1] * 127);
+      const lon = (-180 + (col + 0.5) * 360 / width) * RAD;
+      t.cos[col] = Math.cos(lon); t.sin[col] = Math.sin(lon);
+    }
+    lonTables.set(width, t);
+  }
+  return t;
+}
+
+/**
+ * globeNormalAt for every cell of rows `row0` to `row1 - 1`, handed to `put(k, x, y, z)` with `k`
+ * the cell's index in the grid. The same numbers as globeNormalAt, but each row's and each
+ * column's sines and cosines are worked out once instead of for every cell: the whole grid took
+ * about 0.7 s each time globeNormalAt was called cell by cell (issue #118).
+ */
+export function globeNormalRows(globe: GlobeHeights, relief: number, row0: number, row1: number,
+  put: (k: number, x: number, y: number, z: number) => void): void {
+  const { width, height } = globe.meta;
+  const cellM = Math.PI * MOON_RADIUS_KM * 1000 / height;
+  const { cos: cosLon, sin: sinLon } = lonTable(width);
+  for (let row = Math.max(0, row0); row < Math.min(height, row1); row++) {
+    const lat = (90 - (row + 0.5) * 180 / height) * RAD;
+    const cl = Math.cos(lat), sl = Math.sin(lat);
+    const rowsApart = Math.min(height - 1, row + 1) - Math.max(0, row - 1);
+    const step = Math.min(width >> 2, Math.max(1, Math.round(1 / cl)));
+    const eastScale = relief / (2 * step * cellM * cl), northScale = relief / (rowsApart * cellM);
+    for (let col = 0; col < width; col++) {
+      const cn = cosLon[col], sn = sinLon[col];
+      const east = (globe.cell(row, col + step) - globe.cell(row, col - step)) * eastScale;
+      const north = (globe.cell(row - 1, col) - globe.cell(row + 1, col)) * northScale;
+      const x = cl * sn - east * cn + north * sl * sn;
+      const y = -sl + north * cl;
+      const z = -cl * cn - east * sn - north * sl * cn;
+      const n = Math.sqrt(x * x + y * y + z * z);
+      put(row * width + col, x / n, y / n, z / n);
     }
   }
+}
+
+/**
+ * Cells' surface normals for the flat map, three signed bytes a cell (n * 127), in the Moon's
+ * own frame as core/ uses it: +X toward longitude 0, +Y toward 90 E, +Z north. Slopes are
+ * `relief` times steeper than measured, as on the 3D globe. Only rows `row0` to `row1 - 1` are
+ * worked out, into `out` (a new array for the whole grid when none is given): a polar map needs
+ * only the rows near its pole.
+ */
+export function globeSlopes(globe: GlobeHeights, relief = GLOBE_RELIEF, row0 = 0, row1 = globe.meta.height,
+  out: Int8Array = new Int8Array(globe.meta.width * globe.meta.height * 3)): Int8Array {
+  globeNormalRows(globe, relief, row0, row1, (k, x, y, z) => {
+    // Render frame to Moon frame: +X = 90 E, +Y = south, -Z = longitude 0.
+    const o = k * 3;
+    out[o] = Math.round(-z * 127); out[o + 1] = Math.round(x * 127); out[o + 2] = Math.round(-y * 127);
+  });
   return out;
 }
