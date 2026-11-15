@@ -1,6 +1,6 @@
 # T16: About bar, About panel and the Horizons badge
 
-Status: first delivery done (pull request #93); second delivery at M3 done, in review (MarsRon, branch `t16-about-b`, pull request #201): every "Done when" line passes after merging `main`. The panel covers all 68 sources and 70 AI-use files on `main`; T17's are still empty. MarsRon read the new text on the preview and tried the panel on a phone
+Status: done. First delivery: pull request #93. Second delivery at M3: MarsRon, branch `t16-about-b`, pull request #201, merged as `fe6955c`. Every "Done when" line passes after merging `main`. The panel covers all 68 sources and 70 AI-use files on `main`; T17's are still empty. MarsRon read the new text on the preview and tried the panel on a phone
 
 | | |
 |---|---|
