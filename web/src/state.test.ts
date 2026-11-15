@@ -9,6 +9,9 @@ import {
   setLiveSite, setLiveTime, setMode, setPad, setRange, shiftWindow, skylineFor, stateToAddress,
   subscribe, summaryFor, timelineFor, unpin, type Scenario,
 } from './state';
+// T32: lines of their own, so the shared import lines above stay as other branches edit them.
+import { countdownText } from './core/windows';
+import { neverLitPendingFor } from './state';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -783,5 +786,90 @@ describe('the mission (T34)', () => {
     setData({ eph: circlingSun(60) });
     setLanding(getState().live);   // touchdown at the very start: the arrival is a day earlier
     expect(missionFor()).toEqual({ status: 'outside' });
+  });
+});
+
+describe('T32: a dark site says it is still checking to 2100 (issue #32, row 3)', () => {
+  // The same three 100-day files as "never lit" above, kept apart so the two blocks change
+  // independently. The Sun holds still: +z is below the south-pole horizon, -z overhead.
+  const DAYS = 100;
+  const perFile = DAYS * 24 + 1;
+  function steady(z: number): ArrayBuffer {
+    const buffer = new ArrayBuffer(perFile * 24);
+    const view = new DataView(buffer);
+    for (let k = 0; k < perFile; k++) {
+      [0, 0, z, 384400, 0, 0].forEach((v, c) => view.setFloat32((k * 6 + c) * 4, v, true));
+    }
+    return buffer;
+  }
+  const index = indexEphemeris({
+    start: '2027-01-01T00:00:00Z', step_s: 3600, rows: 3 * perFile - 2, frame: 'MOON_ME_DE440_ME421',
+    columns: [], source: 'made up for a test', home: 0,
+    chunks: [0, 1, 2].map((k) => ({
+      file: `ephemeris/${k}.bin`, start: new Date(T0 + k * DAYS * DAY).toISOString(), rows: perFile,
+    })),
+  });
+  const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+  let files: Record<string, ArrayBuffer> = {};
+  let asked: string[] = [];
+  beforeEach(() => {
+    asked = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(url);
+      return new Response(files[url.replace('/data/ephemeris/', '')]);
+    });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('reads pending while the later decades download, then not pending and never lit', async () => {
+    files = { '1.bin': steady(1), '2.bin': steady(1) };
+    setData({ eph: index.withChunk(0, steady(1)) });
+    const live = (): Scenario => getState().live;
+    expect(neverLitPendingFor(live())).toBe(true);
+    expect(neverLitFor(live())).toBe(false);              // this asks for the rest
+    expect(neverLitPendingFor(live())).toBe(true);        // asked for, not in yet
+    await settle();
+    expect(neverLitPendingFor(live())).toBe(false);
+    expect(neverLitFor(live())).toBe(true);
+  });
+
+  it('is not pending when a later decade failed to download: the text stays "No sunrise"', async () => {
+    files = { '1.bin': steady(1) };                       // 2.bin arrives empty: too short, so failed
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    setData({ eph: index.withChunk(0, steady(1)) });
+    const live = (): Scenario => getState().live;
+    expect(neverLitFor(live())).toBe(false);
+    await settle();
+    expect(warn).toHaveBeenCalled();
+    expect(neverLitPendingFor(live())).toBe(false);
+    expect(neverLitFor(live())).toBe(false);
+    expect(countdownText('sun', false, flipFor(live(), 'sun'), live().tMs, neverLitFor(live()), neverLitPendingFor(live())))
+      .toBe('No sunrise in the next 60 days');
+    warn.mockRestore();
+  });
+
+  it('is never pending where the Sun is up, or rises within 60 days', async () => {
+    files = { '1.bin': steady(1), '2.bin': steady(1) };
+    setData({ eph: index.withChunk(0, steady(-1)) });     // the Sun overhead for the first 100 days
+    expect(neverLitPendingFor(getState().live)).toBe(false);
+    // Dark for the first 20 days, then the Sun comes up: a sunrise within 60 days.
+    const buffer = steady(1);
+    const view = new DataView(buffer);
+    for (let k = 20 * 24; k < perFile; k++) view.setFloat32((k * 6 + 2) * 4, -1, true);
+    setData({ eph: index.withChunk(0, buffer) });
+    expect(flipFor(getState().live, 'sun')?.type).toBe('rise');
+    expect(neverLitPendingFor(getState().live)).toBe(false);
+    expect(neverLitFor(getState().live)).toBe(false);
+    await settle();
+    expect(asked).toEqual([]);                            // and nothing was asked for
+  });
+
+  it('is not pending within 60 days of the end of the table', async () => {
+    files = { '1.bin': steady(1), '2.bin': steady(1) };
+    setData({ eph: index.withChunk(0, steady(1)) });
+    setLiveTime(T0 + 250 * DAY);                          // 50 days before the end
+    expect(neverLitPendingFor(getState().live)).toBe(false);
+    await settle();
+    expect(neverLitPendingFor(getState().live)).toBe(false);
   });
 });
