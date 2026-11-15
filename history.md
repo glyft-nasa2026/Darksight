@@ -32,6 +32,15 @@ coordinate overlapping edits.
   clears only the caches of sites north of 85 S.
 - Why: option C needs a second grid, and the page must say which grid a skyline used.
 
+## 15 Nov 2026: the nudge panel starts top left (issue #177)
+
+### docs/data-contract.md: 5. Page slots, `#nudge`
+
+- Was: the nudge panel starts in the bottom left corner of the map.
+- Now it starts top left. The scene's status message ("Loading…", "Graphics paused…") moves from
+  top left to bottom left so the panel doesn't cover it.
+- Why: issue #177 asked for the top left corner.
+
 ## 15 Nov 2026: the timeline plays, and the solar panel card has a battery (T40)
 
 P5 asked for both.

@@ -268,3 +268,10 @@ describe('file names', () => {
     expect(reportFileName(r, 'csv')).toBe('darksight-mission-89.6866S-162.8100W-2026-11-21T1604Z.csv');
   });
 });
+
+describe('model and sources', () => {
+  it('names GMAT as the next step, in the limits and the sources', () => {
+    expect(report.model.some((l) => l.includes('GMAT'))).toBe(true);
+    expect(report.sources.some((s) => s.name.includes('GMAT') && s.url.startsWith('https://'))).toBe(true);
+  });
+});

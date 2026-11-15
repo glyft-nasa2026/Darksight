@@ -15,7 +15,7 @@ import { kgText, pctText, utcText } from './format';
 export const ERRORS = {
   'bad-input': 'The lander needs positive numbers, and a dry mass below its mass after TLI.',
   'coast-out-of-range': 'No transfer reaches the Moon in that coast time.',
-  'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
+  'thrust-too-low': 'This lander’s engine can’t lift it in the Moon’s gravity, so it can’t slow to a landing. Give it more thrust or less mass.',
 } as const;
 
 /** Why there is no plan, in the card's words; null when there is one. */

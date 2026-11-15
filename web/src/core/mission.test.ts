@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APOLLO_11_TIMES, EXAMPLE_LANDER, LUNAR_ORBIT_ALT_KM, MU_MOON, PARKING_ALT_KM, R_EARTH, R_MOON,
   burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, moonFixedInPlane, planDescent, approachSeconds, hyperbolaAt, hyperbolaTimeToRadius, MOON_SOI_KM,
-  planMission, propellantFor, SEQUENCE, simulateDescent, transferFor, type MissionInput, type OkPlan,
+  planMission, propellantFor, SEQUENCE, simulateDescent, simulateGuidedDescent, HIGH_GATE_KM, ASCENT_LOSSES_KMS, transferFor, type MissionInput, type OkPlan,
 } from './mission';
 import { padById } from './pads';
 
@@ -90,27 +90,43 @@ describe('Powered descent', () => {
     near(d.rangeKm, 259.7, 259.7 * 0.02);
   });
 
-  it('a strong engine starts at 15 km, throttled down, and ends at rest on the ground', () => {
-    const p = planDescent(1400, { ...EXAMPLE_LANDER, thrustN: 9000 })!;
-    expect(p.startAltKm).toBe(15);
-    expect(p.throttle).toBeLessThan(1);
-    expect(p.descent.endSpeedKmS * 1000).toBeLessThan(3);
-    expect(p.descent.endAltKm * 1000).toBeLessThan(10);
-    expect(p.descent.dvKmS).toBeGreaterThan(1.692);   // above the speed at periapsis: gravity losses
-    expect(p.descent.dvKmS).toBeLessThan(2.2);
+  it('Apollo 11’s lunar module from 15 km: within 20 % of its 12 min 34.9 s powered descent, Δv 1.9 to 2.3 km/s', () => {
+    // 15,100 kg, 45.04 kN, Isp 311 s (docs/sources/issue-181.md). Ignition 102:33:05.01, landing 102:45:39.9.
+    const apollo = (102 * 3600 + 45 * 60 + 39.9) - (102 * 3600 + 33 * 60 + 5.01);
+    const d = simulateGuidedDescent(15, 15_100, 45_040, 311);
+    near(d.durationS, apollo, apollo * 0.2);
+    expect(d.dvKmS).toBeGreaterThan(1.9);
+    expect(d.dvKmS).toBeLessThan(2.3);
+    expect(d.endSpeedKmS * 1000).toBeLessThan(3);
+    // Braking to the high gate takes most of it, as on Apollo.
+    expect(d.brakingS / d.durationS).toBeGreaterThan(0.5);
   });
 
-  it('a weaker engine starts higher, at full thrust, and still ends at rest', () => {
-    const p = planDescent(1474, EXAMPLE_LANDER)!;
-    expect(p.startAltKm).toBeGreaterThan(15);
-    expect(p.startAltKm).toBeLessThan(LUNAR_ORBIT_ALT_KM);
-    expect(p.throttle).toBe(1);
-    expect(p.descent.endSpeedKmS * 1000).toBeLessThan(3);
-    expect(p.descent.endAltKm * 1000).toBeLessThan(10);
-    expect(p.descent.dvKmS).toBeLessThan(2.2);
+  it('the altitude falls through braking: never above the start, at the high gate when braking ends', () => {
+    const d = simulateGuidedDescent(15, 1420, EXAMPLE_LANDER.thrustN, EXAMPLE_LANDER.ispS, true);
+    for (const s of d.samples) expect(s.altKm).toBeLessThan(15.5);
+    const atGate = d.samples.find((s) => s.tS >= d.brakingS)!;
+    near(atGate.altKm, HIGH_GATE_KM, 1);
   });
 
-  it('an engine too weak to stop even from 99 km gives no plan', () => {
+  it('a strong engine and the example lander both start at 15 km, at full thrust, and touch down under 3 m/s', () => {
+    for (const lander of [{ ...EXAMPLE_LANDER, thrustN: 9000 }, EXAMPLE_LANDER]) {
+      const p = planDescent(1474, lander)!;
+      expect(p.startAltKm).toBe(15);
+      expect(p.throttle).toBe(1);
+      expect(p.descent.endSpeedKmS * 1000).toBeLessThan(3);
+      expect(p.descent.endAltKm).toBe(0);
+      expect(p.descent.dvKmS).toBeGreaterThan(1.692);   // above the speed at periapsis: gravity losses
+      expect(p.descent.dvKmS).toBeLessThan(2.3);
+    }
+    // The weaker engine fights gravity longer: a longer descent, more Δv.
+    const strong = planDescent(1474, { ...EXAMPLE_LANDER, thrustN: 9000 })!.descent;
+    const weak = planDescent(1474, EXAMPLE_LANDER)!.descent;
+    expect(weak.durationS).toBeGreaterThan(strong.durationS);
+    expect(weak.dvKmS).toBeGreaterThan(strong.dvKmS);
+  });
+
+  it('an engine that cannot lift the lander in the Moon’s gravity gives no plan', () => {
     expect(planDescent(1474, { ...EXAMPLE_LANDER, thrustN: 1500 })).toBeNull();
   });
 });
@@ -216,6 +232,15 @@ describe('The whole mission', () => {
     expect(missionAt(plan, at('coast') + 1).propellantLeftKg).toBe(loaded);
     expect(missionAt(plan, at('lunar-orbit') + 1).propellantLeftKg).toBeLessThan(loaded);
     near(missionAt(plan, TOUCHDOWN).propellantLeftKg, plan.totals.propellantLeftKg, 1e-6);
+  });
+});
+
+describe('Launch', () => {
+  it('the launch Δv is the ideal one plus the cited 1.75 km/s of gravity and drag losses: about 9.1 km/s from Kennedy', () => {
+    const launch = okPlan().steps.find((s) => s.id === 'launch')!;
+    expect(ASCENT_LOSSES_KMS).toBe(1.75);
+    // Ideal from Kennedy to 185 km: 7.79 km/s orbital speed less 0.41 km/s from Earth's turning.
+    near(launch.dvKmS!, 7.38 + 1.75, 0.02);
   });
 });
 

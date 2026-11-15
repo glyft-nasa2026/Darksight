@@ -11,7 +11,7 @@ import {
   type StepId,
 } from '../../core/mission';
 import { PADS, padById } from '../../core/pads';
-import { PHASE_NAMES as NAMES } from '../../core/report';
+import { LAUNCH_DV_NOTE, PHASE_NAMES as NAMES } from '../../core/report';
 import {
   getState, landingScenario, missionFor, setLander, setPad, stateToAddress, subscribe,
 } from '../../state';
@@ -427,7 +427,7 @@ export function mount(el: HTMLElement): void {
   const launchInfo = make('div', 'ms-info');
   const landInfo = make('div', 'ms-info');
   const side = make('div', 'ms-side');
-  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote, proceedButton, proceedNote, reportButton, reportNote);
+  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote, proceedButton, proceedNote);
 
   // --- Animation -----------------------------------------------------------------------------
   const view = make('div', 'ms-view');
@@ -472,12 +472,13 @@ export function mount(el: HTMLElement): void {
   conds.setAttribute('aria-live', 'polite');
   const warnings = make('div', 'ms-warnings');
   const condsBox = make('div', 'ms-conds-box');
-  condsBox.append(condsTitle, conds, warnings);
+  // The report (T35) sits under the landing site's numbers: the last thing the card says.
+  condsBox.append(condsTitle, conds, warnings, reportButton, reportNote);
   const bottom = make('div', 'ms-bottom');
   bottom.append(tableWrap, condsBox);
   const model = make('p', 'ms-note muted',
-    '* Ideal, without gravity and drag losses: the launch vehicle is not modelled. Model: patched conics from Earth to the Moon, ' +
-    'instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent, ' +
+    `${LAUNCH_DV_NOTE} Model: patched conics from Earth to the Moon, ` +
+    'instant burns but the descent, a 100 km circular polar lunar orbit, a guided powered descent from 15 km in Apollo’s phases, ' +
     'phase times from Apollo 11 (NASA SP-4029). The launch time is touchdown less the phases: no launch window is solved.');
   const message = make('p', 'muted');
 
