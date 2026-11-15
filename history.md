@@ -4,6 +4,22 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: date search (T42)
+
+### tasks/T42-date-search.md
+
+- Was: "A decade that isn't loaded gives NaN rows. The search must never treat NaN as hidden".
+- Now: a decade not in memory is found with `eph.missing()`, and the search stops there.
+- Why: `vectorsAt()` hands back the nearest loaded row for a decade not in memory, so the Sun and
+  Earth would read as standing still, not NaN (`core/ephemeris.ts`; NaN only when no decade is
+  loaded at all). Found while writing T42.
+
+### SPEC.md: 2. Cut line and 4. Features
+
+- Was: no F22.
+- Now: F22, date search (if time).
+- Why: a planner asks "when is it good enough here?", the reverse of what the page answered.
+
 ## 15 Nov 2026: the curated list may hold 25 sites (T36)
 
 The team agreed on 15 Nov 2026.
