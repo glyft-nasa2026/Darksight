@@ -1,6 +1,6 @@
 # T34: Mission simulation, launch to touchdown
 
-Status: in progress (P5, branch `t34-mission`, draft pull request #100). The team agreed on 15 Nov 2026 (F20 in `SPEC.md`); every "Done when" line passes. Added: "Proceed", the launch-site picker on a globe and the launch simulation page; the twelve new pad coordinates still need a person's check. Not after the M3 freeze
+Status: second delivery in progress (P5, branch `t34-mission-b`, draft pull request; the first, #100, merged). The team agreed on 15 Nov 2026 (F20 in `SPEC.md`); every "Done when" line passes. Added: "Proceed", the launch-site picker on a globe and the launch simulation page; the twelve new pad coordinates still need a person's check. Not after the M3 freeze
 
 | | |
 |---|---|
@@ -158,7 +158,7 @@ what `missionAt` returns.
 - `web/index.html` (the `#mission` slot), `web/src/site.ts` (its mount), `web/src/ui/layout.css`
 - `docs/data-contract.md` sections 3, 4 and 5; `docs/design/mockup.html` and the new pictures,
   `docs/design.md`
-- Added on 15 Nov at P5's request (pull request #100): "Proceed" and the launch-site picker
+- Added on 15 Nov at P5's request (branch `t34-mission-b`, after #100 merged): "Proceed" and the launch-site picker
   (`web/src/ui/launch/`, `web/public/textures/earth.jpg`), more pads in `core/pads.ts`, and the
   launch simulation page (`web/simulation.html`, `web/src/simulation/`, `web/vite.config.ts`)
 - After step 1: `SPEC.md` (section 2, a new feature row), `docs/decisions.md` (one line),
