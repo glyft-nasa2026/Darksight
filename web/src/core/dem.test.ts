@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { parseDem, projectToGrid, type DemMeta } from './dem';
+import { gzipSync } from 'node:zlib';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { loadDem, parseDem, projectToGrid, unpackDemFile, type DemMeta } from './dem';
+import { packHeights } from './heightPack';
 import { MOON_RADIUS_KM } from './types';
 
 // A made-up grid with the mock file's shape (contract section 2), built in memory.
@@ -156,5 +158,76 @@ describe('parseDem', () => {
     expect(() => parseDem(META, new ArrayBuffer(100))).toThrow(/expected 803912/);
     expect(() => parseDem({ ...META, size: 0 }, new ArrayBuffer(100))).toThrow(/size/);
     expect(() => parseDem({ ...META, pixel_m: 0 }, new ArrayBuffer(100))).toThrow(/pixel_m/);
+  });
+});
+
+describe('dem.pack, the packed height map', () => {
+  // A small grid, big enough that unpacking pauses between slices of rows.
+  const SMALL: DemMeta = { ...META, size: 300 };
+  const n = SMALL.size * SMALL.size;
+  const heights = new Int16Array(n).map((_, i) => Math.round(2000 * Math.sin(i / 97)) + (i % 7));
+  const packedFile = (): Uint8Array<ArrayBuffer> => new Uint8Array(gzipSync(packHeights(heights, 300, 300)));
+  const binFile = (): ArrayBuffer => {
+    const buffer = new ArrayBuffer(n * 2);
+    const view = new DataView(buffer);
+    heights.forEach((v, i) => view.setInt16(i * 2, v, true));
+    return buffer;
+  };
+  const page = (): Response => new Response('<!doctype html><title>Darksight</title>', { headers: { 'content-type': 'text/html' } });
+
+  /** Serves dem.json and dem.bin, and dem.pack as given; records what was asked for. */
+  function host(pack: () => Response): string[] {
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(url.replace(/^.*data\//, ''));
+      if (url.endsWith('dem.json')) return new Response(JSON.stringify(SMALL));
+      if (url.endsWith('dem.pack')) return pack();
+      if (url.endsWith('dem.bin')) return new Response(binFile());
+      return new Response('', { status: 404 });
+    });
+    return asked;
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('unpackDemFile gives back every stored value', async () => {
+    expect(await unpackDemFile(SMALL, packedFile())).toEqual(heights);
+  });
+
+  it('unpackDemFile says null for a page instead of the file, and throws for another grid', async () => {
+    expect(await unpackDemFile(SMALL, new TextEncoder().encode('<!doctype html>'))).toBeNull();
+    const other = new Uint8Array(gzipSync(packHeights(new Int16Array(40 * 40), 40, 40)));
+    await expect(unpackDemFile(SMALL, other)).rejects.toThrow(/expected 180000/);
+  });
+
+  it('loadDem uses dem.pack and does not download dem.bin', async () => {
+    const asked = host(() => new Response(packedFile()));
+    const progress: number[] = [];
+    const dem = await loadDem((f) => progress.push(f));
+    expect(asked).toEqual(['dem.json', 'dem.pack']);
+    expect(dem.cell(150, 77)).toBe(heights[150 * 300 + 77] * SMALL.height_scale);
+    expect(progress.at(-1)).toBe(1);
+    expect(progress.every((f, i) => f >= 0 && f <= 1 && (i === 0 || f >= progress[i - 1]))).toBe(true);
+  });
+
+  it('loadDem loads dem.bin where there is no dem.pack: a 404, or the page itself', async () => {
+    for (const pack of [() => new Response('', { status: 404 }), page]) {
+      const asked = host(pack);
+      const dem = await loadDem();
+      expect(asked).toEqual(['dem.json', 'dem.pack', 'dem.bin']);
+      expect(dem.cell(150, 77)).toBe(heights[150 * 300 + 77] * SMALL.height_scale);
+    }
+  });
+
+  it('loadDem loads dem.bin when dem.pack is broken, and says so', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const broken = packedFile().slice(0, 2000);   // cut short
+    const asked = host(() => new Response(broken));
+    const dem = await loadDem();
+    expect(asked).toEqual(['dem.json', 'dem.pack', 'dem.bin']);
+    expect(dem.cell(299, 299)).toBe(heights[n - 1] * SMALL.height_scale);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dem.pack not loaded'), expect.anything());
   });
 });

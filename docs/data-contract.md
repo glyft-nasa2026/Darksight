@@ -125,6 +125,15 @@ Inverse: `r = hypot(x, y)`, `lat = 2 * atan(r / (2R)) - 90`, `lon = atan2(x, y)`
 `size` and `pixel_m` may change if T04 needs it; code reads them from `dem.json`, never
 hard-codes them. File budget: 15 MB.
 
+`dem.pack` (made by `npm run build` from `dem.bin`, not by T04; only in the built site): the
+same heights, losslessly packed, 4.4 MB against `dem.bin`'s 12.8 MB, which a host sends
+uncompressed. The site loads it first and `dem.bin` where it is missing or broken (the dev
+server has none). It is gzip of `2 * size * size` bytes: for each cell, row by row from the
+top, the stored value minus a prediction (`left + above - above-left`; `left` on the top row,
+`above` in the first column, 0 for the first cell), wrapped to 16 bits and zigzagged (0, -1, 1,
+-2 become 0, 1, 2, 3); the low bytes of every cell, then the high bytes. Code:
+`core/heightPack.ts`. Python and tests keep reading `dem.bin`.
+
 ### `globe.bin` + `globe.json`, `north.bin` + `north.json` (made by `data-prep/make_globe.py`, issue #66)
 
 Heights of the Moon north of the south-pole height map, for pictures: the 3D globe, and
@@ -399,7 +408,8 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | File | Task | Functions |
 |---|---|---|
 | `ephemeris.ts` | T00 | `loadEphemeris(): Promise<Ephemeris>` (index + home decade) · `loadEphemerisChunk(eph, i): Promise<ArrayBuffer>` · `indexEphemeris(meta): Ephemeris` and `parseEphemeris(meta, buffer: ArrayBuffer): Ephemeris` (no network; tests use them) · `eph.startMs`, `eph.endMs` (whole table), `eph.homeStartMs`, `eph.homeEndMs`, `eph.meta` · `eph.vectorsAt(tMs): { sun: [x,y,z]; earthKm: [x,y,z] }` (straight-line step between rows; Sun re-normalised) · `eph.missing(fromMs, toMs): number[]` (decades not yet loaded) · `eph.withChunk(i, buffer): Ephemeris` (a new value, one more decade) |
-| `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.cell(row, col): number` (one stored cell, metres; row 0 at the top as in the file; no data is 0) · `dem.hasData(row, col): boolean` (T41: false on a `nodata` cell or outside the grid) · `dem.meta` |
+| `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` (`dem.pack` first, else `dem.bin`) · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `demFromHeights(meta, values: Int16Array): Dem` · `unpackDemFile(meta, file): Promise<Int16Array \| null>` (`dem.pack`'s bytes to stored values; null when they are not gzip) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.cell(row, col): number` (one stored cell, metres; row 0 at the top as in the file; no data is 0) · `dem.hasData(row, col): boolean` (T41: false on a `nodata` cell or outside the grid) · `dem.meta` |
+| `heightPack.ts` | dem.pack | `packHeights(values: Int16Array, width, height): Uint8Array` · `unpackHeights(packed, width, height): Int16Array` · `unpackHeightRows(packed, width, height, out, rowStart, rowEnd)` (rows in order from row 0). The lossless packing of section 2's `dem.pack`, before gzip; the build packs, the loader unpacks |
 | `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` · `sunAltAzAtSite(eph, site): (tMs) => AltAz` (issue #32: `sunAltAz` for one site at many times, the site's axes worked out once; the same numbers bit for bit) |
 | `horizon.ts` | T00 flat skyline, then T05 | `skylineAt(dem: Dem | null, site: Site): Skyline` · `skylineElev(s: Skyline, az: number): number` (interpolated) |
 | `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
