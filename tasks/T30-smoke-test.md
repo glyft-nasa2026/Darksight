@@ -1,6 +1,6 @@
 # T30: Page smoke test in CI
 
-Status: not started
+Status: in progress (rickphobia with Claude, branch t30-smoke-test). Planned files: web/e2e/, .github/workflows/ci.yml, web/package.json and web/package-lock.json (adds @playwright/test and the test:page script). Next: the smoke test
 
 | | |
 |---|---|
