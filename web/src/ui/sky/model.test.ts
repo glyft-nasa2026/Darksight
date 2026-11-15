@@ -112,6 +112,20 @@ describe('skyModel', () => {
     expect(m.yTop).toBeGreaterThanOrEqual(70);
     expect(m.now?.earth.alt).toBe(66);
   });
+
+  it('says Earth is in view when any of its path is on the chart (T38)', () => {
+    const nearSide = [0, 1, 2].map((i) => sample(i, 100, 10, 250, 60 + i));
+    expect(skyModel(nearSide, skylineOf(() => 0, false), T0).earthInView).toBe(true);
+    // Near the pole Earth dips in and out of view: one sample on the chart is enough.
+    const limb = [sample(0, 10, 1, 160, -20), sample(1, 10, 1, 161, Y_BOTTOM), sample(2, 10, 1, 162, -9)];
+    expect(skyModel(limb, skylineOf(() => 0), T0).earthInView).toBe(true);
+  });
+
+  it('says Earth is out of view on the far side, and with no samples (T38)', () => {
+    const farSide = [0, 1, 2].map((i) => sample(i, 100, 10, 90, -60 - i, 1, false));
+    expect(skyModel(farSide, skylineOf(() => 0, false), T0).earthInView).toBe(false);
+    expect(skyModel([], skylineOf(() => 0), T0).earthInView).toBe(false);
+  });
 });
 
 describe('sunMarkerPx', () => {
