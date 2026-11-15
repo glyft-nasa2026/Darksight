@@ -421,7 +421,9 @@ export const LANDED_KMS = 0.003;
  *   LOW_GATE_KM low gate, the along-track speed falling evenly to zero there, sinking at most
  *   APPROACH_SINK_KMS. Before, the last along-track speed was taken out in a few seconds and the
  *   lander came straight down from the high gate, which drew a 2 km vertical line.
- * - Landing, throttled: straight down at the altitude over LANDING_RATE_S, to 1 m/s at the ground.
+ * - Landing, throttled: down at the altitude over LANDING_RATE_S, to 1 m/s at the ground, the
+ *   along-track speed falling with the height from the low gate's (as fast as the sink there, a
+ *   45° path) to zero at touchdown, so the last 150 m is a curve, not a drop (issue #192).
  *
  * The thrust is worked out at the start of each step and held through it (fourth-order
  * Runge-Kutta in the orbit's plane, as simulateDescent). Ends at the ground; a lander whose
@@ -443,7 +445,7 @@ export function simulateGuidedDescent(
   const span = startAltKm - HIGH_GATE_KM;
   let braking = true;
   let brakingS = 0;
-  let approach: { tS: number; h: number; vt: number; spanS: number; sinkIn: number; sinkOut: number } | null = null;
+  let approach: { tS: number; h: number; vt: number; spanS: number; sinkIn: number; sinkOut: number; drift: number } | null = null;
   let landing = false;
   let t = 0;
   // The thrust force held through a step, radial and along-track, and the mass flow.
@@ -475,6 +477,7 @@ export function simulateGuidedDescent(
           tS: t, h: hNow, vt: Math.max(0, vt), spanS,
           sinkIn: Math.min(APPROACH_SINK_KMS, Math.max(0, -vr)),
           sinkOut: Math.min(0.03, LOW_GATE_KM / LANDING_RATE_S),   // the landing's first sink rate
+          drift: Math.min(Math.max(0, vt), Math.min(0.03, LOW_GATE_KM / LANDING_RATE_S)),
         };
       }
       const g = approach!;
@@ -488,8 +491,9 @@ export function simulateGuidedDescent(
       const f3 = f2 * f;
       const hRef = (2 * f3 - 3 * f2 + 1) * g.h + (f3 - 2 * f2 + f) * m0 + (-2 * f3 + 3 * f2) * LOW_GATE_KM + (f3 - f2) * m1;
       const vrRef = ((6 * f2 - 6 * f) * g.h + (3 * f2 - 4 * f + 1) * m0 + (-6 * f2 + 6 * f) * LOW_GATE_KM + (3 * f2 - 2 * f) * m1) / g.spanS;
-      const vtRef = g.vt * (1 - f);
-      at = -g.vt / g.spanS + (vtRef - vt) / LANDING_TAU_S;
+      // Along-track: evenly down to the low gate's drift, which the landing then takes to zero.
+      const vtRef = g.drift + (g.vt - g.drift) * (1 - f);
+      at = -(g.vt - g.drift) / g.spanS + (vtRef - vt) / LANDING_TAU_S;
       ar = gNet + (hRef - hNow) / (LANDING_TAU_S * LANDING_TAU_S) + (2 * (vrRef - vr)) / LANDING_TAU_S;
       const mag = Math.hypot(ar, at);
       if (mag > aMax) { ar *= aMax / mag; at *= aMax / mag; }
@@ -498,7 +502,8 @@ export function simulateGuidedDescent(
     } else {
       braking = false;
       const vzCmd = -Math.max(0.001, Math.min(0.03, hNow / LANDING_RATE_S));
-      at = -vt / LANDING_TAU_S;
+      const drift = (approach?.drift ?? 0) * Math.min(1, Math.max(0, hNow) / LOW_GATE_KM);
+      at = (drift - vt) / LANDING_TAU_S;
       ar = gNet + (vzCmd - vr) / LANDING_TAU_S;
       const mag = Math.hypot(ar, at);
       if (mag > aMax) { ar *= aMax / mag; at *= aMax / mag; }
@@ -645,6 +650,7 @@ type Geometry = {
   site: [number, number, number];       // unit vector to the site, Moon-fixed, at touchdown
   travel: [number, number, number];     // unit vector of travel at the site (south along it)
   massAfterLoi: number; massAfterDoi: number; dryKg: number;
+  pad: { lat: number; lon: number };    // where the launch is from, degrees
 };
 
 export type MissionPlan =
@@ -669,6 +675,12 @@ export type MissionPlan =
     };
     runsOutMs: number | null;            // when the lander's propellant runs out, if it does
     geometry: Geometry;
+    /**
+     * Set by departure.ts's withLaunchWindow when the Sun and Earth table is there: the turn from
+     * the ICRF into this plan's Earth-Moon frame (x, y in the Moon's orbit plane, z its pole), so
+     * Earth's real axis and turning can be placed. Without it the departure stays in the Moon's plane.
+     */
+    earth?: { icrfToPlane: [[number, number, number], [number, number, number], [number, number, number]] };
   };
 
 export type OkPlan = Extract<MissionPlan, { ok: true }>;
@@ -687,6 +699,17 @@ function validInput(input: MissionInput, times: MissionTimes): boolean {
     && input.earthMoonKm > R_EARTH + PARKING_ALT_KM;
 }
 
+/**
+ * The ascent to the parking orbit, km/s: orbital speed less what Earth's turning gives along the
+ * orbit, plus the cited gravity and drag losses (issue #181). A launch into an orbit inclined
+ * incDeg gets the turning Earth's speed times cos(incDeg): the pad's speed, R cos(latitude), times
+ * the sine of the launch azimuth, which is cos(inc) / cos(latitude). Due east, inc is the latitude.
+ */
+export function ascentDvFor(incDeg: number): number {
+  const rPark = R_EARTH + PARKING_ALT_KM;
+  return circularSpeed(MU_EARTH, rPark) - EARTH_SPIN * R_EARTH * Math.cos(rad(incDeg)) + ASCENT_LOSSES_KMS;
+}
+
 export function planMission(input: MissionInput): MissionPlan {
   const times = input.times ?? APOLLO_11_TIMES;
   if (!validInput(input, times)) return { ok: false, error: 'bad-input' };
@@ -696,9 +719,9 @@ export function planMission(input: MissionInput): MissionPlan {
   const rPark = R_EARTH + PARKING_ALT_KM;
   const transfer = transferFor(rPark, input.earthMoonKm, times.coastS);
   if (!transfer) return { ok: false, error: 'coast-out-of-range' };
-  // Ascent, launched due east: orbital speed less what Earth's turning gives at the pad, plus the
-  // cited gravity and drag losses (issue #181).
-  const ascentDv = circularSpeed(MU_EARTH, rPark) - EARTH_SPIN * R_EARTH * Math.cos(rad(pad.lat)) + ASCENT_LOSSES_KMS;
+  // Ascent, launched due east: the parking orbit inclined by the pad's latitude. With the Sun
+  // and Earth table, departure.ts's launchWindow then sets the real launch time and inclination.
+  const ascentDv = ascentDvFor(Math.abs(pad.lat));
 
   // Moon side.
   const rOrbit = R_MOON + LUNAR_ORBIT_ALT_KM;
@@ -825,6 +848,7 @@ export function planMission(input: MissionInput): MissionPlan {
       descent: d,
       site: siteVec, travel,
       massAfterLoi, massAfterDoi, dryKg: lander.dryKg,
+      pad: { lat: pad.lat, lon: pad.lon },
     },
   };
 }
@@ -920,7 +944,7 @@ export function missionAt(plan: OkPlan, tMs: number): MissionState {
         r = R_EARTH + (g.rPark - R_EARTH) * f;
         // From the pad's own speed with the turning Earth (the same term the launch Δv takes off),
         // not the equator's: 0.408 km/s at Kennedy, 0.465 km/s only on the equator.
-        const padSpeed = EARTH_SPIN * R_EARTH * Math.cos(rad(plan.orbit.parkingIncDeg));
+        const padSpeed = EARTH_SPIN * R_EARTH * Math.cos(rad(g.pad.lat));
         state.speedKmS = padSpeed + (circularSpeed(MU_EARTH, g.rPark) - padSpeed) * f;
       } else {
         r = g.rPark;

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APOLLO_11_TIMES, EXAMPLE_LANDER, LUNAR_ORBIT_ALT_KM, MU_MOON, PARKING_ALT_KM, R_EARTH, R_MOON,
   burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, moonFixedInPlane, planDescent, approachSeconds, hyperbolaAt, hyperbolaTimeToRadius, MOON_SOI_KM,
-  arrivalOrbit, lunarFrameInEarthPlane, planMission, propellantFor, SEQUENCE, simulateDescent, simulateGuidedDescent, HIGH_GATE_KM, LOW_GATE_KM, ASCENT_LOSSES_KMS, transferFor, type MissionInput, type OkPlan,
+  arrivalOrbit, lunarFrameInEarthPlane, planMission, propellantFor, SEQUENCE, simulateDescent, simulateGuidedDescent, HIGH_GATE_KM, LOW_GATE_KM, LANDED_KMS, ASCENT_LOSSES_KMS, transferFor, type MissionInput, type OkPlan,
 } from './mission';
 import { padById } from './pads';
 
@@ -126,6 +126,17 @@ describe('Powered descent', () => {
       const first = approach[0];
       const last = approach[approach.length - 1];
       expect((last.angle - first.angle) * R_MOON).toBeGreaterThan((first.altKm - last.altKm) / 3);
+    }
+  });
+
+  it('comes down the last 150 m on a curve, not straight down, and still touches down gently (issue #192)', () => {
+    for (const [m0, thrustN] of [[1420, EXAMPLE_LANDER.thrustN], [1420, 9000], [900, 15000], [15100, 45040]]) {
+      const d = simulateGuidedDescent(15, m0, thrustN, 320, true);
+      const end = d.samples[d.samples.length - 1];
+      const gate = d.samples.find((s) => s.altKm <= LOW_GATE_KM)!;
+      // At least a third of the 150 m in ground: about 45 degrees at first, upright at the end.
+      expect((end.angle - gate.angle) * R_MOON, `${thrustN} N, ${m0} kg`).toBeGreaterThan(LOW_GATE_KM / 3);
+      expect(d.endSpeedKmS).toBeLessThan(LANDED_KMS);
     }
   });
 
