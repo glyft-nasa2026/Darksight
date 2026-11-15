@@ -5,7 +5,8 @@ import { EXAMPLE_BATTERY, validBattery, type Battery } from './core/battery';
 import type { Dem } from './core/dem';
 import { loadEphemerisChunk, type Ephemeris } from './core/ephemeris';
 import { sunAltAzAtSite } from './core/geometry';
-import { skylineAt, skylineElev } from './core/horizon';
+import type { GlobeHeights } from './core/globe';
+import { groundAt, skylineAt, skylineElev, SKYLINE_MIN_LAT } from './core/horizon';
 import {
   APOLLO_11_TIMES, earthMoonKmAt, EXAMPLE_LANDER, planMission, type Lander, type MissionPlan,
 } from './core/mission';
@@ -25,6 +26,10 @@ export type AppState = {
   // eph is null until the table has loaded, and again while a decade that the live or a pinned
   // scenario needs is still downloading, so every module shows "Loading" by itself.
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
+  // T37: globe.bin, the coarse skyline for sites north of 85 S (contract section 3, "Skyline").
+  // 'missing' once it failed or isn't there (the mock data set has none).
+  globe: GlobeHeights | null;
+  globeStatus: 'loading' | 'ready' | 'missing';
   // The mission (T34): where it lands (a copy of a scenario's site and time, so it stays put
   // while the scenarios change), from which launch pad, with which lander.
   landing: { site: Site; tMs: number } | null;
@@ -161,7 +166,7 @@ function stateFromAddress(hash: string, nowMs: number): { next: AppState; named:
     range: range === '90d' || range === '365d' ? range : '30d',
     mode: q.get('mode') === '3d' ? '3d' : '2d',
     windowStartMs: live.tMs,
-    eph: null, dem: null, sites: [],
+    eph: null, dem: null, sites: [], globe: null, globeStatus: 'loading',
     landing: textToSiteTime(q.get('land')),
     padId: padById(q.get('pad')).id,
     lander: textToLander(q.get('lander')) ?? { ...EXAMPLE_LANDER },
@@ -205,6 +210,8 @@ export function restoreFromAddress(hash: string, nowMs: number = Date.now()): vo
     next.eph = state.eph;
     next.dem = state.dem;
     next.sites = state.sites;
+    next.globe = state.globe;
+    next.globeStatus = state.globeStatus;
   }
   state = next;
   notify(false);
@@ -266,8 +273,13 @@ export function subscribe(fn: (s: AppState) => void): () => void {
   return () => { listeners.delete(fn); };
 }
 
-/** Called by main.ts as each data file arrives. Not for UI modules. */
-export function setData(patch: { eph?: Ephemeris | null; dem?: Dem | null; sites?: CuratedSite[] }): void {
+/**
+ * Called by main.ts as each data file arrives. Not for UI modules. `globe: null` (T37) says
+ * globe.bin failed or is missing, so a site north of 85 S stays a smooth Moon.
+ */
+export function setData(patch: {
+  eph?: Ephemeris | null; dem?: Dem | null; sites?: CuratedSite[]; globe?: GlobeHeights | null;
+}): void {
   if ('eph' in patch) {
     table = patch.eph ?? null;
     pending.clear();
@@ -275,10 +287,15 @@ export function setData(patch: { eph?: Ephemeris | null; dem?: Dem | null; sites
     failures.clear();
     scheduleRetry();                    // nothing failed: stops a waiting retry
   }
-  const { eph: _ignored, ...rest } = patch;
+  const { eph: _ignored, globe, ...rest } = patch;
   state = { ...state, ...rest };
+  if ('globe' in patch) {
+    state = { ...state, globe: globe ?? null, globeStatus: globe ? 'ready' : 'missing' };
+  }
   const example = 'sites' in patch && exampleWanted && addExample();
-  clearCaches();
+  // globe.bin alone changes only the sites north of 85 S (T37).
+  if (Object.keys(patch).every((k) => k === 'globe')) clearNorthCaches();
+  else clearCaches();
   notify(example);   // the example goes into the address, like any other change
 }
 
@@ -602,6 +619,20 @@ function clearCaches(): void {
   litScans.clear();
 }
 
+/**
+ * T37: when globe.bin arrives, only sites north of 85 S change (they use it for their skyline and
+ * ground). Every cache key starts with siteKey, so its latitude; polar sites keep their skyline,
+ * series and never-lit scan, which can be 650,000 hours long. A dropped scan that is still running
+ * sees it is no longer in litScans and stops.
+ */
+function clearNorthCaches(): void {
+  missionCache = null;
+  const northOf85 = (key: string): boolean => !(Number.parseFloat(key) <= SKYLINE_MIN_LAT);
+  for (const cache of [skylineCache, seriesCache, summaryCache, flipCache, litScans] as Map<string, unknown>[]) {
+    for (const key of [...cache.keys()]) if (northOf85(key)) cache.delete(key);
+  }
+}
+
 function cached<T>(cache: Map<string, T>, key: string, make: () => T): T {
   if (cache.has(key)) return cache.get(key) as T;
   // A drag makes a new key at every step; dropping everything now and then keeps this small.
@@ -613,9 +644,9 @@ function cached<T>(cache: Map<string, T>, key: string, make: () => T): T {
 
 const siteKey = (s: Site): string => `${s.lat},${s.lon},${s.eye_m ?? ''}`;
 
+/** T37: the site's ground height from the same grid as its skyline (dem.bin or globe.bin), else 0. */
 function groundFor(site: Site): number {
-  const dem = state.dem;
-  return dem && dem.covers(site.lat, site.lon) ? dem.heightAt(site.lat, site.lon) : 0;
+  return groundAt(state.dem, site, state.globe);
 }
 
 function hourly(sc: Scenario, startMs: number, range: Range): Sample[] {
@@ -627,7 +658,7 @@ function hourly(sc: Scenario, startMs: number, range: Range): Sample[] {
 }
 
 export function skylineFor(sc: Scenario): Skyline {
-  return cached(skylineCache, siteKey(sc.site), () => skylineAt(state.dem, sc.site));
+  return cached(skylineCache, siteKey(sc.site), () => skylineAt(state.dem, sc.site, state.globe));
 }
 
 /** Hourly from sc.tMs: strips, sky paths. */
