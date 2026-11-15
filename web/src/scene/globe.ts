@@ -8,6 +8,7 @@ import {
 } from 'three';
 import { parseDem, type Dem, type DemMeta } from '../core/dem';
 import { MOON_RADIUS_KM } from '../core/types';
+import { afterHeightMap } from '../loadOrder';
 import { GLOBE_RELIEF, globeNormalAt, type GlobeHeights } from './globeHeights';
 
 export * from './globeHeights';
@@ -36,9 +37,12 @@ export async function loadNorth(): Promise<Dem> {
 }
 
 let sharedCap: Promise<Dem> | null = null;
-/** loadNorth, fetched once, for the flat map's north polar view (issue #112). */
+/**
+ * loadNorth, fetched once for the 3D globe and the flat map's north polar view (issue #112),
+ * and only after the height map has finished downloading (issue #96).
+ */
 export function sharedNorth(): Promise<Dem> {
-  return sharedCap ??= loadNorth();
+  return sharedCap ??= afterHeightMap().then(loadNorth);
 }
 
 /** The latitude and longitude a texture coordinate of the globe's textures stands for. */
