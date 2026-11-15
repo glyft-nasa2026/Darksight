@@ -5,9 +5,27 @@ import type { OkPlan } from '../../core/mission';
 import type { LandingConditions, ReportWarning } from '../../core/report';
 import { countdownText } from '../../core/windows';
 import {
-  flipFor, neverLitFor, neverLitPendingFor, samplesFor, skylineFor, summaryFor, type Scenario,
+  type MissionResult, flipFor, neverLitFor, neverLitPendingFor, samplesFor, skylineFor, summaryFor, type Scenario,
 } from '../../state';
+import { noRowText } from '../tableGap';
 import { kgText, pctText, utcText } from './format';
+
+export const ERRORS = {
+  'bad-input': 'The lander needs positive numbers, and a dry mass below its mass after TLI.',
+  'coast-out-of-range': 'No transfer reaches the Moon in that coast time.',
+  'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
+} as const;
+
+/** Why there is no plan, in the card's words; null when there is one. */
+export function planMessage(m: MissionResult): string | null {
+  switch (m.status) {
+    case 'none': return 'No landing site chosen. Go back to the landing sites and press “Land here” on a scenario card, then “Open mission”.';
+    case 'loading': return 'Loading';
+    case 'outside': return 'This landing time is too near the edge of the Sun and Earth table (1900 to 2100) for the mission.';
+    case 'failed': return noRowText('failed', m.decadeMs);
+    case 'ready': return m.plan.ok ? null : ERRORS[m.plan.error];
+  }
+}
 
 /** The landing site at touchdown, or 'loading' while its hours are still on their way. */
 export function landingConditions(sc: Scenario): LandingConditions | 'loading' {

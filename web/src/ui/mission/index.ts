@@ -20,19 +20,13 @@ import {
   coordText, dayText, dvText, elapsedText, kgText, kmText, shortUtcText, speedText, utcText,
 } from './format';
 import { stepCells, totalsCells } from './cells';
-import { conditionStats, landingConditions, missionWarnings } from './conditions';
+import { conditionStats, ERRORS, landingConditions, missionWarnings, planMessage } from './conditions';
 import { BURN_SPEED, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
-import { noRowText } from '../tableGap';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const W = 1000;   // the picture's viewBox
 const H = 400;
 
-const ERRORS = {
-  'bad-input': 'The lander needs positive numbers, and a dry mass below its mass after TLI.',
-  'coast-out-of-range': 'No transfer reaches the Moon in that coast time.',
-  'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
-} as const;
 
 // Simulated seconds per real second, the same as the simulation page's (pace.ts, issue #105):
 // "Auto" (the default) picks one per stage, every change is gradual, and the playback slows
@@ -757,7 +751,7 @@ export function mount(el: HTMLElement): void {
       stop();
       plan = null;
       shownKey = null;
-      message.textContent = 'No landing site chosen. Go back to the landing sites and press “Land here” on a scenario card, then “Open mission”.';
+      message.textContent = planMessage({ status: 'none' }) ?? '';
       body.replaceChildren(message);
       return;
     }
@@ -779,10 +773,7 @@ export function mount(el: HTMLElement): void {
       stop();
       plan = null;
       shownKey = null;
-      if (m.status === 'loading') message.textContent = 'Loading';
-      else if (m.status === 'outside') message.textContent = 'This landing time is too near the edge of the Sun and Earth table (1900 to 2100) for the mission.';
-      else if (m.status === 'failed') message.textContent = noRowText('failed', m.decadeMs);
-      else if (m.status === 'ready' && !m.plan.ok) message.textContent = ERRORS[m.plan.error];
+      message.textContent = planMessage(m) ?? '';
       message.className = m.status === 'loading' ? 'muted' : 'ms-error-text';
       body.replaceChildren(top);
       main.replaceChildren(message);

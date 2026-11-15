@@ -13,13 +13,15 @@ export default defineConfig({
   build: {
     // Plotly alone is about 4.5 MB; the default 500 kB warning would fire on every build.
     chunkSizeWarningLimit: 6000,
-    // Three pages: the site, the mission planner that "Open mission" on the landing scenario
-    // card opens, and the launch simulation that its "Proceed" opens (T34).
+    // Four pages: the site, the mission planner that "Open mission" on the landing scenario
+    // card opens, the launch simulation that its "Proceed" opens (T34), and the mission report
+    // that its "Generate full launch schedule" opens (T35).
     rolldownOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         mission: fileURLToPath(new URL('./mission.html', import.meta.url)),
         simulation: fileURLToPath(new URL('./simulation.html', import.meta.url)),
+        report: fileURLToPath(new URL('./report.html', import.meta.url)),
       },
     },
   },

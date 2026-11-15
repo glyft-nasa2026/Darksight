@@ -1,0 +1,21 @@
+/* The mission report page (T35). Only ui/theme.css names. */
+.rpp {
+  display: grid; gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5);
+  min-height: 100vh; box-sizing: border-box; align-content: start;
+  max-width: 72rem; margin: 0 auto;
+}
+.rpp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.rpp-back { text-decoration: none; }
+.rpp-status { font-family: var(--font-num); font-size: var(--fs-sm); color: var(--warn); }
+#report { min-width: 0; }
+
+@media (max-width: 800px) {
+  .rpp { padding: var(--space-3); gap: var(--space-3); }
+}
+
+/* Paper: the report alone, without its card's frame. */
+@media print {
+  .rpp { display: block; padding: 0; min-height: 0; max-width: none; }
+  .rpp-bar { display: none; }
+  #report.card { border: 0; padding: 0; background: var(--bg); }
+}
