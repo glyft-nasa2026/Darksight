@@ -1,6 +1,6 @@
 # T09: Compare table and strips
 
-Status: done (first delivery #21; Live column #47; resize fix for issue #49, #64; cut-short window and sliver fixes #74)
+Status: done (first delivery #21; Live column #47; resize fix for issue #49, #64; cut-short window and sliver fixes #74; "Smooth Moon, no terrain" on a column without a terrain skyline, #91)
 
 | | |
 |---|---|
@@ -40,6 +40,7 @@ Spec features F6 and F7.
   - A scenario with fewer than 30 days of table after it shows a dash in the five 30-day rows, and its strip stops where the data stops. Before, the short window was ranked as if whole.
   - One value beside a dash is not marked best.
   - "Sun now" rounds the disc as the readout does: a sliver reads 1 %, not 0 %.
+- 14 Nov 2026, pull request #91 (`t09-ui-compare-e`), from a review of #86: a column whose skyline is not from terrain (the height map not in yet, or a site north of 85° S) says "Smooth Moon, no terrain" under its time, as the readout does. Since #86 the site opens before the height map is in; until then the first-open example showed the crater floor as "Lit, 100 % of disc" with nothing on the card to say why.
 
 ## Prompt to paste into Claude Code
 
