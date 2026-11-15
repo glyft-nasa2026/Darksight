@@ -8,14 +8,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
-  approachSeconds, EARTH_SPIN, missionAt, moonFixedInPlane, R_EARTH, R_MOON, type MissionState, type OkPlan, type StepId,
+  EARTH_SPIN, lunarFrameInEarthPlane, missionAt, moonFixedInPlane, R_EARTH, R_MOON, type MissionState, type OkPlan, type StepId,
 } from '../core/mission';
 import type { Pad } from '../core/pads';
 import { disposeScene, earthDirection, makeEarth, prefersReducedMotion, themeLength } from '../ui/launch/earth';
 import { themeColor } from '../ui/plotTheme';
-import { alignFrames } from '../core/sky';
+import { alignFrames, apply } from '../core/sky';
 import type { Vec3 } from '../core/ephemeris';
 import { makeStarField } from '../scene/stars';
+import { departureAt, departureFor } from '../core/departure';
 
 export type Scale = 'near' | 'earth' | 'moon' | 'descent';
 
@@ -45,7 +46,7 @@ const isMoonScale = (s: Scale): boolean => s === 'moon' || s === 'descent';
 const VIEW_DIRECTION: Record<Scale, THREE.Vector3> = {
   near: new THREE.Vector3(0.25, 0.75, 1).normalize(),
   earth: new THREE.Vector3(0, 1, 0.55).normalize(),
-  moon: new THREE.Vector3(0.25, 0.2, 1).normalize(),
+  moon: new THREE.Vector3(0.25, 0.2, 1).normalize(),   // replaced per plan: along the orbit's normal
   descent: new THREE.Vector3(0, 0, 1),   // replaced per plan: from the side of the site
 };
 
@@ -101,17 +102,24 @@ export function createScene(
   // the Moon's real orbit plane at touchdown (core/sky.ts moonOrbitIcrf), with the Moon where it
   // really is then. Without the table's Earth vectors there are no stars.
   const stars = makeStarField();
+  // Earth's north pole in missionAt's frame (x, y in the Moon's orbit plane, z its normal), from
+  // the same turn: ICRF's z is Earth's pole. Without it the departure stays in the Moon's plane.
+  let earthPole: [number, number, number] | null = null;
   if (sky) {
     const moonAt = P(missionAt(plan, td).earthPlane.moon).normalize();
-    stars.turn(alignFrames(sky.toMoon, sky.pole, [moonAt.x, moonAt.y, moonAt.z], [0, 1, 0]));
+    const icrfToScene = alignFrames(sky.toMoon, sky.pole, [moonAt.x, moonAt.y, moonAt.z], [0, 1, 0]);
+    stars.turn(icrfToScene);
     scene.add(stars.object);
+    const [x, y, z] = apply(icrfToScene, [0, 0, 1]);
+    earthPole = [x, -z, y];
   }
+  const departure = departureFor(plan, earthPole);
 
   // Earth, turned so the pad is under the craft at launch.
   const earth = makeEarth(R_EARTH * KM, true);
   scene.add(earth);
   const padDir = earthDirection(pad.lat, pad.lon);
-  const launchDir = P(missionAt(plan, launch).earthPlane.craft).normalize();
+  const launchDir = P3(departureAt(plan, departure, launch)!).normalize();
   const tilt = new THREE.Quaternion().setFromUnitVectors(padDir, launchDir);
   const spin = new THREE.Quaternion();
   const yAxis = new THREE.Vector3(0, 1, 0);
@@ -121,19 +129,22 @@ export function createScene(
   earth.add(padMark);
 
   // The Moon, carried along its circle. Inside `moon` everything is in missionAt's lunar-orbit
-  // frame (P, P3); the group is turned so the Moon's north pole points up and the orbit (polar)
-  // faces the viewer, so a site's latitude shows where it is: a south-pole site at the bottom.
+  // frame (P, P3); the group is turned as core says that frame sits in the transfer's
+  // (lunarFrameInEarthPlane, issue #192): the Moon's north up, its near side towards Earth, and
+  // the orbit in the plane the arrival leads into, so the arrival carries on from the transfer.
   const moon = new THREE.Group();
   scene.add(moon);
   const at = (t: number, lat: number, lon: number): THREE.Vector3 => P3(moonFixedInPlane(plan, t, lat, lon));
-  {
-    const north = at(td, 90, 0).normalize();
-    const normal = new THREE.Vector3(0, 1, 0);   // the orbit's normal in the group
-    const x = new THREE.Vector3().crossVectors(north, normal).normalize();
-    const up = new THREE.Vector3().crossVectors(normal, x).normalize();
-    const toGroup = new THREE.Matrix4().makeBasis(x, up, normal);   // display axes -> group
-    moon.quaternion.setFromRotationMatrix(toGroup.transpose());
-  }
+  const axis = ([x, y, z]: [number, number, number]): THREE.Vector3 => new THREE.Vector3(x, z, -y);   // P3, unscaled
+  const [lx, ly, lz] = lunarFrameInEarthPlane(plan);
+  // The group's axes are P3 of the lunar frame's: x, then z (its normal) up, then -y.
+  moon.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(axis(lx), axis(lz), axis(ly).negate()));
+  // The Moon views look along the orbit's normal, from the side the Earth view is on.
+  const orbitNormal = axis(lz);
+  if (orbitNormal.dot(VIEW_DIRECTION.earth) < 0) orbitNormal.negate();
+  const up = new THREE.Vector3(0, 1, 0);
+  const moonView = orbitNormal.clone().addScaledVector(up, 0.2)
+    .addScaledVector(new THREE.Vector3().crossVectors(up, orbitNormal), 0.25).normalize();
   // The body itself turns with the Moon: its grid follows the Moon-fixed frame from core.
   const moonBody = new THREE.Group();
   moon.add(moonBody);
@@ -162,7 +173,7 @@ export function createScene(
   placeSite(td);
   // The descent is watched from beside the site, looking along the orbit's normal.
   const siteOut = at(td, site.lat, site.lon).normalize().applyQuaternion(moon.quaternion);
-  const descentView = siteOut.clone().multiplyScalar(0.45).add(new THREE.Vector3(0, 0, 1)).normalize();
+  const descentView = siteOut.clone().multiplyScalar(0.45).add(orbitNormal).normalize();
 
   // Markers that stay visible when the bodies are a few pixels across: round dots.
   const disc = document.createElement('canvas');
@@ -208,18 +219,38 @@ export function createScene(
     return [before, flown];
   };
   const doi = step('doi').startMs;
-  const toTli = sample(plan, launch, tli, 500, (s) => s.earthPlane.craft);
-  const coast = sample(plan, tli, loi, 700, (s) => s.earthPlane.craft);
-  const earthTrack = addTrack(scene, { times: [...toTli.times, ...coast.times], points: [...toTli.points, ...coast.points] }, '--accent');
-  // The arrival hyperbola, sampled densely near the periapsis, where it bends.
-  const arrive = loi - approachSeconds(plan) * 1000;
+  // Where the craft is drawn (issue #192). Until the Moon's sphere of influence: core's
+  // departure, in the plane inclined to Earth's equator by the parking orbit's inclination that
+  // holds the arrival, with the coast the one orbit from TLI to the arrival (core/departure.ts).
+  // From there on: its Moon-centred path, carried with the Moon. Worked out for each plan.
+  const arrive = departure.entryMs;
+  const atMoon = (st: MissionState): THREE.Vector3 =>
+    P(st.earthPlane.moon).add(P(st.moonPlane!).applyQuaternion(moon.quaternion));
+  const inScene = (st: MissionState): THREE.Vector3 => {
+    const d = departureAt(plan, departure, st.tMs);
+    if (d) return P3(d);
+    return st.moonPlane ? atMoon(st) : P(st.earthPlane.craft);
+  };
+  // The arrival hyperbola's times, densely near the periapsis, where it bends.
+  const approachTimes: number[] = [];
+  for (let i = 0; i <= 400; i++) approachTimes.push(Math.min(loi - 1, loi - (loi - arrive) * (1 - i / 400) ** 3));
+  // The transfer from the pad to LOI as one line, in the scene: launch, the parking orbit, the
+  // coast from TLI and, inside the sphere of influence, the arrival as it is seen from Earth.
+  const transfer = { times: [] as number[], points: [] as THREE.Vector3[] };
+  const toTliTimes = Array.from({ length: 501 }, (_, i) => launch + ((tli - launch) * i) / 500);
+  // Densest just after TLI, where the craft is fastest and the near view shows the departure.
+  const coastTimes = Array.from({ length: 800 }, (_, i) => tli + (arrive - tli) * ((i + 1) / 800) ** 2);
+  for (const t of [...toTliTimes, ...coastTimes, ...approachTimes.slice(1)]) {
+    transfer.times.push(t);
+    transfer.points.push(inScene(missionAt(plan, t)));
+  }
+  const earthTrack = addTrack(scene, transfer, '--accent');
   const approach = { times: [] as number[], points: [] as THREE.Vector3[] };
-  for (let i = 0; i <= 400; i++) {
-    const t = Math.min(loi - 1, loi - (loi - arrive) * (1 - i / 400) ** 3);
+  for (const t of approachTimes) {
     const m = missionAt(plan, t).moonPlane;
     if (m) { approach.times.push(t); approach.points.push(P(m)); }
   }
-  addTrack(moon, approach, '--muted');
+  const approachTrack = addTrack(moon, approach, '--muted');
   addTrack(moon, sample(plan, loi, doi, 500, (s) => s.moonPlane), '--accent');
   addTrack(moon, sample(plan, doi, pdi, 400, (s) => s.moonPlane), '--warn');
   addTrack(moon, sample(plan, pdi, td, 400, (s) => s.moonPlane), '--ok');
@@ -338,19 +369,23 @@ export function createScene(
   };
 
   let last: { st: MissionState; scale: Scale; burning: boolean } | null = null;
-  // At Earth's scales the craft follows the transfer; at the Moon's, its Moon-centred path; in a
-  // glide between them, a blend. The Earth-frame lines, which run into the Moon's centre, fade
-  // out toward the Moon's scales by the same weight.
-  for (const l of [...earthTrack, moonPath]) l.userData.opacity = (l.material as THREE.LineBasicMaterial).opacity;
+  // The craft is on the one joined path at every scale (inScene). The Earth-scale lines fade
+  // out toward the Moon's scales, where the Moon-centred tracks show the same path up close.
+  // The arrival hyperbola does the opposite: it is drawn round the Moon and moves with it, so at
+  // Earth's scales it would hang off where the Moon is now, not where the craft meets it. There
+  // the transfer line already shows the arrival.
+  const fades = [
+    ...[...earthTrack, moonPath].map((l) => ({ l, atMoon: false })),
+    ...approachTrack.map((l) => ({ l, atMoon: true })),
+  ];
+  for (const { l } of fades) l.userData.opacity = (l.material as THREE.LineBasicMaterial).opacity;
   const placeCraft = (st: MissionState | undefined = last?.st): void => {
     if (!st) return;
-    const w = st.moonPlane ? moonWeight : 0;
-    const fromEarth = P(st.earthPlane.craft);
-    craft.position.copy(w > 0 ? fromEarth.lerp(moon.position.clone().add(P(st.moonPlane!).applyQuaternion(moon.quaternion)), w) : fromEarth);
-    for (const l of [...earthTrack, moonPath]) {
+    craft.position.copy(inScene(st));
+    for (const { l, atMoon: shownAtMoon } of fades) {
       const m = l.material as THREE.LineBasicMaterial;
       m.transparent = true;
-      m.opacity = l.userData.opacity * (1 - moonWeight);
+      m.opacity = l.userData.opacity * (shownAtMoon ? moonWeight : 1 - moonWeight);
       l.visible = m.opacity > 0.01;
     }
   };
@@ -363,7 +398,8 @@ export function createScene(
     const target = targetFor(scale, st);
     let offset = camera.position.clone().sub(lastTarget);
     if (scale !== shown) {
-      const to = (scale === 'descent' ? descentView : VIEW_DIRECTION[scale]).clone().multiplyScalar(distanceFor(scale));
+      const view = scale === 'descent' ? descentView : scale === 'moon' ? moonView : VIEW_DIRECTION[scale];
+      const to = view.clone().multiplyScalar(distanceFor(scale));
       if (shown === null || prefersReducedMotion()) {
         offset = to;
         glide = null;

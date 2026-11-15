@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APOLLO_11_TIMES, EXAMPLE_LANDER, LUNAR_ORBIT_ALT_KM, MU_MOON, PARKING_ALT_KM, R_EARTH, R_MOON,
   burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, moonFixedInPlane, planDescent, approachSeconds, hyperbolaAt, hyperbolaTimeToRadius, MOON_SOI_KM,
-  planMission, propellantFor, SEQUENCE, simulateDescent, simulateGuidedDescent, HIGH_GATE_KM, ASCENT_LOSSES_KMS, transferFor, type MissionInput, type OkPlan,
+  arrivalOrbit, lunarFrameInEarthPlane, planMission, propellantFor, SEQUENCE, simulateDescent, simulateGuidedDescent, HIGH_GATE_KM, LOW_GATE_KM, ASCENT_LOSSES_KMS, transferFor, type MissionInput, type OkPlan,
 } from './mission';
 import { padById } from './pads';
 
@@ -107,6 +107,26 @@ describe('Powered descent', () => {
     for (const s of d.samples) expect(s.altKm).toBeLessThan(15.5);
     const atGate = d.samples.find((s) => s.tS >= d.brakingS)!;
     near(atGate.altKm, HIGH_GATE_KM, 1);
+  });
+
+  it('approaches on a slant from the high gate to the low gate, not straight down (issue #192)', () => {
+    for (const lander of [EXAMPLE_LANDER, { ...EXAMPLE_LANDER, thrustN: 9000 }]) {
+      const d = simulateGuidedDescent(15, 1420, lander.thrustN, lander.ispS, true);
+      const approach = d.samples.filter((s) => s.tS > d.brakingS && s.altKm > LOW_GATE_KM + 0.05);
+      expect(approach.length).toBeGreaterThan(10);
+      // Every 10 s, the path stays more than 5 degrees off vertical...
+      for (let i = 10; i < approach.length; i += 10) {
+        const a = approach[i - 10];
+        const b = approach[i];
+        const across = (b.angle - a.angle) * R_MOON;
+        const down = a.altKm - b.altKm;
+        expect((Math.atan2(down, across) * 180) / Math.PI).toBeLessThan(85);
+      }
+      // ...and the approach covers ground: at least a third of the height it drops.
+      const first = approach[0];
+      const last = approach[approach.length - 1];
+      expect((last.angle - first.angle) * R_MOON).toBeGreaterThan((first.altKm - last.altKm) / 3);
+    }
   });
 
   it('a strong engine and the example lander both start at 15 km, at full thrust, and touch down under 3 m/s', () => {
@@ -308,10 +328,12 @@ describe('The landing site in the animation’s lunar-orbit frame (issue #105)',
     const eq = okPlan({ site: { lat: 0, lon: 30 } });
     const poleSouth = moonFixedInPlane(plan, plan.touchdownMs, 90, 0);
     const poleEq = moonFixedInPlane(eq, eq.touchdownMs, 90, 0);
-    // The orbit is polar, so the pole is in its plane. From Shackleton (0.3° from the south
-    // pole) the north pole is opposite the site; from the equator it is a quarter turn away.
-    near(poleSouth[2], 0, 1e-6);
-    near(poleEq[2], 0, 1e-6);
+    // From Shackleton (0.3° from the south pole) the north pole is almost opposite the site;
+    // from the equator it is a quarter turn away. The orbit's plane is the one the arrival leads
+    // into (issue #192), so the pole is off it by the inclination.
+    const cosInc = (p: OkPlan): number => Math.cos((p.orbit.lunarOrbitIncDeg * Math.PI) / 180);
+    near(poleSouth[2], R_MOON * cosInc(plan), 1e-6);
+    near(poleEq[2], R_MOON * cosInc(eq), 1e-6);
     near(poleSouth[1], -R_MOON, 0.1);
     near(poleEq[1], 0, 1e-6);
   });
@@ -351,4 +373,67 @@ describe('Arrival at the Moon: the hyperbola before LOI', () => {
     near(Math.hypot(before[0] - after[0], before[1] - after[1]), 0, 0.01);
     near(missionAt(plan, loi - 1).altKm, LUNAR_ORBIT_ALT_KM, 0.01);
   });
+});
+
+describe('The arrival leads into the lunar orbit (issue #192)', () => {
+  const dot = (a: number[], b: number[]): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const angleDeg = (a: number[], b: number[]): number =>
+    (Math.acos(Math.max(-1, Math.min(1, dot(a, b) / Math.hypot(a[0], a[1], a[2]) / Math.hypot(b[0], b[1], b[2])))) * 180) / Math.PI;
+
+  it('arrivalOrbit: a plane through the site holding vInf, crossed heading south, and the craft comes in from -vInf', () => {
+    const site: [number, number, number] = [0.3, -0.2, -0.93];
+    const vInf: [number, number, number] = [-0.4, 0.9, 0];
+    const r = R_MOON + LUNAR_ORBIT_ALT_KM;
+    const a = arrivalOrbit(site, vInf, r, 0.9)!;
+    const s = site.map((x) => x / Math.hypot(...site));
+    near(Math.hypot(...a.travel), 1, 1e-12);
+    near(dot(a.travel, s), 0, 1e-12);
+    expect(a.travel[2]).toBeLessThanOrEqual(0);
+    // vInf is in the plane: no part along the normal.
+    const n = [s[1] * a.travel[2] - s[2] * a.travel[1], s[2] * a.travel[0] - s[0] * a.travel[2], s[0] * a.travel[1] - s[1] * a.travel[0]];
+    near(dot(n, vInf), 0, 1e-12);
+    // Far out on the way in (true anomaly -nuInf from periapsis) the craft is towards -vInf.
+    const e = 1 + (r * 0.9 ** 2) / MU_MOON;
+    const th = a.periapsisAngle - Math.acos(-1 / e);
+    const far = [0, 1, 2].map((i) => Math.cos(th) * s[i] + Math.sin(th) * a.travel[i]);
+    near(angleDeg(far, vInf.map((x) => -x)), 0, 1e-6);
+    expect(arrivalOrbit([0, 0, -1], [0, 0, 2], r, 0.9)).toBeNull();
+  });
+
+  for (const [name, site] of [['Shackleton rim', SHACKLETON], ['an equatorial site', { lat: 0.67408, lon: 23.47297 }]] as const) {
+    it(`${name}: the hyperbola comes in along the transfer, so the two join (within the impact parameter's few degrees)`, () => {
+      const p = okPlan({ site });
+      const loi = p.steps.find((s) => s.id === 'loi')!.startMs;
+      const entry = loi - approachSeconds(p) * 1000 + 1;
+      const [lx, ly, lz] = lunarFrameInEarthPlane(p);
+      const toEarth = (m: [number, number]): number[] => [0, 1, 2].map((i) => m[0] * lx[i] + m[1] * ly[i]);
+      // The craft's direction from the Moon on the hyperbola, in the transfer's frame...
+      const rel = toEarth(missionAt(p, entry).moonPlane!);
+      // ...against where the transfer comes in from: -vInf, in the plane, at LOI.
+      const t = p.geometry.transfer;
+      const ang = Math.PI + t.arriveNu;
+      const vInf = [
+        t.vInfRadialKmS * Math.cos(ang) - t.vInfAlongKmS * Math.sin(ang),
+        t.vInfRadialKmS * Math.sin(ang) + t.vInfAlongKmS * Math.cos(ang),
+        0,
+      ];
+      expect(angleDeg(rel, vInf.map((x) => -x))).toBeLessThan(6);
+      // The frame is a rotation: unit, at right angles, right-handed.
+      for (const v of [lx, ly, lz]) near(Math.hypot(...v), 1, 1e-12);
+      near(dot(lx, ly), 0, 1e-12);
+      const c = [lx[1] * ly[2] - lx[2] * ly[1], lx[2] * ly[0] - lx[0] * ly[2], lx[0] * ly[1] - lx[1] * ly[0]];
+      near(angleDeg(c, lz), 0, 1e-4);   // acos near 0 resolves only to about 1e-6 degrees
+    });
+
+    it(`${name}: still lands on the site, waiting in lunar orbit within half a lap of Apollo 11's wait`, () => {
+      const p = okPlan({ site });
+      const s = missionAt(p, p.touchdownMs);
+      near(s.ground!.lat, site.lat, 0.01);
+      const wait = (p.steps.find((x) => x.id === 'doi')!.startMs - p.steps.find((x) => x.id === 'loi')!.startMs) / 1000;
+      near(wait, p.orbit.lunarOrbitS, 1e-3);
+      expect(Math.abs(wait - APOLLO_11_TIMES.lunarOrbitS)).toBeLessThanOrEqual(p.orbit.lunarOrbitPeriodS / 2 + 1);
+      expect(p.orbit.lunarOrbitIncDeg).toBeGreaterThanOrEqual(0);
+      expect(p.orbit.lunarOrbitIncDeg).toBeLessThanOrEqual(180);
+    });
+  }
 });
