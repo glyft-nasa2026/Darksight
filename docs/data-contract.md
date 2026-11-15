@@ -557,8 +557,8 @@ buttons that scroll, never `#id` links: the page address hash holds the state (s
 `#mission` (T34) is not on the site's page: it is the card of the page `web/mission.html`
 (`web/src/missionPage/`), which loads the same data files and mounts `ui/mission`. "Land here" on a
 scenario card sets its landing point; the page address keeps it as `land=`, with `pad=` and
-`lander=` when they differ from the defaults. The landing scenario's card then shows "Open
-mission", which opens `mission.html` in a new tab (the current tab if a pop-up blocker stops it)
+`lander=` when they differ from the defaults. The Scenarios panel then shows "Open mission"
+beside "Copy share link" (the two wrap to the next line together), which opens `mission.html` in a new tab (the current tab if a pop-up blocker stops it)
 with the same page address; its "Back to landing sites" returns to the site's tab, or opens
 `index.html` with the address it has. "Proceed" on the card opens the launch-site picker
 (a pop-up with a satellite globe of Earth and the pads, `web/src/ui/launch/`); confirming a pad
