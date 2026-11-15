@@ -12,6 +12,7 @@ import { loadDem } from './core/dem';
 import { loadEphemeris } from './core/ephemeris';
 import type { CuratedSite } from './core/types';
 import { holdUntilHeightMap } from './loadOrder';
+import { whenPlotly } from './ui/plotly';
 import { setData } from './state';
 import { startIntro } from './ui/intro/index';
 
@@ -36,7 +37,13 @@ function mountSlots(slots: readonly Slot[]): void {
 // Sun and Earth table and the site list are in (at most 10 s for the data; T22 hero.png,
 // loading.png). The height map keeps loading behind the site.
 const intro = startIntro({
-  loadSite: () => import('./site').then(({ slots }) => () => mountSlots(slots)),
+  loadSite: () => {
+    // Plotly (the charts) is a separate file (issue #95). Fetch it from the click, but only once
+    // the Sun and Earth table is in, so on a slow line it doesn't hold up the readout's numbers;
+    // on a fast one it is ready about when the site is, as before.
+    void ephJob.then(whenPlotly, whenPlotly).catch(() => undefined);
+    return import('./site').then(({ slots }) => () => mountSlots(slots));
+  },
 });
 
 // --- Data loading ---------------------------------------------------------------------------
@@ -98,12 +105,16 @@ function track<T>(name: keyof typeof files, job: Promise<T>, done: (value: T) =>
 }
 
 showStatus();
-track('Sun and Earth table', loadEphemeris(), (eph) => setData({ eph }));
+const ephJob = loadEphemeris();
+track('Sun and Earth table', ephJob, (eph) => setData({ eph }));
 track('site list', loadSites(), (sites) => setData({ sites }));
-const demJob = loadDem((fraction) => {
+// The height map (12.85 MB) waits for the Sun and Earth table (its first decade, 0.70 MB), loaded
+// or failed, rather than share the connection: the readout's numbers need only the table, and
+// arrive about a second sooner on a slow line (issue #95).
+const demJob = ephJob.then(() => undefined, () => undefined).then(() => loadDem((fraction) => {
   demFraction = fraction;
   showStatus();
-});
+}));
 // The whole-Moon picture files wait for it rather than share the connection (issue #96).
 holdUntilHeightMap(demJob);
 track('height map', demJob, (dem) => setData({ dem }));

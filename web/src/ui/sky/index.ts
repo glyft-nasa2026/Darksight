@@ -2,10 +2,10 @@
 // shape, the Sun's and Earth's paths over the next 30 days, and where they are at the selected
 // scenario's time. Every number comes from core/ through state.ts.
 import './sky.css';
-import Plotly from 'plotly.js-dist-min';
 import type { Data, Layout } from 'plotly.js-dist-min';
 import { getState, samplesFor, selected, skylineFor, subscribe } from '../../state';
 import { axisTitle, chartLine, plotLayout, themeColor } from '../plotTheme';
+import { clearChartWait, plotlyIfLoaded, plotlyNow, showChartWait, whenPlotly } from '../plotly';
 import { skyModel, sunMarkerPx, Y_BOTTOM, type SkyModel, type SunState } from './model';
 
 const SUN_WORDS: Record<SunState, string> = {
@@ -128,7 +128,7 @@ export function mount(el: HTMLElement): void {
     if (!st.eph) {
       note.textContent = 'Loading';
       if (drawn) {
-        Plotly.purge(chart);
+        plotlyIfLoaded()?.purge(chart);
         drawn = false;
       }
       lastKey = '';
@@ -148,6 +148,15 @@ export function mount(el: HTMLElement): void {
     const margin = lay.margin ?? {};
     const plotH = chart.clientHeight - (margin.t ?? 0) - (margin.b ?? 0);
     const sunPx = sunMarkerPx(plotH, m.yTop, themeNumber('--space-2'));
+    // Plotly loads on first use (issue #95): the caption shows now, the chart once it is in.
+    const Plotly = plotlyNow();
+    if (!Plotly) {
+      lastKey = '';
+      showChartWait(chart);
+      whenPlotly().then(() => render(true), () => undefined);
+      return;
+    }
+    clearChartWait(chart);
     void Plotly.react(chart, traces(m, sunPx), lay, { displayModeBar: false, responsive: true });
     drawn = true;
   };
