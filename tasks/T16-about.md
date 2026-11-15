@@ -36,7 +36,6 @@ Spec feature F13, built and written by one person.
 
 - 15 Nov 2026, audit before submission (pull request #189). The panel called validation.json's 0.000001 degrees "our angles". That figure is the data pipeline's (Skyfield against Horizons). The page's own code differs from the same 18 Horizons cases by up to 0.000675 degrees: the table holds the Sun's direction from the Moon's centre, so its parallax across the Moon's radius is left out. The panel now says which figure is which, and `web/src/core/horizons.test.ts` holds the page's code to the 0.001 degrees the panel states.
 - *cosmetic*: the badge in the bar still shows the pipeline's figure with no word that it is the pipeline's.
-- *costs time*, for the team: `web/public/team/go-yu-an.jpg` carries a photo studio's artist and copyright fields in its metadata, while `docs/sources/issue-117.md` calls the photos the members' own. Not changed.
 
 ## Prompt to paste into Claude Code
 
