@@ -3,17 +3,16 @@
 // which call core/; model.ts only groups, ranks and formats them.
 import './compare.css';
 import type { Data, Layout } from 'plotly.js-dist-min';
+import { plotlyIfLoaded, whenPlotly } from '../plotly';
 import type { Body, Sample } from '../../core/types';
 import { countdownText } from '../../core/windows';
 import {
   flipFor, getState, neverLitFor, samplesFor, subscribe, summaryFor, type AppState, type Scenario,
 } from '../../state';
 import { axisTitle, plotLayout, themeColor } from '../plotTheme';
-import { plotlyIfLoaded, whenPlotly } from '../plotly';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
 
 const SPAN_DAYS = 30;
-
 
 function make<K extends keyof HTMLElementTagNameMap>(
   tag: K, className = '', text = '',
