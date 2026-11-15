@@ -8,3 +8,5 @@ __pycache__/
 .env
 *.tsbuildinfo
 coverage/
+web/test-results/
+web/playwright-report/
