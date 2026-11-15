@@ -227,6 +227,9 @@ export function mount(el: HTMLElement): void {
   // which changes nothing else here, so each notify redraws until no column is checking (T32).
   type Shown = {
     live: Scenario; pinned: Scenario[]; eph: AppState['eph']; dem: AppState['dem']; sites: AppState['sites'];
+    // T37: when globe.bin arrives or fails, every column north of 85° S gets another skyline,
+    // other numbers and another terrain note, with no change to live or pinned.
+    globe: AppState['globe']; globeStatus: AppState['globeStatus'];
     checking: boolean;
   };
   let shown: Shown | null = null;
@@ -260,8 +263,12 @@ export function mount(el: HTMLElement): void {
     const s = getState();
     // Pinned scenarios never change, but live does on every map click, time entry and drag.
     if (shown && !shown.checking && shown.live === s.live && shown.pinned === s.pinned
-      && shown.eph === s.eph && shown.dem === s.dem && shown.sites === s.sites) return;
-    shown = { live: s.live, pinned: s.pinned, eph: s.eph, dem: s.dem, sites: s.sites, checking: false };
+      && shown.eph === s.eph && shown.dem === s.dem && shown.sites === s.sites
+      && shown.globe === s.globe && shown.globeStatus === s.globeStatus) return;
+    shown = {
+      live: s.live, pinned: s.pinned, eph: s.eph, dem: s.dem, sites: s.sites,
+      globe: s.globe, globeStatus: s.globeStatus, checking: false,
+    };
     const id = ++drawId;
 
     if (!s.eph) {
