@@ -72,7 +72,10 @@ function team(): HTMLElement {
     img.alt = `Photo of ${m.name}`;
     img.loading = 'lazy';
     img.decoding = 'async';
-    li.append(img, make('span', 'landing-name', m.name));
+    // The first letter is larger: read down the cards, they spell the team's name, GLYFT.
+    const name = make('span', 'landing-name');
+    name.append(make('span', 'landing-initial', m.name.charAt(0)), m.name.slice(1));
+    li.append(img, name);
     list.append(li);
   }
   el.append(h, make('p', 'landing-p', 'Team GLYFT, Kuala Lumpur.'), list);

@@ -90,6 +90,12 @@
   color: var(--accent);
 }
 
+/* G, L, Y, F, T: where the team's name comes from. */
+.landing-initial {
+  font-size: 1.5em;
+  line-height: 1;
+}
+
 .landing-footer {
   max-width: calc(var(--space-5) * 40);
   width: 100%;

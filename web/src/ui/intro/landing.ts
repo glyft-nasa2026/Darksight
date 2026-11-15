@@ -39,19 +39,17 @@ export const ABOUT: Section = {
 
 export interface Member {
   name: string;
-  /** Path under web/public/, without a leading slash. A placeholder until the real photo is in. */
+  /** Path under web/public/, without a leading slash. */
   photo: string;
 }
 
-const PLACEHOLDER = 'team/placeholder.svg';
-
 /** Team GLYFT, in the order of the team's name: G, L, Y, F, T. Full names, from the team. */
 export const TEAM: Member[] = [
-  { name: 'Go Yu An', photo: PLACEHOLDER },
-  { name: 'Leon Ng', photo: PLACEHOLDER },
-  { name: 'Yi Hung', photo: PLACEHOLDER },
-  { name: 'Fabian Chuah', photo: PLACEHOLDER },
-  { name: 'Teh Hao Zhe', photo: PLACEHOLDER },
+  { name: 'Go Yu An', photo: 'team/go-yu-an.jpg' },
+  { name: 'Leon Ng', photo: 'team/leon-ng.jpg' },
+  { name: 'Yeap Yi Hung', photo: 'team/yeap-yi-hung.jpg' },
+  { name: 'Fabian Chuah', photo: 'team/fabian-chuah.jpg' },
+  { name: 'Teh Hao Zhe', photo: 'team/teh-hao-zhe.jpg' },
 ];
 
 export const PRIVACY: Section = {
