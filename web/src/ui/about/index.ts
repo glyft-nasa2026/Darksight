@@ -24,6 +24,18 @@ const NO_REFRACTION =
   'The Moon has no atmosphere, so nothing bends the light: the Sun and Earth are exactly where ' +
   'the geometry puts them. Darksight applies no refraction, unlike sunrise tables on Earth.';
 
+const LIBRATION = [
+  'The Moon keeps the same face towards Earth, but not exactly. It rocks a little as it goes ' +
+    'round (libration), and its distance from Earth changes through the month. So from a site on ' +
+    'the near side, Earth doesn\'t stand still in the sky: over a month it traces a small loop ' +
+    'round one spot. Near the edge of the near side, which includes the south pole, the loop dips ' +
+    'below the horizon, so Earth rises and sets there.',
+  'Darksight includes both. Every Sun and Earth position comes from NASA JPL\'s DE440 ephemeris, ' +
+    'with the Moon turned by its own measured orientation (NAIF\'s moon_pa_de440 file), so the ' +
+    'rocking and the changing distance are in every number on the page. The sky panorama draws ' +
+    'Earth\'s loop over the next 30 days.',
+];
+
 const KNOWN_LIMITS = [
   // SPEC.md section 8, plus where the terrain applies (section 6).
   'Real terrain applies south of 85° S, from the LOLA height map, looking out to 150 km. ' +
@@ -149,6 +161,7 @@ function buildDialog(): Panel {
     section('Checked against JPL Horizons', checkP, dataP),
     section('Known limits', h('ul', undefined, ...KNOWN_LIMITS.map((t) => h('li', undefined, t)))),
     section('Why there is no refraction', h('p', undefined, NO_REFRACTION)),
+    section('Libration and the Moon\'s orbit', ...LIBRATION.map((t) => h('p', undefined, t))),
     section('Data sources', sourcesBox),
     section('How AI was used', h('p', undefined, AI_INTRO), aiBox),
   );

@@ -1,5 +1,5 @@
-// The mission planner page (T34): the mission card on a page of its own. "Open mission" on the
-// landing scenario card opens it with the same page address, which state.ts reads, so it plans
+// The mission planner page (T34): the mission card on a page of its own. "Open mission" in the
+// Scenarios panel (beside "Copy share link", once a landing point is chosen) opens it with the same page address, which state.ts reads, so it plans
 // the mission to the same landing point, pad and lander. It loads the same data files as the
 // site (the skyline needs the height map for the landing window's numbers) and mounts
 // ui/mission into #mission. "Back to landing sites" returns to the site.
@@ -8,8 +8,9 @@ import './missionPage.css';
 import { loadDem } from '../core/dem';
 import { loadEphemeris } from '../core/ephemeris';
 import type { CuratedSite } from '../core/types';
-import { setData, stateToAddress } from '../state';
+import { failedDecades, setData, stateToAddress, subscribe } from '../state';
 import { mount } from '../ui/mission/index';
+import { failedDecadesText } from '../ui/tableGap';
 
 const status = document.getElementById('mp-status') as HTMLElement;
 const back = document.querySelector<HTMLAnchorElement>('.mp-back')!;
@@ -53,12 +54,16 @@ const files = { 'Sun and Earth table': 'loading', 'height map': 'loading', 'site
 let demFraction = 0;
 function showStatus(): void {
   const missing = Object.keys(files).filter((n) => files[n] === 'missing');
+  // A decade of the table that failed to download, which state.ts tries again (T33).
+  const decades = failedDecadesText(failedDecades());
+  if (decades) missing.push(decades);
   const loading = Object.keys(files).filter((n) => files[n] === 'loading')
     .map((n) => (n === 'height map' && demFraction > 0 ? `${n} ${Math.round(demFraction * 100)} %` : n));
   const parts: string[] = [];
   if (missing.length > 0) parts.push(`Data not loaded: ${missing.join(', ')}.`);
   if (loading.length > 0) parts.push(`Loading ${loading.join(', ')}.`);
-  status.textContent = parts.join(' ');
+  const text = parts.join(' ');
+  if (status.textContent !== text) status.textContent = text;
 }
 function track<T>(name: string, job: Promise<T>, done: (value: T) => void): void {
   job.then(
@@ -71,6 +76,7 @@ function track<T>(name: string, job: Promise<T>, done: (value: T) => void): void
   );
 }
 showStatus();
+subscribe(showStatus);   // a decade failing or arriving changes the line too
 track('Sun and Earth table', loadEphemeris(), (eph) => setData({ eph }));
 track('site list',
   fetch(import.meta.env.BASE_URL + 'data/sites.json').then((r) => {

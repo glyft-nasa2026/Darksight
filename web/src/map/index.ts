@@ -41,12 +41,24 @@ const GLOBAL_W = 1440, GLOBAL_H = 720;            // the whole-Moon layer withou
 const RELIEF_LIGHT = 1.2;
 /** Cosine of the Sun's zenith angle at which the whole-Moon map reaches full daylight (about 5 degrees up). */
 const DAWN = 0.08;
+/**
+ * Brightness of ground the Sun does not reach, on both maps (issue #154). At 0.3 shadowed ground
+ * went nearly black and the relief and height colours under it were lost; at 0.5 it still reads
+ * clearly darker than any lit ground, and its shape shows.
+ */
+const SHADOW_LIGHT = 0.5;
 /** A press that moves less than this many CSS pixels is a click, not a drag (as in the 3D scene). */
 const CLICK_SLOP = 5;
-/** Time changes closer together than this are a drag: the polar light layer is drawn coarser until they stop. */
+/** Time changes closer together than this are a drag: the light layers are drawn coarser until they stop. */
 const DRAG_GAP_MS = 250;
 /** Cells per side of the polar light layer while the time is dragged (about 1 km a cell at the south), and otherwise. */
 const DRAG_CELLS = 650, FULL_CELLS = 1300;
+/**
+ * The whole-Moon picture shows every `step`th cell of its grid each way: as coarse as the screen
+ * allows (one screen pixel already covering `step` cells or more), up to MAX_STEP, and at least
+ * DRAG_STEP while the time is dragged.
+ */
+const DRAG_STEP = 2, MAX_STEP = 4;
 const POLAR_STEPS = [5, 2, 1, 0.5, 0.25, 0.1];    // parallels, degrees apart
 const MERIDIAN_STEPS = [90, 45, 30, 15, 10, 5, 2, 1];
 const GLOBAL_STEPS = [30, 15, 10, 5, 2, 1, 0.5, 0.25, 0.1];
@@ -54,6 +66,15 @@ const GLOBAL_STEPS = [30, 15, 10, 5, 2, 1, 0.5, 0.25, 0.1];
 const POLAR_REACH = 20;
 /** Pixels per side of the fading ring's layer (about 2 km a pixel; the whole-Moon grid is 3.8 km a cell). */
 const RING_PX = 640;
+
+// The whole-Moon picture is written a pixel (four bytes, RGBA) at a time, as one 32-bit word: the
+// bytes' order inside the word is the machine's.
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+const [SHIFT_R, SHIFT_G, SHIFT_B, SHIFT_A] = LITTLE_ENDIAN ? [0, 8, 16, 24] : [24, 16, 8, 0];
+/** An opaque pixel as one word of a Uint32Array over ImageData's bytes; each channel 0..255, rounded. */
+function rgbaWord(r: number, g: number, b: number): number {
+  return ((r + 0.5) << SHIFT_R) | ((g + 0.5) << SHIFT_G) | ((b + 0.5) << SHIFT_B) | (255 << SHIFT_A);
+}
 
 /** A theme length in CSS pixels (theme.css may write it in rem). */
 function themeLength(host: HTMLElement, name: string): number {
@@ -123,6 +144,10 @@ export function mount(el: HTMLElement): void {
   // Which rows of `slopes` and `tones` are worked out: only the rows a picture needs, when it
   // first needs them (issue #118). A polar view needs about a tenth of the grid.
   let slopeRows: Uint8Array | null = null, toneRows: Uint8Array | null = null;
+  // The whole-Moon picture's pixels and Sun table, kept between redraws: 16 MB each at full size,
+  // too much to allocate again for every step of a timeline drag.
+  let pixels: ImageData | null = null, dayBuf: Float32Array | undefined;
+  let baseStep = 0;
   let theme = { key: '', lo: [0, 0, 0] as Rgb, hi: [0, 0, 0] as Rgb, pinPx: 0, fontPx: 0, font: '' }; // set by readTheme()
 
   function readTheme(): void {
@@ -150,7 +175,7 @@ export function mount(el: HTMLElement): void {
    * through the height colours. Flat ground under a low Sun reads as lit, slopes facing it brighter.
    */
   const brightness = (frac: number, cosI: number): number =>
-    0.3 + 0.7 * frac * Math.min(1, Math.max(0, 0.4 + 2 * cosI));
+    SHADOW_LIGHT + (1 - SHADOW_LIGHT) * frac * Math.min(1, Math.max(0, 0.4 + 2 * cosI));
 
   function buildPolarBase(s: AppState, lit: boolean): void {
     const sc = selected();
@@ -189,16 +214,29 @@ export function mount(el: HTMLElement): void {
   function buildGlobalBase(s: AppState, lit: boolean): void {
     const sc = selected();
     const vectors = lit ? s.eph!.vectorsAt(sc.tMs) : null;
-    const key = `global|${theme.key}|${demId(dem)}|${globe ? 'heights' : 'plain'}|${vectors ? vectors.sun.join(',') : 'unlit'}`;
+    const step = globalStep();
+    const key = `global|${theme.key}|${demId(dem)}|${globe ? 'heights' : 'plain'}|${step}|${vectors ? vectors.sun.join(',') : 'unlit'}`;
     sunPoint = vectors ? subPoint(vectors.sun) : null;
     earthPoint = vectors ? subPoint(vectors.earthKm) : null;
     if (base && baseKey === key) return;
-    const image = globalPixels(vectors ? vectors.sun : null, 0, Infinity);
+    const image = globalPixels(vectors ? vectors.sun : null, 0, Infinity, step);
     const W = image.width, H = image.height;
-    base = base && base.width === W ? base : document.createElement('canvas');
-    base.width = W; base.height = H;
+    base ??= document.createElement('canvas');
+    if (base.width !== W || base.height !== H) { base.width = W; base.height = H; }
     base.getContext('2d')!.putImageData(image, 0, 0);
-    baseKey = key;
+    baseKey = key; baseStep = step;
+  }
+  /**
+   * How many cells of the whole-Moon grid the picture steps over: the most (up to MAX_STEP) that
+   * still leaves a picture pixel for each screen pixel, and at least DRAG_STEP while the time is
+   * dragged. The whole Moon in a few hundred pixels needs a quarter of the grid each way.
+   */
+  function globalStep(): number {
+    const cells = globe ? globe.meta.width : GLOBAL_W;
+    const screenPx = 2 * HALF_WORLD_KM * view.scale * (canvas.width / Math.max(1, view.width));
+    let step = 1;
+    while (step < MAX_STEP && screenPx * step * 2 <= cells) step *= 2;
+    return dragging ? Math.max(step, DRAG_STEP) : step;
   }
   /** The ramp's range: the same as the south polar map's, so a site keeps its colour when the map changes. */
   function rampRange(): [number, number] {
@@ -206,16 +244,19 @@ export function mount(el: HTMLElement): void {
   }
   /**
    * The whole-Moon picture, one pixel a cell of the whole-Moon grid (or of a plain grid until it
-   * arrives): rows `j0` to `j1 - 1` of it, so the image's row 0 is grid row `j0`.
+   * arrives), or with a `step` above 1 a pixel every `step`th cell each way: rows `j0` to `j1 - 1`
+   * of that picture, so the image's row 0 is its row `j0`. The image is reused by the next call.
    */
-  function globalPixels(sun: Vec3 | null, j0: number, j1: number): ImageData {
-    const W = globe ? globe.meta.width : GLOBAL_W, H = globe ? globe.meta.height : GLOBAL_H;
+  function globalPixels(sun: Vec3 | null, j0: number, j1: number, step = 1): ImageData {
+    const W = Math.floor((globe ? globe.meta.width : GLOBAL_W) / step);
+    const H = Math.floor((globe ? globe.meta.height : GLOBAL_H) / step);
     const rows: [number, number] = [Math.max(0, j0), Math.min(H, j1)];
-    const day = sun ? shadeGlobal(sun, W, H, rows[0], rows[1]) : null;
-    const image = new ImageData(W, rows[1] - rows[0]);
+    const day = sun ? (dayBuf = shadeGlobal(sun, W, H, rows[0], rows[1], dayBuf)) : null;
+    if (!pixels || pixels.width !== W || pixels.height !== rows[1] - rows[0]) pixels = new ImageData(W, rows[1] - rows[0]);
+    const image = pixels;
     const range = rampRange();
     const span = Math.max(1, range[1] - range[0]);
-    if (globe) paintHeights(image.data, globe, range, span, sun, day, rows);
+    if (globe) paintHeights(new Uint32Array(image.data.buffer), globe, range, span, sun, day, rows, step);
     else {
       // No whole-Moon heights: the polar cap's own, where the height map covers it; grey elsewhere.
       for (let j = rows[0]; j < rows[1]; j++) {
@@ -227,7 +268,7 @@ export function mount(el: HTMLElement): void {
             t = Math.min(1, Math.max(0, (dem.heightAt(lat, lon) - range[0]) / span));
           }
           const k = (j - rows[0]) * W + i;
-          paint(image.data, k * 4, t, day ? (day[k] > 0 ? 0.6 + 0.4 * day[k] : 0.3) : 0.6);
+          paint(image.data, k * 4, t, day ? (day[k] > 0 ? 0.6 + 0.4 * day[k] : SHADOW_LIGHT) : 0.6);
         }
       }
     }
@@ -291,15 +332,17 @@ export function mount(el: HTMLElement): void {
    * The whole Moon from its height grid: height colour, times core's day and night, with slopes
    * facing the Sun brighter and slopes facing away darker so craters and mountains show.
    */
-  function paintHeights(data: Uint8ClampedArray, g: GlobeHeights, range: number[], span: number, sun: Vec3 | null, day: Float32Array | null, rows: [number, number]): void {
+  function paintHeights(out: Uint32Array, g: GlobeHeights, range: number[], span: number, sun: Vec3 | null, day: Float32Array | null, rows: [number, number], step: number): void {
     const { width, height } = g.meta, count = width * height;
+    const w = Math.floor(width / step);
     if (!slopes || !slopeRows) { slopes = new Int8Array(count * 3); slopeRows = new Uint8Array(height); }
     const key = `${range[0]},${range[1]}`;
     if (!tones || !toneRows || tonesKey !== key) {
       tones = new Uint8Array(count); toneRows = new Uint8Array(height);
       tonesKey = key;
     }
-    for (let row = rows[0]; row < rows[1]; row++) {
+    for (let j = rows[0]; j < rows[1]; j++) {
+      const row = j * step;
       if (!slopeRows[row]) { globeSlopes(g, GLOBE_RELIEF, row, row + 1, slopes); slopeRows[row] = 1; }
       if (toneRows[row]) continue;
       // Each cell's place on the colour ramp, 0..255: it changes only with the ramp's range.
@@ -311,21 +354,22 @@ export function mount(el: HTMLElement): void {
     const { lo, hi } = theme;
     const ramp = new Float32Array(256 * 3);
     for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) ramp[i * 3 + c] = lo[c] + ((hi[c] - lo[c]) * i) / 255;
+    // Night (and every cell, with no Sun table) has one light, so its pixels come from a table.
+    const still = new Uint32Array(256), stillLight = day ? SHADOW_LIGHT : 0.6;
+    for (let i = 0; i < 256; i++) still[i] = rgbaWord(ramp[i * 3] * stillLight, ramp[i * 3 + 1] * stillLight, ramp[i * 3 + 2] * stillLight);
     const n = sun ? Math.hypot(sun[0], sun[1], sun[2]) || 1 : 1;
     // Slopes are stored as n * 127: fold that into the Sun's direction.
     const sx = sun ? sun[0] / n / 127 : 0, sy = sun ? sun[1] / n / 127 : 0, sz = sun ? sun[2] / n / 127 : 0;
-    for (let k = rows[0] * width, d = 0; k < rows[1] * width; k++, d++) {
-      let light = 0.6;
-      if (day) {
-        const up = day[d];
-        if (up > 0) {
-          const facing = slopes[k * 3] * sx + slopes[k * 3 + 1] * sy + slopes[k * 3 + 2] * sz;
-          // Daylight comes in over the first few degrees of Sun, so the day's edge is not a hard step.
-          light = Math.min(1, Math.max(0.3, 0.3 + Math.min(1, up / DAWN) * (0.3 + 0.4 * up + RELIEF_LIGHT * (facing - up))));
-        } else light = 0.3;
+    for (let j = rows[0], d = 0; j < rows[1]; j++) {
+      for (let c = 0, k = j * step * width; c < w; c++, d++, k += step) {
+        const up = day ? day[d] : 0;
+        if (!(up > 0)) { out[d] = still[tones[k]]; continue; }
+        const facing = slopes[k * 3] * sx + slopes[k * 3 + 1] * sy + slopes[k * 3 + 2] * sz;
+        // Daylight comes in over the first few degrees of Sun, so the day's edge is not a hard step.
+        const light = Math.min(1, Math.max(SHADOW_LIGHT, SHADOW_LIGHT + Math.min(1, up / DAWN) * (0.3 + 0.4 * up + RELIEF_LIGHT * (facing - up))));
+        const r = tones[k] * 3;
+        out[d] = rgbaWord(ramp[r] * light, ramp[r + 1] * light, ramp[r + 2] * light);
       }
-      const r = tones[k] * 3, o = d * 4;
-      data[o] = ramp[r] * light; data[o + 1] = ramp[r + 1] * light; data[o + 2] = ramp[r + 2] * light; data[o + 3] = 255;
     }
   }
   const capRanges = new WeakMap<Dem, [number, number]>();
@@ -556,6 +600,8 @@ export function mount(el: HTMLElement): void {
   function draw(): void {
     const { width, height } = view;
     if (width <= 1 || el.hidden) return;
+    // Zoomed in or out far enough, the whole-Moon picture needs a finer or coarser grid.
+    if (kind === 'global' && base && baseStep !== globalStep()) baseDirty = true;
     if (baseDirty) {
       baseDirty = false;
       const s = getState(), lit = tabled(s.eph, selected().tMs);
@@ -753,7 +799,7 @@ export function mount(el: HTMLElement): void {
     canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', key);
     el.removeEventListener('map:centre', onCentre);
     canvas.remove(); base = null; ring = null; ringCells = null; shade = null; globe = null; north = null;
-    slopes = null; tones = null; slopeRows = null; toneRows = null; mounts.delete(el);
+    slopes = null; tones = null; slopeRows = null; toneRows = null; pixels = null; dayBuf = undefined; mounts.delete(el);
   }
   mounts.set(el, dispose);
 }

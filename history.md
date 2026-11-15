@@ -4,6 +4,57 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: a decade that failed to download is tried again (T33, issue #32 row 4)
+
+Issue #32, row 4: after a failed download the readout said the time was outside the table,
+although it was inside 1900 to 2100, and only a reload asked for the decade again.
+
+### docs/data-contract.md: 4. State, "Decades"
+
+- Was: "`state.ts` fetches each decade once; one that fails to download reads as outside the
+  table."
+- Now a failed decade is asked for again after a wait (10 s, doubling to 60 s) or when the
+  browser is back online, and `tableGap` tells a failed decade from a time outside the table, so
+  the modules can say which.
+- Why: a dropped connection is usually brief; saying "outside the table" for a time inside it
+  was wrong, and only a reload brought the numbers back.
+
+### docs/data-contract.md: 4. State, "Still checking"
+
+- Was: `neverLitPendingFor` "false when one of them failed to download (… no verdict can come
+  before a reload)".
+- Now false only while the failed decade waits for its next try, true again while it downloads.
+- Why: the verdict no longer needs a reload once the retry gets the decade.
+
+### docs/data-contract.md: 4. State, `missionFor`
+
+- Was: `{ status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan }`, with `'outside'`
+  also for a decade that did not download; the mission page then said the landing time was "too
+  near the edge of the Sun and Earth table (1900 to 2100)".
+- Now `{ status: 'failed'; decadeMs }` for a failed decade, and `'outside'` only before 1900 or
+  after 2100.
+- Why: the same mistake as the other modules, on the mission and launch simulation pages.
+
+## 15 Nov 2026: freeze checklist (T26)
+
+### SPEC.md: 10. Open decisions
+
+- Was: eight rows with a decision, who and importance, and no answer. The load-time row said
+  "proposed, not yet agreed".
+- Now each row has an Answer column, taken from `docs/decisions.md`, T17's `pitch/checklist.md`
+  (pull request #130), T22's status and `docs/load-time.md`. The deadline is 22:00, from Yi
+  Hung; the checklist's 23:59 (NASA's guide) was written in first and corrected the same day.
+  The Figma seat row is struck out: T22 made its pictures with no Figma file.
+- Why: T26 step 5. At the freeze no decision stays open.
+
+### tasks/T32-never-lit-checking.md, tasks/T34-mission.md: `Status:`
+
+- Was: T32 "in review … draft pull request"; T34 "seventh delivery in progress (P5, branch
+  `t34-mission-g` …)", written by #151 before it merged.
+- Now T32 says merged in #138 with line 5 not checked on a preview; T34 says done, seven
+  deliveries merged, the last #151.
+- Why: T26 step 4 found both behind what merged (#138, #151). Yi Hung asked T26 to fix them.
+
 ## 15 Nov 2026: the mission card gets its own page (T34)
 
 P5 asked for it.
@@ -12,8 +63,8 @@ P5 asked for it.
 
 - Was: "`#mission` (T34) is a full-width card after `#sky`, and last on a phone", on the site's
   page; the launch simulation's "Back" went to `index.html`.
-- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" on the
-  landing scenario's card; the simulation's "Back" goes to `mission.html`.
+- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" beside
+  "Copy share link" in the Scenarios panel, once a landing point is chosen; the simulation's "Back" goes to `mission.html`.
 - Why: the card is long and sat at the very bottom of the site, far from the "Land here" that
   fills it.
 

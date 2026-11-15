@@ -249,6 +249,8 @@ export function setData(patch: { eph?: Ephemeris | null; dem?: Dem | null; sites
     table = patch.eph ?? null;
     pending.clear();
     failed.clear();
+    failures.clear();
+    scheduleRetry();                    // nothing failed: stops a waiting retry
   }
   const { eph: _ignored, ...rest } = patch;
   state = { ...state, ...rest };
@@ -287,14 +289,67 @@ function addExample(): boolean {
 // ---------------------------------------------------------------------------------------------
 // Decades of the Sun and Earth table (core/ephemeris.ts). main.ts hands over the table with its
 // home decade (the 2020s) loaded; any other decade is fetched here the first time a scenario
-// needs it. A decade that fails to download is not asked for again; its times then read as
-// outside the table.
+// needs it. A decade that fails to download (a dropped connection, a phone in a tunnel) reads as
+// failed, not as outside the table (tableGap), and is asked for again once a short wait is
+// over, or at once when the browser says it is back online (T33, issue #32 row 4).
 // ---------------------------------------------------------------------------------------------
 
 let table: Ephemeris | null = null;   // every decade loaded so far
 const pending = new Set<number>();
-const failed = new Set<number>();
+/** Decades that failed to download, each with the time it may be asked for again. */
+const failed = new Map<number, number>();
+/** How many times in a row each decade has failed: the wait before the next try grows with it. */
+const failures = new Map<number, number>();
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
 const FLIP_DAYS = 60;                 // nextFlip's default look-ahead
+
+/**
+ * The wait after a decade's download fails, before it is asked for again: RETRY_MS the first
+ * time, doubled after each failure in a row, at most RETRY_MAX_MS. So a dead connection is
+ * tried now and then, not over and over.
+ */
+export const RETRY_MS = 10_000;
+export const RETRY_MAX_MS = 60_000;
+
+/** Asks for decade i, unless it is downloading or failed less than its wait ago. */
+function ask(i: number): void {
+  const retryAt = failed.get(i);
+  if (retryAt !== undefined && Date.now() < retryAt) return;
+  fetchChunk(i);
+}
+
+/**
+ * Wakes the page when the next failed decade's wait is over. notify() then asks again for every
+ * decade a scenario still needs, so it is tried again without anyone touching the page; one no
+ * longer needed waits until it is.
+ */
+function scheduleRetry(): void {
+  if (retryTimer !== undefined) clearTimeout(retryTimer);
+  retryTimer = undefined;
+  const now = Date.now();
+  let next = Infinity;
+  for (const at of failed.values()) if (at > now) next = Math.min(next, at);
+  if (next === Infinity) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = undefined;
+    scheduleRetry();
+    notify(false);
+  }, next - now);
+}
+
+if (hasPage) {
+  // Back online: every failed decade may be asked for again now, from the shortest wait.
+  window.addEventListener('online', () => {
+    if (failed.size === 0) return;
+    for (const i of failed.keys()) failed.set(i, 0);
+    failures.clear();
+    scheduleRetry();
+    notify(false);
+  });
+}
+
+const chunkStartMs = (eph: Ephemeris, i: number): number =>
+  Date.parse(eph.meta.chunks?.[i]?.start ?? eph.meta.start);
 
 /**
  * True when every decade from fromMs to toMs is in memory; asks for the ones that aren't.
@@ -303,25 +358,23 @@ const FLIP_DAYS = 60;                 // nextFlip's default look-ahead
 function covered(fromMs: number, toMs: number, settled = false): boolean {
   if (!table) return false;
   const need = table.missing(fromMs, toMs);
-  for (const i of need) if (!failed.has(i)) fetchChunk(i);
+  for (const i of need) ask(i);
   return settled ? need.every((i) => failed.has(i)) : need.length === 0;
 }
 
 /**
  * How far the table can be read from fromMs towards toMs. toMs when every decade on the way is
  * in memory. The start of the first decade that failed to download when one is in the way: its
- * times read as outside the table, so the days before it are still good. Null while a decade
- * on the way is downloading, or when fromMs itself is in a failed one. Asks for the decades
- * not asked for yet.
+ * times have no rows yet, so the days before it are still good. Null while a decade on the way
+ * is downloading, or when fromMs itself is in a failed one. Asks for the decades not asked for
+ * yet, and again for a failed one whose wait is over.
  */
 function readableTo(fromMs: number, toMs: number): number | null {
   if (!table) return null;
   const need = table.missing(fromMs, toMs);
+  for (const i of need) ask(i);
   let end = toMs;
-  for (const i of need) {
-    if (failed.has(i)) end = Math.min(end, Date.parse(table.meta.chunks?.[i]?.start ?? table.meta.start));
-    else fetchChunk(i);
-  }
+  for (const i of need) if (failed.has(i)) end = Math.min(end, chunkStartMs(table, i));
   if (!(end > fromMs)) return null;
   // Anything still missing before `end` is on its way; a decade past it no longer matters.
   return table.missing(fromMs, end).some((i) => !failed.has(i)) ? null : end;
@@ -330,17 +383,22 @@ function readableTo(fromMs: number, toMs: number): number | null {
 function fetchChunk(i: number): void {
   if (!table || pending.has(i)) return;
   pending.add(i);
+  failed.delete(i);                     // a retry counts as downloading again: "Loading"
   const asked = table;
   loadEphemerisChunk(asked, i).then(
     (buffer) => {
       if (table?.meta !== asked.meta || !pending.delete(i)) return; // a new table came meanwhile
+      failures.delete(i);
       table = table.withChunk(i, buffer);   // the loader has checked the length: this can't throw
       notify(false);
     },
     (err: unknown) => {
       if (table?.meta !== asked.meta || !pending.delete(i)) return;
-      failed.add(i);
+      const times = (failures.get(i) ?? 0) + 1;
+      failures.set(i, times);
+      failed.set(i, Date.now() + Math.min(RETRY_MS * 2 ** (times - 1), RETRY_MAX_MS));
       console.warn(`Data not loaded (Sun and Earth table, decade ${i}):`, err instanceof Error ? err.message : err);
+      scheduleRetry();
       notify(false);
     },
   );
@@ -359,6 +417,26 @@ function scenariosCovered(): boolean {
 function refreshEph(): void {
   const eph = table && scenariosCovered() ? table : null;
   if (eph !== state.eph) state = { ...state, eph };
+}
+
+export type TableGap = 'none' | 'outside' | 'failed';
+
+/**
+ * Why the table may have no row for tMs, so a module can say which. 'outside': before the
+ * table's start (1900) or after its end (2100). 'failed': inside, but the decade holding tMs did
+ * not download; it is being tried again. 'none' otherwise: the row is in memory or on its way
+ * (eph is null and the modules show "Loading"), or the table itself has not loaded.
+ */
+export function tableGap(tMs: number): TableGap {
+  if (!table || !Number.isFinite(tMs)) return 'none';
+  if (tMs < table.startMs || tMs > table.endMs) return 'outside';
+  return table.missing(tMs, tMs).some((i) => failed.has(i)) ? 'failed' : 'none';
+}
+
+/** The start (ms) of each decade that failed to download and waits to be tried again, earliest first. */
+export function failedDecades(): number[] {
+  const t = table;
+  return t ? [...failed.keys()].sort((a, b) => a - b).map((i) => chunkStartMs(t, i)) : [];
 }
 
 /** Moves the live scenario and selects it. Ignores a latitude outside -90..90 or a non-number. */
@@ -573,11 +651,11 @@ export function neverLitFor(sc: Scenario): boolean {
  * (issue #32, row 3) or they are all in and the scan back from 2100 is still running in slices
  * (issue #32, row 1). The countdown then says it is still checking, rather than "No sunrise in
  * the next 60 days" turning into "Permanently shadowed" a moment later. False once neverLitFor
- * answers, false when one of the decades failed to download (neverLitFor can't answer before a
- * reload), and false wherever neverLitFor answers false at once: the Sun up, a sunrise within
- * 60 days, or within 60 days of the end of the table. Downloads nothing itself; with every
- * decade in, it starts the scan if neverLitFor hasn't yet, so the order the two are called in
- * doesn't matter.
+ * answers, false while one of the decades waits to be tried again after a failed download (true
+ * again while the retry downloads), and false wherever neverLitFor answers false at once: the
+ * Sun up, a sunrise within 60 days, or within 60 days of the end of the table. Downloads nothing
+ * itself; with every decade in, it starts the scan if neverLitFor hasn't yet, so the order the
+ * two are called in doesn't matter.
  */
 export function neverLitPendingFor(sc: Scenario): boolean {
   const eph = state.eph;
@@ -700,6 +778,7 @@ export type MissionResult =
   | { status: 'none' }        // no landing point chosen
   | { status: 'loading' }     // the table, or the decade of the arrival, is on its way
   | { status: 'outside' }     // the arrival or touchdown is outside the Sun and Earth table
+  | { status: 'failed'; decadeMs: number }   // T33: a decade it needs did not download (its start); tried again
   | { status: 'ready'; plan: MissionPlan };
 
 let missionCache: { key: string; plan: MissionPlan } | null = null;
@@ -716,9 +795,12 @@ export function missionFor(): MissionResult {
   if (!eph) return { status: 'loading' };
   const arrivalMs = land.tMs - APOLLO_11_TIMES.lunarOrbitS * 1000 - 2 * HOUR_MS;
   if (arrivalMs < eph.startMs || land.tMs > eph.endMs) return { status: 'outside' };
+  // Asks for the decades from the arrival to touchdown, again for a failed one whose wait is over.
   const end = readableTo(arrivalMs, land.tMs);
+  // One of them did not download (T33): say which, not "outside". It is tried again.
+  const gone = table?.missing(arrivalMs, land.tMs).find((i) => failed.has(i));
+  if (table && gone !== undefined) return { status: 'failed', decadeMs: chunkStartMs(table, gone) };
   if (end === null) return { status: 'loading' };
-  if (end < land.tMs) return { status: 'outside' };
   const earthMoonKm = earthMoonKmAt(eph, arrivalMs);
   if (earthMoonKm === null) return { status: 'loading' };
   const l = state.lander;

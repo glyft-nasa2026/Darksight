@@ -76,6 +76,12 @@ order given in `docs/team-workflow.md`, "The first three merges".
 | [T33](T33-decade-retry.md) | A decade that failed to download is tried again (issue #32, row 4) | if time | - |
 | [T34](T34-mission.md) | Mission simulation, launch to touchdown (F20) | if time | M2 |
 | [T35](T35-report.md) | Mission report, print and download (F21) | if time | T34 |
+| [T36](T36-planned-sites.md) | Upcoming mission targets in the site list | if time | M2, the team's answer on the site count |
+| [T37](T37-terrain-north.md) | Terrain skyline north of 85 S | if time | M2, pull request #146, the team's choice of option |
+| [T38](T38-libration.md) | Say that libration and the Moon's orbit are included | if time | - |
+| [T39](T39-moon-vs-earth.md) | Why the Moon is different, in plain words | if time | - |
+| [T40](T40-timeline-play.md) | Play the timeline | if time | M2 |
+| [T41](T41-slope.md) | Ground slope, as a map layer and a readout line | if time | M2, T14 |
 
 ## Order
 
@@ -99,6 +105,10 @@ T24 needs T01, T04, T05, T06 and T07. T17 and T18 run alongside from M1.
 T27 needs T04 and T21. T26 runs at M3.
 T32 and T33 (issue #32, rows 3 and 4) can start now; both edit `state.ts`, so agree an order.
 T34 and T35 (F20, F21; agreed 15 Nov) run after M2 and before the M3 freeze. T35 needs T34.
+T36 to T41 (15 Nov) cover what the challenge statement asks for and the site doesn't do yet.
+All stop at the M3 freeze; T38 and T39 are text, and the team decides if they may merge after it.
+T38 and T39 both edit web/src/ui/about/index.ts, so agree an order. T37 waits for #146 and,
+like T33, changes `state.ts`. T36 and T37 start with a team decision.
 ```
 
 After T00 and T20, several tasks can run in parallel: the page already shows live
