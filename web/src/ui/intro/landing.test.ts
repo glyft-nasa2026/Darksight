@@ -23,13 +23,18 @@ describe('landing sections', () => {
     for (const id of ids) expect(id).toMatch(/^landing-[a-z]+$/);
   });
 
-  it('name everyone in the team list of tasks/README.md', () => {
+  it('name everyone in the team list of tasks/README.md, by full name', () => {
     const board = readFileSync(new URL('../../../../tasks/README.md', import.meta.url), 'utf8');
     const people = board.split('## People')[1].split('##')[0];
     const names = [...people.matchAll(/^\| ([^|]+?) \| [^|]+ \|$/gm)]
       .map((m) => m[1])
       .filter((n) => n !== 'Name' && !n.startsWith('-'));
-    expect(TEAM).toEqual(names);
+    expect(TEAM).toHaveLength(names.length);
+    for (const n of names) expect(TEAM.some((full) => full.includes(n))).toBe(true);
+  });
+
+  it('list the team in the order that spells GLYFT', () => {
+    expect(TEAM.map((n) => n[0]).join('')).toBe('GLYFT');
   });
 
   it('say the licence the LICENSE file has', () => {

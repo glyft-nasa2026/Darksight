@@ -37,8 +37,8 @@ export const ABOUT: Section = {
   ],
 };
 
-/** Team GLYFT, as tasks/README.md lists it. */
-export const TEAM: string[] = ['Yi Hung', 'Leon', 'Yu An', 'Fabian', 'Hao Zhe'];
+/** Team GLYFT, in the order of the team's name: G, L, Y, F, T. Full names, from the team. */
+export const TEAM: string[] = ['Go Yu An', 'Leon Ng', 'Yi Hung', 'Fabian Chuah', 'Teh Hao Zhe'];
 
 export const PRIVACY: Section = {
   id: 'landing-privacy',

@@ -58,8 +58,9 @@ function section(s: Section, extra?: HTMLElement): HTMLElement {
   return el;
 }
 
+/** The avatar's letter: the first of the name, so the list reads G, L, Y, F, T. */
 function initials(name: string): string {
-  return name.split(/\s+/).map((w) => w[0]).join('').toUpperCase();
+  return name.charAt(0).toUpperCase();
 }
 
 function team(): HTMLElement {
