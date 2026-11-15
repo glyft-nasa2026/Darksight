@@ -2,12 +2,16 @@
 
 export type Site = { lat: number; lon: number; eye_m?: number };   // eye_m default 2
 export type AltAz = { alt: number; az: number };
-export type TerrainGrid = 'dem' | 'globe';   // T37: dem.bin (240 m) or globe.bin (3.8 km)
+// T37: the height map a site's skyline starts from: dem.bin (240 m), north.bin (1.2 km) or globe.bin (3.8 km)
+export type TerrainGrid = 'dem' | 'north' | 'globe';
 export type Skyline = {
   elev: Float32Array;                // 360 values, index = azimuth
   terrain: boolean;                  // false: a smooth Moon (all zeros)
   grid: TerrainGrid | null;          // T37: which height map the walk used; null when terrain is false
   cellM: number | null;              // T37: that grid's cell size, metres; null when terrain is false
+  // Set when the walk can pass a polar map's edge (a site between 80 and 85 degrees from the
+  // equator): beyond latitude `lat` (-80 or 80) it read globe.bin, cells of `cellM` metres.
+  outer?: { lat: number; cellM: number };
 };
 export type Sample = {
   tMs: number;

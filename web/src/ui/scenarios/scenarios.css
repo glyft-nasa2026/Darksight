@@ -87,16 +87,18 @@
   gap: var(--space-2);
 }
 
-/* T23: each card is a site chip, as in docs/design/scenarios.png: a round-ended outline on the
-   page colour, the scenario's dot and letter, the accent outline on the selected one. 100vmax
-   is "fully round", the pill of theme.css's .btn (docs/design.md, "Needs team decision" 1). */
+/* T23: each card is a site chip, as in docs/design/scenarios.png: a rounded outline on the
+   page colour, the scenario's dot and letter, the accent outline on the selected one. The
+   picture's chip is one line and fully round; a card here has two lines or more, and fully
+   round ends (100vmax) cut into the dot, "Land here" and the ×. So the corners are --radius
+   x 2, no more than the card's own padding (--space-3), and nothing inside reaches the curve. */
 .scn-card {
   display: flex;
   align-items: stretch;
   gap: var(--space-1);
   background: var(--bg);
   border: thin solid var(--border);
-  border-radius: 100vmax;
+  border-radius: calc(var(--radius) * 2);
 }
 
 .scn-card.scn-selected {
@@ -119,8 +121,8 @@
   text-align: left;
   background: none;
   border: none;
-  /* Round like the chip, so the focus outline follows its ends. */
-  border-radius: 100vmax;
+  /* Rounded like the chip, so the focus outline follows its corners. */
+  border-radius: calc(var(--radius) * 2);
   cursor: pointer;
 }
 
