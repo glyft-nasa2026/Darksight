@@ -1,0 +1,189 @@
+/* The main page's lower sections (issue #117). Theme variables only; each section is a .card. */
+
+.landing {
+  position: relative;
+  padding: calc(var(--space-5) * 2);
+  padding-bottom: var(--space-5);
+  display: grid;
+  gap: calc(var(--space-5) * 2);
+  background: linear-gradient(transparent, var(--bg) calc(var(--space-5) * 4));
+}
+
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  max-width: calc(var(--space-5) * 48);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.landing-section {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  scroll-margin-top: var(--space-5);
+}
+
+.landing-h {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.landing-p {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.landing-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.landing a {
+  color: var(--accent);
+}
+
+.landing-team {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-5) * 5), 1fr));
+  gap: var(--space-3);
+}
+
+.landing-member {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+}
+
+.landing-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(var(--space-5) * 1.5);
+  height: calc(var(--space-5) * 1.5);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.landing-name {
+  font-weight: 500;
+}
+
+.landing-footer {
+  max-width: calc(var(--space-5) * 48);
+  width: 100%;
+  margin: 0 auto;
+  border-top: thin solid var(--border);
+  padding-top: var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.landing-logo {
+  width: var(--space-5);
+  height: var(--space-5);
+}
+
+.landing-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.landing-jump {
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.landing .landing-jump {
+  color: var(--muted);
+}
+
+.landing-jump:hover,
+.landing-jump:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.landing-copy {
+  margin: 0;
+  width: 100%;
+  font-size: var(--fs-sm);
+}
+
+/* On the first screen, under the hero text. */
+.landing-more {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  animation: intro-up 0.8s ease-out 1.8s both;
+}
+
+.landing-more:hover,
+.landing-more:focus-visible {
+  color: var(--text);
+}
+
+.landing-more-arrow {
+  display: inline-block;
+}
+
+@media (max-width: 800px) {
+  .landing {
+    padding: var(--space-5);
+  }
+
+  .landing-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-more {
+    bottom: var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-more {
+    animation: none;
+  }
+}
