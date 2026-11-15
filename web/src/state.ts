@@ -775,6 +775,7 @@ export type MissionResult =
   | { status: 'none' }        // no landing point chosen
   | { status: 'loading' }     // the table, or the decade of the arrival, is on its way
   | { status: 'outside' }     // the arrival or touchdown is outside the Sun and Earth table
+  | { status: 'failed'; decadeMs: number }   // T33: a decade it needs did not download (its start); tried again
   | { status: 'ready'; plan: MissionPlan };
 
 let missionCache: { key: string; plan: MissionPlan } | null = null;
@@ -791,9 +792,12 @@ export function missionFor(): MissionResult {
   if (!eph) return { status: 'loading' };
   const arrivalMs = land.tMs - APOLLO_11_TIMES.lunarOrbitS * 1000 - 2 * HOUR_MS;
   if (arrivalMs < eph.startMs || land.tMs > eph.endMs) return { status: 'outside' };
+  // Asks for the decades from the arrival to touchdown, again for a failed one whose wait is over.
   const end = readableTo(arrivalMs, land.tMs);
+  // One of them did not download (T33): say which, not "outside". It is tried again.
+  const gone = table?.missing(arrivalMs, land.tMs).find((i) => failed.has(i));
+  if (table && gone !== undefined) return { status: 'failed', decadeMs: chunkStartMs(table, gone) };
   if (end === null) return { status: 'loading' };
-  if (end < land.tMs) return { status: 'outside' };
   const earthMoonKm = earthMoonKmAt(eph, arrivalMs);
   if (earthMoonKm === null) return { status: 'loading' };
   const l = state.lander;

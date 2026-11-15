@@ -26,6 +26,15 @@ although it was inside 1900 to 2100, and only a reload asked for the decade agai
 - Now false only while the failed decade waits for its next try, true again while it downloads.
 - Why: the verdict no longer needs a reload once the retry gets the decade.
 
+### docs/data-contract.md: 4. State, `missionFor`
+
+- Was: `{ status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan }`, with `'outside'`
+  also for a decade that did not download; the mission page then said the landing time was "too
+  near the edge of the Sun and Earth table (1900 to 2100)".
+- Now `{ status: 'failed'; decadeMs }` for a failed decade, and `'outside'` only before 1900 or
+  after 2100.
+- Why: the same mistake as the other modules, on the mission and launch simulation pages.
+
 ## 15 Nov 2026: the mission card gets its own page (T34)
 
 P5 asked for it.

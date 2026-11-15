@@ -77,6 +77,35 @@ test('a decade that did not download says so, shows no Sun in 3D, and comes back
   expect(thrown, 'uncaught exceptions').toEqual([]);
 });
 
+// T33: the mission page (T34-f) plans from the same table; it said the landing time was "too
+// near the edge of the table" for a decade that did not download.
+const LANDING = '-89.6866,-162.81,2055-06-01T05:00:00Z';
+
+test('the mission page says which decade did not download, then plans the mission when it arrives', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.route(DECADE, (route) => route.abort('failed'));
+  await page.goto(`./mission.html#live=${LANDING}&land=${LANDING}`);
+  const mission = page.locator('#mission');
+  await expect(async () => {
+    const card = (await mission.textContent()) ?? '';
+    expect(card).toContain(FAILED);
+    expect(card).not.toContain('too near the edge');
+    expect(await page.locator('#mp-status').textContent()).toContain(STATUS);
+  }).toPass({ timeout: 60_000 });
+
+  await page.unroute(DECADE);
+  await expect(mission.locator('.ms-table')).toBeVisible({ timeout: 75_000 });   // the flight table: a plan
+  await expect(mission).not.toContainText(FAILED);
+  await expect(page.locator('#mp-status')).not.toContainText(STATUS);
+});
+
+test('the launch simulation page says which decade did not download', async ({ page }) => {
+  await page.route(DECADE, (route) => route.abort('failed'));
+  await page.goto(`./simulation.html#live=${LANDING}&land=${LANDING}`);
+  await expect(page.locator('#sim')).toContainText(FAILED, { timeout: 30_000 });
+  await expect(page.locator('#sim')).not.toContainText('too near the edge');
+});
+
 test('back online, a failed decade is tried again at once', async ({ page, context }) => {
   await open(page, `live=${AT_2026}`);
   await expect(page.locator('#readout')).toContainText('Altitude', { timeout: 30_000 });

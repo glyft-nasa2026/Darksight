@@ -476,7 +476,8 @@ neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still 
 tableGap(tMs: number): 'none' | 'outside' | 'failed'  // T33: why a time may have no row
 failedDecades(): number[]                             // T33: start of each failed decade, for the status line
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
-missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan: MissionPlan }
+missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'failed'; decadeMs: number }
+  | { status: 'ready'; plan: MissionPlan }            // 'failed' (T33): a decade it needs did not download
 ```
 
 **Selected and live.** `selectedId` is the live scenario's id or a pinned one's. The readout,
@@ -512,6 +513,10 @@ apart: `'outside'` before 1900 or after 2100, `'failed'` in a decade that failed
 otherwise. A module with no row for a time says so with `noRowText(tableGap(tMs), tMs)` from
 `ui/tableGap.ts`: `The Sun and Earth table for the 2050s did not download. Trying again…`, or
 `This time is outside the Sun and Earth table`. The status line lists `failedDecades()`.
+`missionFor` answers `{ status: 'failed', decadeMs }` (the start of that decade) when a decade
+from the arrival to touchdown failed, and `'outside'` only before 1900 or after 2100; the mission
+and launch simulation pages say `noRowText('failed', decadeMs)`, and the mission page's status
+line lists `failedDecades()` too.
 
 **Never lit.** `neverLitFor` is true when no part of the Sun's disc clears the skyline at any
 hour from the scenario's time to the end of the table (2100-12-31), whatever time is chosen. It

@@ -727,6 +727,20 @@ describe('decades of the table (loaded as needed)', () => {
       expect(getState().eph).not.toBeNull();  // never stuck on "Loading"
     });
 
+    it('the mission names the decade that did not download, not "outside", and plans once it arrives', async () => {
+      failThenServe(1);
+      setLiveTime(later);
+      setLanding(getState().live);            // the arrival, a day before touchdown, is in the same file
+      await flush();
+      expect(asked).toHaveLength(1);
+      expect(missionFor()).toEqual({ status: 'failed', decadeMs: T0 + DAYS * DAY });
+
+      await vi.advanceTimersByTimeAsync(RETRY_MS);   // the wait is over: tried again, and it arrives
+      await flush();
+      expect(asked).toHaveLength(2);
+      expect(missionFor().status).toBe('ready');
+    });
+
     it('a decade no longer needed is not asked for again', async () => {
       failThenServe(Infinity);
       setLiveTime(later);
