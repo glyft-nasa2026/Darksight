@@ -394,6 +394,15 @@ export const HIGH_GATE_KM = 2;
 const BRAKING_END_KMS = 0.05;
 /** How fast the altitude loop follows its profile in braking, rad/s (a time constant of 33 s). */
 const ALT_LOOP = 0.03;
+/**
+ * Where the approach hands over to the vertical landing: the "low gate" altitude, km, about
+ * Apollo's 500 ft (issue #192).
+ */
+export const LOW_GATE_KM = 0.15;
+/** The approach's fastest sink rate, km/s. */
+const APPROACH_SINK_KMS = 0.03;
+/** The approach's braking, as a share of the engine's full acceleration at the high gate. */
+const APPROACH_BRAKING = 0.5;
 /** The landing phase's descent rate: altitude over this many seconds, between 1 and 30 m/s. */
 const LANDING_RATE_S = 40;
 /** The landing phase's speed loops' time constant, s. */
@@ -407,8 +416,11 @@ export const LANDED_KMS = 0.003;
  *
  * - Braking, at full thrust: mostly against the motion, the rest up or down so the altitude
  *   follows a profile that falls with the along-track speed, from startAltKm to HIGH_GATE_KM.
- * - Approach and landing, throttled: the last along-track speed taken out, then straight down at
- *   the altitude over LANDING_RATE_S, from 30 m/s to 1 m/s at the ground.
+ * - Approach, throttled (issue #192): a straight slanting line from the high gate down to the
+ *   LOW_GATE_KM low gate, the along-track speed falling evenly to zero there, sinking at most
+ *   APPROACH_SINK_KMS. Before, the last along-track speed was taken out in a few seconds and the
+ *   lander came straight down from the high gate, which drew a 2 km vertical line.
+ * - Landing, throttled: straight down at the altitude over LANDING_RATE_S, to 1 m/s at the ground.
  *
  * The thrust is worked out at the start of each step and held through it (fourth-order
  * Runge-Kutta in the orbit's plane, as simulateDescent). Ends at the ground; a lander whose
@@ -430,6 +442,9 @@ export function simulateGuidedDescent(
   const span = startAltKm - HIGH_GATE_KM;
   let braking = true;
   let brakingS = 0;
+  let approach: { tS: number; h: number; drop: number; vt: number; spanS: number } | null = null;
+  let landing = false;
+  let t = 0;
   // The thrust force held through a step, radial and along-track, and the mass flow.
   let fr = 0;
   let ft = 0;
@@ -447,6 +462,27 @@ export function simulateGuidedDescent(
       ar = gNet + ALT_LOOP * ALT_LOOP * (hRef - hNow) + 2 * ALT_LOOP * (vrRef - vr);
       ar = Math.max(-aMax, Math.min(aMax, ar));
       at = -Math.sqrt(Math.max(0, aMax * aMax - ar * ar));
+    } else if (!landing) {
+      if (braking) {
+        // The high gate: plan the approach from here. Long enough to sink no faster than
+        // APPROACH_SINK_KMS and to brake at APPROACH_BRAKING of full thrust.
+        braking = false;
+        const drop = Math.max(0, hNow - LOW_GATE_KM);
+        const spanS = Math.max(10, (2 * drop) / APPROACH_SINK_KMS, Math.max(0, vt) / (APPROACH_BRAKING * aMax));
+        approach = { tS: t, h: hNow, drop, vt: Math.max(0, vt), spanS };
+      }
+      const g = approach!;
+      const f = Math.min(1, (t - g.tS) / g.spanS);
+      // Along a straight line: the height falls with the distance gone, (2f - f^2) of it.
+      const hRef = g.h - g.drop * (2 * f - f * f);
+      const vrRef = (-g.drop * (2 - 2 * f)) / g.spanS;
+      const vtRef = g.vt * (1 - f);
+      at = -g.vt / g.spanS + (vtRef - vt) / LANDING_TAU_S;
+      ar = gNet + (hRef - hNow) / (LANDING_TAU_S * LANDING_TAU_S) + (2 * (vrRef - vr)) / LANDING_TAU_S;
+      const mag = Math.hypot(ar, at);
+      if (mag > aMax) { ar *= aMax / mag; at *= aMax / mag; }
+      if (ar < 0) ar = 0;
+      if (f >= 1 || hNow <= LOW_GATE_KM) landing = true;
     } else {
       braking = false;
       const vzCmd = -Math.max(0.001, Math.min(0.03, hNow / LANDING_RATE_S));
@@ -473,7 +509,6 @@ export function simulateGuidedDescent(
   };
   if (keepSamples) sample(0);
   const h = DT / 2;
-  let t = 0;
   let nextSample = 1;
   while (t < MAX_DESCENT_S) {
     steer();

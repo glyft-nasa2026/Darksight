@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APOLLO_11_TIMES, EXAMPLE_LANDER, LUNAR_ORBIT_ALT_KM, MU_MOON, PARKING_ALT_KM, R_EARTH, R_MOON,
   burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, moonFixedInPlane, planDescent, approachSeconds, hyperbolaAt, hyperbolaTimeToRadius, MOON_SOI_KM,
-  arrivalOrbit, lunarFrameInEarthPlane, planMission, propellantFor, SEQUENCE, simulateDescent, simulateGuidedDescent, HIGH_GATE_KM, ASCENT_LOSSES_KMS, transferFor, type MissionInput, type OkPlan,
+  arrivalOrbit, lunarFrameInEarthPlane, planMission, propellantFor, SEQUENCE, simulateDescent, simulateGuidedDescent, HIGH_GATE_KM, LOW_GATE_KM, ASCENT_LOSSES_KMS, transferFor, type MissionInput, type OkPlan,
 } from './mission';
 import { padById } from './pads';
 
@@ -107,6 +107,26 @@ describe('Powered descent', () => {
     for (const s of d.samples) expect(s.altKm).toBeLessThan(15.5);
     const atGate = d.samples.find((s) => s.tS >= d.brakingS)!;
     near(atGate.altKm, HIGH_GATE_KM, 1);
+  });
+
+  it('approaches on a slant from the high gate to the low gate, not straight down (issue #192)', () => {
+    for (const lander of [EXAMPLE_LANDER, { ...EXAMPLE_LANDER, thrustN: 9000 }]) {
+      const d = simulateGuidedDescent(15, 1420, lander.thrustN, lander.ispS, true);
+      const approach = d.samples.filter((s) => s.tS > d.brakingS && s.altKm > LOW_GATE_KM + 0.05);
+      expect(approach.length).toBeGreaterThan(10);
+      // Every 10 s, the path stays more than 5 degrees off vertical...
+      for (let i = 10; i < approach.length; i += 10) {
+        const a = approach[i - 10];
+        const b = approach[i];
+        const across = (b.angle - a.angle) * R_MOON;
+        const down = a.altKm - b.altKm;
+        expect((Math.atan2(down, across) * 180) / Math.PI).toBeLessThan(85);
+      }
+      // ...and the approach covers ground: at least a third of the height it drops.
+      const first = approach[0];
+      const last = approach[approach.length - 1];
+      expect((last.angle - first.angle) * R_MOON).toBeGreaterThan((first.altKm - last.altKm) / 3);
+    }
   });
 
   it('a strong engine and the example lander both start at 15 km, at full thrust, and touch down under 3 m/s', () => {
@@ -402,7 +422,7 @@ describe('The arrival leads into the lunar orbit (issue #192)', () => {
       for (const v of [lx, ly, lz]) near(Math.hypot(...v), 1, 1e-12);
       near(dot(lx, ly), 0, 1e-12);
       const c = [lx[1] * ly[2] - lx[2] * ly[1], lx[2] * ly[0] - lx[0] * ly[2], lx[0] * ly[1] - lx[1] * ly[0]];
-      near(angleDeg(c, lz), 0, 1e-6);
+      near(angleDeg(c, lz), 0, 1e-4);   // acos near 0 resolves only to about 1e-6 degrees
     });
 
     it(`${name}: still lands on the site, waiting in lunar orbit within half a lap of Apollo 11's wait`, () => {
