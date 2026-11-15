@@ -16,6 +16,7 @@ import { themeColor } from '../ui/plotTheme';
 import { alignFrames } from '../core/sky';
 import type { Vec3 } from '../core/ephemeris';
 import { makeStarField } from '../scene/stars';
+import { coastBend } from './arrival';
 
 export type Scale = 'near' | 'earth' | 'moon' | 'descent';
 
@@ -208,18 +209,48 @@ export function createScene(
     return [before, flown];
   };
   const doi = step('doi').startMs;
-  const toTli = sample(plan, launch, tli, 500, (s) => s.earthPlane.craft);
-  const coast = sample(plan, tli, loi, 700, (s) => s.earthPlane.craft);
-  const earthTrack = addTrack(scene, { times: [...toTli.times, ...coast.times], points: [...toTli.points, ...coast.points] }, '--accent');
-  // The arrival hyperbola, sampled densely near the periapsis, where it bends.
-  const arrive = loi - approachSeconds(plan) * 1000;
+  // Where the craft is drawn (issue #192). From the Moon's sphere of influence on, it is on its
+  // Moon-centred path, carried with the Moon. Before that, on the transfer, bent (arrival.ts) so
+  // the transfer runs into the arrival hyperbola's first point at that point's velocity, with
+  // no gap and no corner. The bend comes from this plan's own two paths.
+  // The first whole millisecond inside the sphere of influence: at loi - approachSeconds itself,
+  // rounding can leave missionAt just outside it, with no Moon-centred position yet.
+  let arrive = Math.ceil(loi - approachSeconds(plan) * 1000);
+  while (!missionAt(plan, arrive).moonPlane && arrive < loi) arrive++;
+  const atMoon = (st: MissionState): THREE.Vector3 =>
+    P(st.earthPlane.moon).add(P(st.moonPlane!).applyQuaternion(moon.quaternion));
+  const onCoast = (t: number): THREE.Vector3 => P(missionAt(plan, t).earthPlane.craft);
+  const STEP_MS = 60_000;
+  const entry = atMoon(missionAt(plan, arrive));
+  const gap = entry.clone().sub(onCoast(arrive));
+  const entryVelocity = atMoon(missionAt(plan, arrive + STEP_MS)).sub(entry).divideScalar(STEP_MS / 1000);
+  const coastVelocity = onCoast(arrive).sub(onCoast(arrive - STEP_MS)).divideScalar(STEP_MS / 1000);
+  const gapRate = entryVelocity.sub(coastVelocity);
+  const inScene = (st: MissionState): THREE.Vector3 => {
+    if (st.moonPlane) return atMoon(st);
+    const p = P(st.earthPlane.craft);
+    const [x, y, z] = coastBend(st.tMs, tli, arrive, gap.toArray(), gapRate.toArray());
+    return p.add(new THREE.Vector3(x, y, z));
+  };
+  // The arrival hyperbola's times, densely near the periapsis, where it bends.
+  const approachTimes: number[] = [];
+  for (let i = 0; i <= 400; i++) approachTimes.push(Math.min(loi - 1, loi - (loi - arrive) * (1 - i / 400) ** 3));
+  // The transfer from the pad to LOI as one line, in the scene: launch, the parking orbit, the
+  // bent coast and, inside the sphere of influence, the arrival as it is seen from Earth.
+  const transfer = { times: [] as number[], points: [] as THREE.Vector3[] };
+  const toTliTimes = Array.from({ length: 501 }, (_, i) => launch + ((tli - launch) * i) / 500);
+  const coastTimes = Array.from({ length: 600 }, (_, i) => tli + ((arrive - tli) * (i + 1)) / 600);
+  for (const t of [...toTliTimes, ...coastTimes, ...approachTimes.slice(1)]) {
+    transfer.times.push(t);
+    transfer.points.push(inScene(missionAt(plan, t)));
+  }
+  const earthTrack = addTrack(scene, transfer, '--accent');
   const approach = { times: [] as number[], points: [] as THREE.Vector3[] };
-  for (let i = 0; i <= 400; i++) {
-    const t = Math.min(loi - 1, loi - (loi - arrive) * (1 - i / 400) ** 3);
+  for (const t of approachTimes) {
     const m = missionAt(plan, t).moonPlane;
     if (m) { approach.times.push(t); approach.points.push(P(m)); }
   }
-  addTrack(moon, approach, '--muted');
+  const approachTrack = addTrack(moon, approach, '--muted');
   addTrack(moon, sample(plan, loi, doi, 500, (s) => s.moonPlane), '--accent');
   addTrack(moon, sample(plan, doi, pdi, 400, (s) => s.moonPlane), '--warn');
   addTrack(moon, sample(plan, pdi, td, 400, (s) => s.moonPlane), '--ok');
@@ -338,19 +369,23 @@ export function createScene(
   };
 
   let last: { st: MissionState; scale: Scale; burning: boolean } | null = null;
-  // At Earth's scales the craft follows the transfer; at the Moon's, its Moon-centred path; in a
-  // glide between them, a blend. The Earth-frame lines, which run into the Moon's centre, fade
-  // out toward the Moon's scales by the same weight.
-  for (const l of [...earthTrack, moonPath]) l.userData.opacity = (l.material as THREE.LineBasicMaterial).opacity;
+  // The craft is on the one joined path at every scale (inScene). The Earth-scale lines fade
+  // out toward the Moon's scales, where the Moon-centred tracks show the same path up close.
+  // The arrival hyperbola does the opposite: it is drawn round the Moon and moves with it, so at
+  // Earth's scales it would hang off where the Moon is now, not where the craft meets it. There
+  // the transfer line already shows the arrival.
+  const fades = [
+    ...[...earthTrack, moonPath].map((l) => ({ l, atMoon: false })),
+    ...approachTrack.map((l) => ({ l, atMoon: true })),
+  ];
+  for (const { l } of fades) l.userData.opacity = (l.material as THREE.LineBasicMaterial).opacity;
   const placeCraft = (st: MissionState | undefined = last?.st): void => {
     if (!st) return;
-    const w = st.moonPlane ? moonWeight : 0;
-    const fromEarth = P(st.earthPlane.craft);
-    craft.position.copy(w > 0 ? fromEarth.lerp(moon.position.clone().add(P(st.moonPlane!).applyQuaternion(moon.quaternion)), w) : fromEarth);
-    for (const l of [...earthTrack, moonPath]) {
+    craft.position.copy(inScene(st));
+    for (const { l, atMoon: shownAtMoon } of fades) {
       const m = l.material as THREE.LineBasicMaterial;
       m.transparent = true;
-      m.opacity = l.userData.opacity * (1 - moonWeight);
+      m.opacity = l.userData.opacity * (shownAtMoon ? moonWeight : 1 - moonWeight);
       l.visible = m.opacity > 0.01;
     }
   };
