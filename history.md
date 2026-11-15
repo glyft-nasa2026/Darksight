@@ -4,6 +4,17 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: SPEC section 10 answered at the freeze (T26)
+
+### SPEC.md: 10. Open decisions
+
+- Was: eight rows with a decision, who and importance, and no answer. The load-time row said
+  "proposed, not yet agreed".
+- Now each row has an Answer column, taken from `docs/decisions.md`, T17's `pitch/checklist.md`
+  (pull request #130), T22's status and `docs/load-time.md`. The Figma seat row is struck out:
+  T22 made its pictures with no Figma file.
+- Why: T26 step 5. At the freeze no decision stays open.
+
 ## 15 Nov 2026: the mission card gets its own page (T34)
 
 P5 asked for it.

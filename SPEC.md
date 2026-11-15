@@ -139,13 +139,15 @@ Fill in the clock times once the submission deadline is known.
 
 ## 10. Open decisions
 
-| Decision | Who | Importance |
-|---|---|---|
-| Submission deadline and Saturday start time, Malaysia time | Team | blocks the schedule |
-| Team agrees the cut line (refraction and GPS removed) | All | blocks T08 onward |
-| Project name | Team | cosmetic |
-| Repo made public (GitHub refuses the branch rule and Pages on a private repo in a free organisation) | Whoever takes T21, with repository settings access | blocks T21 |
-| Figma seat when using Figma: Full or Dev on Professional or Education | Whoever takes the design task | costs time (a fallback is in `docs/mcp-and-skills.md`) |
-| Demo format and length, read from the submission form | Whoever takes T17 | blocks T17 |
-| Load-time budgets in T27 (numbers in 3 s, height map in 20 s, no freeze over 0.5 s, on "Fast 4G"): proposed, not yet agreed | Team, informed by T27's measurements | costs time |
-| 3D view zoomed right out: a drag orbits the selected site, so only the half of the Moon round it is in view (since issue #77, pull request #84). Or, past the distance where the whole Moon fits, a drag turns the whole Moon like a globe, as pull request #18 had, and close in it orbits the site | P1 and the team, after trying pull request #84 | cosmetic |
+Every decision below has its answer (checked 15 Nov 2026, T26).
+
+| Decision | Who | Importance | Answer |
+|---|---|---|---|
+| Submission deadline and Saturday start time, Malaysia time | Team | blocks the schedule | Submit by Sunday 15 Nov 2026, 23:59 Kuala Lumpur time (UTC+8), so M3 is 18:59 that day. Source: NASA's Project Submission Guide dated 13 Nov 2026, read on 15 Nov in T17's `pitch/checklist.md` (pull request #130). The Saturday start time is no longer needed: work started on Saturday 14 Nov |
+| Team agrees the cut line (refraction and GPS removed) | All | blocks T08 onward | Agreed on 14 Nov 2026: refraction and GPS removed (`docs/decisions.md`). On 15 Nov landing trajectories moved from Out to If time as F20 and F21; thermal models stay Out (section 2) |
+| Project name | Team | cosmetic | Darksight, at darksight.space (`docs/decisions.md`, 14 Nov 2026) |
+| Repo made public (GitHub refuses the branch rule and Pages on a private repo in a free organisation) | Whoever takes T21, with repository settings access | blocks T21 | Public, with the MIT licence (`gh repo view`, 15 Nov 2026) |
+| ~~Figma seat when using Figma: Full or Dev on Professional or Education~~ | Whoever takes the design task | costs time (a fallback is in `docs/mcp-and-skills.md`) | Struck out: not needed. T22 made the pictures from the brief, with no Figma file |
+| Demo format and length, read from the submission form | Whoever takes T17 | blocks T17 | A video of 30 seconds or less, or at most 7 slides including the title and intro slides. Over the limit isn't eligible for global judging. Source: the same guide, in T17's `pitch/checklist.md` (pull request #130) |
+| Load-time budgets in T27 (numbers in 3 s, height map in 20 s, no freeze over 0.5 s, on "Fast 4G") | Team, informed by T27's measurements | costs time | Kept as proposed. T27 measured them (`docs/load-time.md`): on the laptop all pass after the fixes in #109 and #143. On a phone the longest freeze after #132 is 534 ms on Shackleton's floor, which the team accepted as is (Leon, issue #32) |
+| 3D view zoomed right out: a drag orbits the selected site, so only the half of the Moon round it is in view (since issue #77, pull request #84). Or, past the distance where the whole Moon fits, a drag turns the whole Moon like a globe, as pull request #18 had, and close in it orbits the site | P1 and the team, after trying pull request #84 | cosmetic | Both: the 3D view offers either drag, orbit the selected site or turn the whole Moon (`docs/decisions.md`, 15 Nov 2026, issue #126) |
