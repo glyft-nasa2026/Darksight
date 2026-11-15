@@ -1,6 +1,6 @@
 # T32: A dark site says it is still checking to 2100
 
-Status: in progress (an agent for Yi Hung, branch `t32-never-lit-checking-b`): checking "Done when" line 5 on the pull request's preview. The code merged in #138 (Fabian) and #148 ("checking" while #132's sliced scan runs); lines 1-4 and 6 pass; line 5 passed on a local production build with Fast 4G figures. Follow-up: the mission card (`ui/mission/`, T34), not changed in #138
+Status: in progress (an agent for Yi Hung, branch `t32-never-lit-checking-b`, draft pull request #186): checking "Done when" line 5 on the pull request's preview. The code merged in #138 (Fabian) and #148 ("checking" while #132's sliced scan runs); lines 1-4 and 6 pass; line 5 passed on a local production build with Fast 4G figures. Follow-up: the mission card (`ui/mission/`, T34), not changed in #138
 
 | | |
 |---|---|
