@@ -11,6 +11,7 @@ import './ui/layout.css';
 import { loadDem } from './core/dem';
 import { loadEphemeris } from './core/ephemeris';
 import type { CuratedSite } from './core/types';
+import { holdUntilHeightMap } from './loadOrder';
 import { setData } from './state';
 import { startIntro } from './ui/intro/index';
 
@@ -99,11 +100,10 @@ function track<T>(name: keyof typeof files, job: Promise<T>, done: (value: T) =>
 showStatus();
 track('Sun and Earth table', loadEphemeris(), (eph) => setData({ eph }));
 track('site list', loadSites(), (sites) => setData({ sites }));
-track(
-  'height map',
-  loadDem((fraction) => {
-    demFraction = fraction;
-    showStatus();
-  }),
-  (dem) => setData({ dem }),
-);
+const demJob = loadDem((fraction) => {
+  demFraction = fraction;
+  showStatus();
+});
+// The whole-Moon picture files wait for it rather than share the connection (issue #96).
+holdUntilHeightMap(demJob);
+track('height map', demJob, (dem) => setData({ dem }));
