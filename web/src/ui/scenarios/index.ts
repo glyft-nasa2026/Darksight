@@ -93,8 +93,17 @@ export function mount(el: HTMLElement): void {
   pinButton.type = 'button';
   const shareButton = make('button', 'btn', 'Copy share link');
   shareButton.type = 'button';
+  // T34: once "Land here" has chosen a landing point, the mission planner on a page of its own.
+  const missionButton = make('button', 'btn btn-primary scn-open', 'Open mission ›');
+  missionButton.type = 'button';
+  missionButton.title = 'Plan and watch the mission to the landing site, on its own page';
+  missionButton.hidden = true;
+  // Share and mission side by side: when the row is too narrow for all three, they move to the
+  // next line together, so "Open mission" stays beside "Copy share link".
+  const shareGroup = make('div', 'scn-share');
+  shareGroup.append(shareButton, missionButton);
   const actions = make('div', 'scn-actions');
-  actions.append(pinButton, shareButton);
+  actions.append(pinButton, shareGroup);
 
   const shareNote = make('p', 'scn-note muted');
   shareNote.setAttribute('role', 'status');
@@ -159,6 +168,13 @@ export function mount(el: HTMLElement): void {
   });
 
   pinButton.addEventListener('click', () => pin());
+  // A new tab, so this page and its scenarios stay as they are (as "Proceed" does, issue #105).
+  // Not 'noopener': a blocked tab must be told apart, and the page's "Back" uses the opener.
+  missionButton.addEventListener('click', () => {
+    const url = `mission.html#${stateToAddress()}`;
+    const tab = window.open(url, '_blank');
+    if (!tab) window.location.assign(url);   // a pop-up blocker stopped it: this tab instead
+  });
 
   // A box applies its value on the mouse press that takes the focus away. If that makes a
   // message line appear or go, everything below it moves, the release lands beside the button
@@ -337,6 +353,9 @@ export function mount(el: HTMLElement): void {
     sync(timeBox, 'time', toBoxValue(live.tMs), timeField.setError);
 
     drawCards([live, ...s.pinned], s.selectedId, s.sites);
+
+    const landing = s.landing !== null;
+    if (missionButton.hidden === landing) missionButton.hidden = !landing;
 
     const full = s.pinned.length >= MAX_PINNED;
     pinButton.disabled = full;

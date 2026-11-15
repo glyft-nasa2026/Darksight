@@ -108,6 +108,25 @@ export function mount(el: HTMLElement): void {
   el.setAttribute('aria-labelledby', title.id);
   el.replaceChildren(head, body);
 
+  // Fold. Folded to start, on every screen (issue #126): most visits never nudge.
+  // The arrow points the way the body opens or closes: in a top corner the body opens downward
+  // (▼ opens, ▲ folds); in a bottom corner it opens upward, so the arrows swap.
+  let folded = true;
+  const drawFold = (): void => {
+    const bottom = el.dataset.corner === 'bl' || el.dataset.corner === 'br';
+    const arrow = folded === bottom ? '▲' : '▼';
+    if (fold.textContent !== arrow) fold.textContent = arrow;   // only what changed: see place()
+  };
+  const setFolded = (f: boolean): void => {
+    folded = f;
+    body.hidden = f;
+    drawFold();
+    fold.setAttribute('aria-expanded', String(!f));
+    fold.setAttribute('aria-label', f ? 'Show the nudge controls' : 'Hide the nudge controls');
+    fold.title = f ? 'Show' : 'Hide';
+  };
+  fold.addEventListener('click', () => setFolded(!folded));
+
   // Corner: the one asked for, or the next free one if the map's own controls hold it.
   let wanted: Corner = START_CORNER;
   const taken = (): Set<Corner> => {
@@ -135,6 +154,7 @@ export function mount(el: HTMLElement): void {
       corner.title = `Move to the ${CORNER_NAMES[next]} corner`;
     }
     if (corner.disabled !== (next === at)) corner.disabled = next === at;
+    drawFold();
   };
   corner.addEventListener('click', () => { wanted = nextCorner(el.dataset.corner as Corner, taken()); place(); });
   // The map may add or move its own controls later; look again when it does.
@@ -144,18 +164,6 @@ export function mount(el: HTMLElement): void {
     });
   }
   place();
-
-  // Fold. Folded to start, on every screen (issue #126): most visits never nudge.
-  let folded = true;
-  const setFolded = (f: boolean): void => {
-    folded = f;
-    body.hidden = f;
-    fold.textContent = f ? '▼' : '▲';   // issue #126: ▼ opens the panel, ▲ folds it
-    fold.setAttribute('aria-expanded', String(!f));
-    fold.setAttribute('aria-label', f ? 'Show the nudge controls' : 'Hide the nudge controls');
-    fold.title = f ? 'Show' : 'Hide';
-  };
-  fold.addEventListener('click', () => setFolded(!folded));
   setFolded(folded);
 
   // The last step: the scenario before it (drawn grey as "Before") and the live scenario it made.

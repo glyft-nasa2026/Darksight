@@ -542,7 +542,7 @@ flat skyline and zeros. Modules show "Loading" and must not crash.
 | `#nudge` | `web/src/ui/nudge/` | T13 (made by `#scene`, see below) |
 | `#about` | `web/src/ui/about/` | T16 |
 | `#panel` | `web/src/ui/panel/` | T15 |
-| `#mission` | `web/src/ui/mission/` | T34 |
+| `#mission` | `web/src/ui/mission/` | T34 (on its own page, `mission.html`, see below) |
 
 Each folder has `index.ts` exporting `mount(el)`, and its own CSS file. `main.ts` mounts each
 one, from the list in `site.ts`, after "Start exploring" (`web/src/ui/intro/`). T00 wired the
@@ -554,14 +554,18 @@ Meet the team, Privacy, Licence and a footer (issue #117). Their words and the t
 `intro/landing.ts`; the team photos are `web/public/team/*.jpg`. Links there to a section are
 buttons that scroll, never `#id` links: the page address hash holds the state (section 4).
 
-`#mission` (T34) is a full-width card after `#sky`, and last on a phone. "Land here" on a
+`#mission` (T34) is not on the site's page: it is the card of the page `web/mission.html`
+(`web/src/missionPage/`), which loads the same data files and mounts `ui/mission`. "Land here" on a
 scenario card sets its landing point; the page address keeps it as `land=`, with `pad=` and
-`lander=` when they differ from the defaults. "Proceed" on the card opens the launch-site picker
+`lander=` when they differ from the defaults. The Scenarios panel then shows "Open mission"
+beside "Copy share link" (the two wrap to the next line together), which opens `mission.html` in a new tab (the current tab if a pop-up blocker stops it)
+with the same page address; its "Back to landing sites" returns to the site's tab, or opens
+`index.html` with the address it has. "Proceed" on the card opens the launch-site picker
 (a pop-up with a satellite globe of Earth and the pads, `web/src/ui/launch/`); confirming a pad
 opens the second page, `web/simulation.html` (`web/src/simulation/`), in a new tab (the current
 tab if a pop-up blocker stops it), with the same page address, so it plans the same mission through `missionFor()`. That page draws the mission in 3D
-from `missionAt` only and links back to the planner with the address it has. Vite builds both
-pages (`vite.config.ts`, `build.rolldownOptions.input`).
+from `missionAt` only and links back to the mission page with the address it has. Vite builds all
+three pages (`vite.config.ts`, `build.rolldownOptions.input`).
 
 `#about` is a thin bar across the top: the product name, the Horizons badge and an About button
 that opens the About panel. On desktop `#scenarios` sits beside `#scene` with `#panel` under it,
