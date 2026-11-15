@@ -12,7 +12,7 @@ function facts(p: Partial<Facts> = {}): Facts {
   return {
     tMs: T, litPct: 50, earthPct: 50, sunUp: true, earthUp: true,
     sunFlip: { type: 'set', tMs: T + 50 * H }, earthFlip: { type: 'set', tMs: T + 100 * H },
-    terrain: true, ...p,
+    grid: 'dem', ...p,
   };
 }
 const pct = (hours: number): number => (100 * hours) / WINDOW_H;
@@ -170,26 +170,29 @@ describe('compare', () => {
       .toEqual(['No meaningful change (under 6 h)']);
   });
 
-  it('adds the terrain note when neither site has terrain', () => {
-    const l = texts(facts({ terrain: false }), facts({ terrain: false }));
-    expect(l[0]).toBe('No meaningful change (under 6 h)');
-    expect(l[1]).toMatch(/Terrain isn't modelled north of 85° S/);
+  it('adds the terrain note it is given (coarse terrain, or a smooth Moon and why), and none on the polar map', () => {
+    const coarse = 'Coarse terrain: LOLA whole-Moon height map, 3.8 km cells';
+    const l = compare(facts({ grid: 'globe' }), facts({ grid: 'globe' }), coarse).map((x) => x.text);
+    expect(l).toEqual(['No meaningful change (under 6 h)', `${coarse}.`]);
     expect(texts(facts(), facts())).toHaveLength(1);
   });
 
-  it('says the height map is missing, not that the site is north of 85 S, while it isn\'t loaded', () => {
-    const smooth = facts({ terrain: false });
-    const l = compare(smooth, facts({ terrain: false, litPct: 50 - pct(7) }), false).map((x) => x.text);
-    expect(l).toEqual(['−7 h of sunlight in 30 days', 'The height map isn\'t loaded, so the ground here is a smooth Moon.']);
+  it('a smooth Moon on both sides compares, with the reason', () => {
+    const smooth = facts({ grid: null });
+    const why = 'Smooth Moon until the whole-Moon height map loads';
+    const l = compare(smooth, facts({ grid: null, litPct: 50 - pct(7) }), why).map((x) => x.text);
+    expect(l).toEqual(['−7 h of sunlight in 30 days', `${why}.`]);
   });
 
-  it('claims no gain or loss across the edge of the terrain model', () => {
-    // 1 km north from 85.01 S: real terrain here, a smooth Moon there. The engine's two answers
-    // differ by days, and none of it is the ground.
-    const here = facts({ terrain: true, litPct: 40 });
-    const there = facts({ terrain: false, litPct: 40 + pct(276), sunFlip: null });
-    for (const l of [compare(here, there), compare(there, here)]) {
-      expect(l).toEqual([{ text: ACROSS_EDGE, tone: 'muted' }]);
+  it('claims no gain or loss across the edge of a terrain model', () => {
+    // 1 km north from 85.01 S: the 240 m map here, the 3.8 km map (or a smooth Moon, while
+    // globe.bin loads) there. The engine's two answers differ by days, and none of it is the ground.
+    const here = facts({ grid: 'dem', litPct: 40 });
+    for (const far of [null, 'globe'] as const) {
+      const there = facts({ grid: far, litPct: 40 + pct(276), sunFlip: null });
+      for (const l of [compare(here, there), compare(there, here)]) {
+        expect(l).toEqual([{ text: ACROSS_EDGE, tone: 'muted' }]);
+      }
     }
   });
 });

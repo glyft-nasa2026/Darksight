@@ -14,6 +14,7 @@ import {
   skylineFor, subscribe, summaryFor, tableGap, type Scenario,
 } from '../../state';
 import { noRowText } from '../tableGap';
+import { terrainNote } from '../terrain';
 import {
   asCorner, clampKm, compare, CORNER_NAMES, DAY_MS, freeCorner, kmText, nextCorner, NUDGE_KM, NUDGES,
   POLES, START_CORNER, stepLabel, stepText, type Corner, type Facts, type Nudge,
@@ -52,7 +53,7 @@ function factsOf(sc: Scenario): Facts | null {
     tMs: sc.tMs, litPct: s.litPct, earthPct: s.earthPct,
     sunUp: first.sunFrac > 0, earthUp: first.earthUp,
     sunFlip: flipFor(sc, 'sun'), earthFlip: flipFor(sc, 'earth'),
-    terrain: skylineFor(sc).terrain,
+    grid: skylineFor(sc).grid,
   };
 }
 
@@ -274,7 +275,8 @@ export function mount(el: HTMLElement): void {
       const gone = [before, live].find((sc) => tableGap(sc.tMs) === 'failed');
       out.append(make('p', 'muted', gone ? noRowText('failed', gone.tMs) : 'Loading'));
     } else {
-      for (const line of compare(fb, fn, !!st.dem)) out.append(make('p', `nudge-line nudge-${line.tone}`, line.text));
+      const note = terrainNote(skylineFor(live), live.site, st.globeStatus);
+      for (const line of compare(fb, fn, note)) out.append(make('p', `nudge-line nudge-${line.tone}`, line.text));
       const table = make('table', 'table nudge-table');
       const headRow = make('tr');
       headRow.append(make('th'), make('th', '', 'Before'), make('th', '', 'Now'));

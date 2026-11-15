@@ -1,6 +1,6 @@
 # T37: Terrain skyline north of 85 S
 
-Status: not started
+Status: in review (Fabian started it, MarsRon took over the second half; branch `t37-terrain-north`, pull request #193). Option C. Every "Done when" line passes on `676a781` and again on `d74002a` (`npm test` 779 passed, `npm run build` passed; height map in at 6.97 s on Fast 4G, `docs/load-time.md` section 9). `npx playwright test`: 18 of 20, the two `landing-wide.spec.ts` fails also fail on `main` (`4df5398`). Next: a person reviews and merges
 
 | | |
 |---|---|
@@ -51,15 +51,15 @@ terrain skyline too, even a coarse one.
 
 ## Done when
 
-- [ ] The team's choice is recorded (step 1).
-- [ ] A test: a synthetic grid with a ring wall gives the wall's elevation at every azimuth, within
+- [x] The team's choice is recorded (step 1).
+- [x] A test: a synthetic grid with a ring wall gives the wall's elevation at every azimuth, within
       one cell's worth.
-- [ ] On real data (skips on mock): Apollo 15's skyline has its highest point above 1°, since Mons
+- [x] On real data (skips on mock): Apollo 15's skyline has its highest point above 1°, since Mons
       Hadley and Hadley Delta rise kilometres above the site.
-- [ ] T24's terrain checks still pass.
-- [ ] The height-map budget passes again on Fast 4G (a new row in `docs/load-time.md`).
-- [ ] The About panel and every "smooth Moon" label agree with where terrain now applies.
-- [ ] `npm test` and `npm run build` pass.
+- [x] T24's terrain checks still pass.
+- [x] The height-map budget passes again on Fast 4G (a new row in `docs/load-time.md`).
+- [x] The About panel and every "smooth Moon" label agree with where terrain now applies.
+- [x] `npm test` and `npm run build` pass.
 
 ## Notes
 

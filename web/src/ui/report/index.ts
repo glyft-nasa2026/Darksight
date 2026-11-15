@@ -331,7 +331,7 @@ export function mount(el: HTMLElement): void {
       ['Longest light, 30 days', durationText(c.summary.longestLit_h * 3600)],
       ['Longest dark, 30 days', durationText(c.summary.longestDark_h * 3600)],
       ['Longest without Earth, 30 days', durationText(c.summary.longestEarthGap_h * 3600)],
-      ['Skyline', c.terrain ? 'Real terrain (LOLA)' : 'Smooth Moon, no terrain'],
+      ['Skyline', c.terrainText],
     ]);
 
     // 8. First 30 days on the surface

@@ -13,6 +13,7 @@ import {
   subscribe, tableGap, type AppState,
 } from '../../state';
 import { noRowText } from '../tableGap';
+import { terrainNote } from '../terrain';
 import { azText, degText, pctText, slopeText, type SlopeInfo } from './format';
 
 function make<K extends keyof HTMLElementTagNameMap>(
@@ -86,7 +87,8 @@ export function mount(el: HTMLElement): void {
 
     slope.textContent = slopeText(slopeInfo(s.dem, heights, sc.site.lat, sc.site.lon));
 
-    note.textContent = skylineFor(sc).terrain ? '' : 'Smooth Moon, no terrain';
+    // T37: coarse terrain north of 85 S says so; a smooth Moon says why (ui/terrain.ts).
+    note.textContent = terrainNote(skylineFor(sc), sc.site, s.globeStatus);
 
     if (!s.eph) {
       content.replaceChildren(make('p', 'muted', 'Loading'));

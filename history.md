@@ -4,6 +4,34 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the terrain skyline over the whole Moon (T37, option C)
+
+### docs/decisions.md: 14 Nov, "Real terrain for any point south of 85 S"
+
+- Was: "Real terrain for any point south of 85 S, computed in the browser from one LOLA grid".
+- Now: `dem.bin` (240 m) at or south of 85 S, unchanged; `globe.bin` (3.8 km) for every other site;
+  the page says which.
+- Why: 14 of the 20 curated sites had a smooth Moon. The team picked option C of three (T37):
+  whole-Moon reach with no new download, without coarsening the polar sites.
+
+### SPEC.md: 6. Where real terrain applies
+
+- Was: "South of 85 S: Real, from LOLA, looking out to 150 km" and "Anywhere else: Smooth Moon
+  (0 degrees). The app says so on screen".
+- Now: real at 240 m south of 85 S, coarse at 3.8 km elsewhere; a smooth Moon only while a height
+  map is loading or missing.
+- Why: as above.
+
+### docs/data-contract.md: 2. `globe.bin`; 3. `Skyline` and `horizon.ts`; 4. state
+
+- Was: `globe.bin` gave numbers only to the height and slope layers and the readout's slope line;
+  the skyline was "`terrain = false` and all zeros when `dem` is null or the site is north of
+  85 S"; `Skyline` was `{ elev, terrain }`; `state.ts` had no `globe`.
+- Now: `globe.bin` also gives the skyline and ground height north of 85 S through `core/globe.ts`;
+  `Skyline` carries `grid` and `cellM`; `AppState` has `globe` and `globeStatus`, and its arrival
+  clears only the caches of sites north of 85 S.
+- Why: option C needs a second grid, and the page must say which grid a skyline used.
+
 ## 15 Nov 2026: the nudge panel starts top left (issue #177)
 
 ### docs/data-contract.md: 5. Page slots, `#nudge`
