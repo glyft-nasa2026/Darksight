@@ -1,6 +1,6 @@
 # T42: Date search: the first date with enough sunlight and Earth
 
-Status: not started
+Status: in progress (MarsRon, branch `t42-date-search`, draft pull request open). Next: `core/datesearch.ts` and its tests
 
 | | |
 |---|---|
