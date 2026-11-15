@@ -425,6 +425,29 @@ export function mount(el: HTMLElement): void {
     ctx.fillText(text, x, y);
   }
 
+  /** The boxes of the grid labels drawn so far in this frame. */
+  let gridLabels: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  /**
+   * A grid label, kept whole inside the map and left out when it would overlap one already
+   * drawn: near the top of the polar map the 0° meridian's label ran into the first circle's
+   * ("0°88°S"), and labels at the edge were cut in half. Earlier labels win. `edge` says what to
+   * do with a label that sticks out: 'shift' it inside (a meridian's, which marks where the line
+   * leaves the map) or 'skip' it (a circle's, which must sit on its circle).
+   */
+  function gridLabel(text: string, x: number, y: number, edge: 'shift' | 'skip'): void {
+    const w = ctx.measureText(text).width, h = theme.fontPx, pad = theme.pinPx / 2;
+    let x0 = ctx.textAlign === 'center' ? x - w / 2 : ctx.textAlign === 'right' || ctx.textAlign === 'end' ? x - w : x;
+    let y0 = ctx.textBaseline === 'middle' ? y - h / 2 : ctx.textBaseline === 'bottom' || ctx.textBaseline === 'alphabetic' ? y - h : y;
+    const dx = Math.max(pad - x0, 0) + Math.min(view.width - pad - (x0 + w), 0);
+    const dy = Math.max(pad - y0, 0) + Math.min(view.height - pad - (y0 + h), 0);
+    if ((dx !== 0 || dy !== 0) && edge === 'skip') return;
+    x0 += dx; y0 += dy;
+    const box = { x0: x0 - pad, y0: y0 - pad, x1: x0 + w + pad, y1: y0 + h + pad };
+    if (gridLabels.some((b) => box.x0 < b.x1 && b.x0 < box.x1 && box.y0 < b.y1 && b.y0 < box.y1)) return;
+    gridLabels.push(box);
+    label(text, x + dx, y + dy);
+  }
+
   function drawPolarGrid(): void {
     if (!cap()) return;
     const { width, height } = view;
@@ -444,7 +467,7 @@ export function mount(el: HTMLElement): void {
       const r = Math.abs(polarForward(lat, 0, p).y) * view.scale;
       ctx.beginPath(); ctx.arc(pole0.px, pole0.py, r, 0, Math.PI * 2); ctx.stroke();
       const at = viewToScreen(view, 0, polarForward(lat, 0, p).y);
-      if (at.py > 0 && at.py < height) label(degLabel(lat, 'N', 'S'), pole0.px + theme.pinPx, at.py - theme.fontPx / 2);
+      if (at.py > 0 && at.py < height) gridLabel(degLabel(lat, 'N', 'S'), pole0.px + theme.pinPx, at.py - theme.fontPx / 2, 'skip');
     }
     // Meridians: straight lines from the pole. Spacing from the circle 60 px out from the view's middle.
     const middleR = Math.max(60, Math.hypot(pole0.px - width / 2, pole0.py - height / 2));
@@ -458,7 +481,7 @@ export function mount(el: HTMLElement): void {
       const t = Math.min(1, clipT(pole0.px, pole0.py, s.px, s.py, width, height));
       if (t > 0.05) {
         const lx = pole0.px + (s.px - pole0.px) * t * 0.97, ly = pole0.py + (s.py - pole0.py) * t * 0.97;
-        label(degLabel(lon, 'E', 'W'), lx, ly);
+        gridLabel(degLabel(lon, 'E', 'W'), lx, ly, 'shift');
       }
     }
   }
@@ -488,7 +511,7 @@ export function mount(el: HTMLElement): void {
       const px = viewToScreen(view, d / degPerKm, 0).px;
       ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px, y1); ctx.stroke();
       const lon = cylInverse(d / degPerKm, 0)!.lon;
-      label(degLabel(Math.round(lon * 1000) / 1000, 'E', 'W'), px, y1 - theme.pinPx / 2);
+      gridLabel(degLabel(Math.round(lon * 1000) / 1000, 'E', 'W'), px, y1 - theme.pinPx / 2, 'shift');
     }
     // Parallels: horizontal lines.
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
@@ -496,7 +519,7 @@ export function mount(el: HTMLElement): void {
       const py = viewToScreen(view, 0, (lat / 180) * HALF_WORLD_KM).py;
       if (py < -1 || py > height + 1) continue;
       ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(width, py); ctx.stroke();
-      label(degLabel(Math.round(lat * 1000) / 1000, 'N', 'S'), theme.pinPx, py - theme.pinPx / 2);
+      gridLabel(degLabel(Math.round(lat * 1000) / 1000, 'N', 'S'), theme.pinPx, py - theme.pinPx / 2, 'skip');
     }
   }
 
@@ -556,6 +579,7 @@ export function mount(el: HTMLElement): void {
       }
       ctx.restore();
     }
+    gridLabels = [];
     if (kind !== 'global') drawPolarGrid(); else drawGlobalGrid();
     if (kind === 'global') {
       if (sunPoint) drawMarker(sunPoint, '--sun', 'Sun overhead');
