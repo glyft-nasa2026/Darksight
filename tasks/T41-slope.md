@@ -1,6 +1,6 @@
 # T41: Ground slope, as a map layer and a readout line
 
-Status: in progress (MarsRon, branch t41-slope, draft pull request): core/slope.ts and tests done; next the Slope layer and the readout line.
+Status: done, waiting for review (MarsRon, pull request #165): core/slope.ts with tests, dem.hasData(), the Slope map layer and the readout line; contract, SPEC F3 and F14, history.md updated. Extra scope: web/src/core/dem.ts and dem.test.ts.
 
 | | |
 |---|---|

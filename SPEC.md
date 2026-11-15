@@ -57,7 +57,7 @@ can be pinned.
 |---|---|---|---|
 | F1 | Pick a site | Click the map, choose from the curated list, or type latitude and longitude | All three set the same live site |
 | F2 | Pick a time | UTC date and time box, plus dragging on the timeline. Range 1900 to 2100 | A time outside the range shows a message, not a crash |
-| F3 | Readout | For the selected scenario. Sun: altitude, azimuth, degrees above the skyline, fraction of disc visible. Earth: altitude, azimuth, visible or hidden | Matches the fixtures to 0.02 degrees |
+| F3 | Readout | For the selected scenario. Sun: altitude, azimuth, degrees above the skyline, fraction of disc visible. Earth: altitude, azimuth, visible or hidden. Ground slope at the site, "Ground slope 7° (over 240 m)", or why there is none (no height map north of 80° S) | Matches the fixtures to 0.02 degrees |
 | F4 | Countdowns | "Sunset in 3 d 4 h" or "Sunrise in ..."; same for Earth. Special wording: "No sunset in the next 60 days", "No sunrise in the next 60 days", "Earth always visible", "Earth never visible", "Permanently shadowed (until 2100)". The exact table is in contract section 3 | The countdown ends where the strip ends |
 | F5 | Scenarios | Pin the live scenario (max 3). Colours: A `#E69F00`, B `#0072B2`, C `#009E73`. Click a card to select it; remove with x | Pin, select, remove work; the same colour appears on pin, card and strips |
 | F6 | Compare table | A Live column first, then one column per pinned scenario, same rows in the same order: Sun now, sunset in, Earth now, Earthset in, lit % (next 30 days), longest unbroken light, longest dark, Earth contact %, longest gap in contact. Best value per row highlighted | Two pinned scenarios show three columns (Live plus two) with every row filled |
@@ -68,7 +68,7 @@ can be pinned.
 | F11 | Nudge | Buttons: 1 km north, south, east, west (distance on a slider); +1 day, -1 day; straight to the north or south pole. A press moves the live scenario at once, leaves where it was on the map as a grey "Before" scenario, and states the difference in words: "+31 h of sunlight", "loses Earth 2 days earlier"; Undo goes back. The panel starts folded | A nudge off a crater rim onto its floor shows a large loss of sunlight |
 | F12 | Curated sites | 15-25 sites: Apollo, recent landers, south-pole candidates, and up to 5 upcoming mission targets (`planned`). Each has a source link | Every pin checked on Quickmap |
 | F13 | About and checks | "Checked against JPL Horizons, largest difference X degrees", known limits, data sources, how AI was used | Page shows the number from `validation.json` |
-| F14 | Layers (if time) | Coloured map overlays with on/off and transparency: lit %, Earth-visible %, never lit, height | |
+| F14 | Layers (if time) | Coloured map overlays with on/off and transparency: lit %, Earth-visible %, never lit, height, slope (T41) | |
 | F15 | Panel choice (if time) | Flat panel or upright panel that turns to face the Sun; shows relative power | |
 | F16 | Transition (if time) | The flat map and the 3D scene cross-fade, the 3D camera easing onto the site | |
 | F17 | Share link | Scenarios are stored in the page address, so a link reopens the same comparison | Reloading the page keeps the pinned scenarios |
