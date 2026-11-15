@@ -7,6 +7,8 @@ import '../ui/theme.css';
 import './missionPage.css';
 import { loadDem } from '../core/dem';
 import { loadEphemeris } from '../core/ephemeris';
+import { holdUntilHeightMap } from '../loadOrder';
+import { sharedGlobe } from '../scene/globeHeights';
 import type { CuratedSite } from '../core/types';
 import { failedDecades, setData, stateToAddress, subscribe } from '../state';
 import { mount } from '../ui/mission/index';
@@ -87,4 +89,9 @@ track('site list',
     return list as CuratedSite[];
   }),
   (sites) => setData({ sites }));
-track('height map', loadDem((f) => { demFraction = f; showStatus(); }), (dem) => setData({ dem }));
+const demJob = loadDem((f) => { demFraction = f; showStatus(); });
+track('height map', demJob, (dem) => setData({ dem }));
+// T37: globe.bin, the coarse skyline for sites north of 85 S, as on the site: after the height map
+// (issue #96), and null when it fails or is missing.
+holdUntilHeightMap(demJob);
+sharedGlobe().then((globe) => setData({ globe }), () => setData({ globe: null }));

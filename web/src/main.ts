@@ -13,6 +13,7 @@ import { loadDem } from './core/dem';
 import { loadEphemeris } from './core/ephemeris';
 import type { CuratedSite } from './core/types';
 import { holdUntilHeightMap } from './loadOrder';
+import { sharedGlobe } from './scene/globeHeights';
 import { whenPlotly } from './ui/plotly';
 import { failedDecades, setData, subscribe } from './state';
 import { failedDecadesText } from './ui/tableGap';
@@ -201,3 +202,6 @@ const demJob = ephJob.then(() => undefined, () => undefined).then(() => loadDem(
 // The whole-Moon picture files wait for it rather than share the connection (issue #96).
 holdUntilHeightMap(demJob);
 track('height map', demJob, (dem) => setData({ dem }));
+// T37: globe.bin, the coarse skyline for sites north of 85 S. The same download as the map's and
+// the 3D globe's (sharedGlobe), after the height map (issue #96); null when it fails or is missing.
+sharedGlobe().then((globe) => setData({ globe }), () => setData({ globe: null }));
