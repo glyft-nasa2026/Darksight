@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Color, Vector3 } from 'three';
-import { moonCentre, sphereSite } from './coordinates';
+import { moonCentre, sitePosition, siteUp, sphereSite } from './coordinates';
 import { globeNormalAt, globeNormalNear, parseGlobe, type GlobeMeta } from './globe';
 import {
-  cellSite, parseTile, PATCH_HALF_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch, tileFile,
-  tileHeights, windowTiles, type TileIndex,
+  cellSite, groundAngle, parseTile, PATCH_HALF_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch, tileFile,
+  tileHeights, viewGround, windowTiles, type TileIndex,
 } from './patch';
 
 const index: TileIndex = { cells_per_deg: 32, tile_deg: 15, height_scale: 0.5, source: 'test' };
@@ -194,5 +194,36 @@ describe('globe normal at a point', () => {
     near.forEach((v, k) => expect(v).toBeCloseTo(mid[k], 6));
     globeNormalNear(globe, 12, 179.99, 6, near);                    // across 180 degrees: no jump, unit length
     expect(Math.hypot(near[0], near[1], near[2])).toBeCloseTo(1, 6);
+  });
+});
+
+describe('ground in the middle of the view (issue #85)', () => {
+  const close = (a: { lat: number; lon: number }, b: { lat: number; lon: number }): void => {
+    expect(groundAngle(a, b)).toBeLessThan(1e-6);
+  };
+
+  it('is where the line of sight meets the sphere, looking straight down or at a slant', () => {
+    const site = { lat: 23.5, lon: -140 };
+    const above = sitePosition(site, 0, 1).addScaledVector(siteUp(site), 500);
+    close(viewGround(above, siteUp(site).negate()), site);
+    // From far out, aimed at another site: the near side of the Moon, not the far side.
+    const other = { lat: -10, lon: 30 }, from = sitePosition(other).addScaledVector(siteUp(other), 4000).add(new Vector3(800, 0, 0));
+    close(viewGround(from, sitePosition(other).sub(from)), other);
+  });
+
+  it('is the point nearest the line of sight when it misses the Moon, never behind the camera', () => {
+    const centre = moonCentre();
+    // Looking along +X past the Moon, 2000 km to its south (+Y): the nearest point is the Moon's southmost.
+    const from = centre.clone().add(new Vector3(-5000, 2000, 0));
+    close(viewGround(from, new Vector3(1, 0, 0)), { lat: -90, lon: 0 });
+    // Looking straight away from the Moon: the point under the camera.
+    const site = { lat: 40, lon: 100 }, away = sitePosition(site).addScaledVector(siteUp(site), 300);
+    close(viewGround(away, siteUp(site)), site);
+  });
+
+  it('measures the angle between two places, across 180 degrees', () => {
+    expect(groundAngle({ lat: 0, lon: 179 }, { lat: 0, lon: -179 })).toBeCloseTo(2, 9);
+    expect(groundAngle({ lat: -90, lon: 0 }, { lat: -80, lon: 123 })).toBeCloseTo(10, 9);
+    expect(groundAngle({ lat: 10, lon: 20 }, { lat: 10, lon: 20 })).toBe(0);
   });
 });
