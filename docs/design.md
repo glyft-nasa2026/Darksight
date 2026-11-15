@@ -135,9 +135,9 @@ Values the design needs that the contract doesn't name. Nothing below was given 
    - Tabs "01 Explore · 02 Comparison · 03 Launch Site · 04 Simulation". The picture shows them
      in `#about` as links that scroll to `#scene`, `#compare` and `#timeline`. "Launch Site"
      (picking an Earth launch pad, PDF page 6), the flight-sequence page (PDF page 7) and the
-     report/print page (PDF page 8) have no feature in the spec. T34 (launch pad and flight
-     sequence, as the `mission` card) and T35 (the report) propose them, pending the team's
-     agreement. The `mission` frame uses contract section 6 names only; its line widths and dash
+     report/print page (PDF page 8) had no feature in the spec. The team agreed on 15 Nov 2026
+     to add them as "if time" features: F20 (T34, launch pad and flight sequence, as the
+     `mission` card) and F21 (T35, the report). The tabs themselves stay out. The `mission` frame uses contract section 6 names only; its line widths and dash
      lengths in the diagram are literals, like the other charts in the mock-up.
    - Loading screen and hero (brief frames 1 and 2) with their animations. They would live in
      `main.ts` or `index.html`.

@@ -74,8 +74,8 @@ order given in `docs/team-workflow.md`, "The first three merges".
 | [T31](T31-flat-map.md) | A true flat 2D map (issue #39) | must | T12 |
 | [T32](T32-never-lit-checking.md) | A dark site says it is still checking to 2100 (issue #32, row 3) | if time | - |
 | [T33](T33-decade-retry.md) | A decade that failed to download is tried again (issue #32, row 4) | if time | - |
-| [T34](T34-mission.md) | Mission simulation, launch to touchdown (proposed: SPEC lists landing trajectories as Out) | if time | M2, team agreement |
-| [T35](T35-report.md) | Mission report, print and download (proposed) | if time | T34 |
+| [T34](T34-mission.md) | Mission simulation, launch to touchdown (F20) | if time | M2 |
+| [T35](T35-report.md) | Mission report, print and download (F21) | if time | T34 |
 
 ## Order
 
@@ -98,8 +98,7 @@ kickoff ─┬─ T00 ──┬── T02 (also needs T01)
 T24 needs T01, T04, T05, T06 and T07. T17 and T18 run alongside from M1.
 T27 needs T04 and T21. T26 runs at M3.
 T32 and T33 (issue #32, rows 3 and 4) can start now; both edit `state.ts`, so agree an order.
-T34 and T35 are proposed: they start only once the team agrees to move landing trajectories
-out of SPEC section 2's Out column (T34, step 1), after M2 and before the M3 freeze. T35 needs T34.
+T34 and T35 (F20, F21; agreed 15 Nov) run after M2 and before the M3 freeze. T35 needs T34.
 ```
 
 After T00 and T20, several tasks can run in parallel: the page already shows live
