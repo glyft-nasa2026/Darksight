@@ -411,6 +411,20 @@ export function mount(el: HTMLElement): void {
     return best;
   }
 
+  /**
+   * Text on the map, with an outline in the page colour so it reads on lit and dark ground alike
+   * (T19 "Done when" line 2: 4.5 to 1 against --bg). Uses the fill, font and alignment already set.
+   */
+  function label(text: string, x: number, y: number): void {
+    ctx.save();
+    ctx.strokeStyle = themeColor('--bg');
+    ctx.lineWidth = theme.pinPx;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(text, x, y);
+    ctx.restore();
+    ctx.fillText(text, x, y);
+  }
+
   function drawPolarGrid(): void {
     if (!cap()) return;
     const { width, height } = view;
@@ -429,8 +443,8 @@ export function mount(el: HTMLElement): void {
       const lat = latAt(Math.round((POLAR_REACH - n * latStep) * 1000) / 1000);
       const r = Math.abs(polarForward(lat, 0, p).y) * view.scale;
       ctx.beginPath(); ctx.arc(pole0.px, pole0.py, r, 0, Math.PI * 2); ctx.stroke();
-      const label = viewToScreen(view, 0, polarForward(lat, 0, p).y);
-      if (label.py > 0 && label.py < height) ctx.fillText(degLabel(lat, 'N', 'S'), pole0.px + 4, label.py - theme.fontPx / 2);
+      const at = viewToScreen(view, 0, polarForward(lat, 0, p).y);
+      if (at.py > 0 && at.py < height) label(degLabel(lat, 'N', 'S'), pole0.px + 4, at.py - theme.fontPx / 2);
     }
     // Meridians: straight lines from the pole. Spacing from the circle 60 px out from the view's middle.
     const middleR = Math.max(60, Math.hypot(pole0.px - width / 2, pole0.py - height / 2));
@@ -444,7 +458,7 @@ export function mount(el: HTMLElement): void {
       const t = Math.min(1, clipT(pole0.px, pole0.py, s.px, s.py, width, height));
       if (t > 0.05) {
         const lx = pole0.px + (s.px - pole0.px) * t * 0.97, ly = pole0.py + (s.py - pole0.py) * t * 0.97;
-        ctx.fillText(degLabel(lon, 'E', 'W'), lx, ly);
+        label(degLabel(lon, 'E', 'W'), lx, ly);
       }
     }
   }
@@ -474,7 +488,7 @@ export function mount(el: HTMLElement): void {
       const px = viewToScreen(view, d / degPerKm, 0).px;
       ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px, y1); ctx.stroke();
       const lon = cylInverse(d / degPerKm, 0)!.lon;
-      ctx.fillText(degLabel(Math.round(lon * 1000) / 1000, 'E', 'W'), px, y1 - 2);
+      label(degLabel(Math.round(lon * 1000) / 1000, 'E', 'W'), px, y1 - 2);
     }
     // Parallels: horizontal lines.
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
@@ -482,18 +496,18 @@ export function mount(el: HTMLElement): void {
       const py = viewToScreen(view, 0, (lat / 180) * HALF_WORLD_KM).py;
       if (py < -1 || py > height + 1) continue;
       ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(width, py); ctx.stroke();
-      ctx.fillText(degLabel(Math.round(lat * 1000) / 1000, 'N', 'S'), 4, py - 2);
+      label(degLabel(Math.round(lat * 1000) / 1000, 'N', 'S'), 4, py - 2);
     }
   }
 
-  function drawMarker(site: LatLon, color: string, label: string): void {
+  function drawMarker(site: LatLon, color: string, text: string): void {
     const p = project(site), s = viewToScreen(view, p.x, p.y);
     const r = theme.pinPx * 2;
     ctx.fillStyle = themeColor(color); ctx.strokeStyle = themeColor('--bg'); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(s.px, s.py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = themeColor('--text'); ctx.font = theme.font;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(label, s.px + r + 3, s.py);
+    label(text, s.px + r + 3, s.py);
   }
 
   function pinScreen(pin: Pin): { px: number; py: number; r: number } {
