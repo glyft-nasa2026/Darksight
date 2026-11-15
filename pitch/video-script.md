@@ -1,58 +1,39 @@
-# Demo video: script
+# Demo video: script (second version)
 
 **Limit:** 30 seconds or less (Space Apps project submission guide, 13 Nov 2026; a longer video
-is not eligible for global judging). **File:** `pitch/demo/darksight-demo.webm`, 29.2 s,
-1280 × 720, silent, English captions burned in. **Made by** `node pitch/tools/record-demo.mjs`,
-which drives the deployed site at darksight.space and cuts out the loading.
+is not eligible for global judging). **File:** `pitch/demo/darksight-demo.webm`, 1280 × 720,
+English captions burned in. **Made by** `node pitch/tools/record-demo.mjs`, which drives the
+deployed site at darksight.space and cuts out the loading.
 
-The one moment the video is built around: **move the pin 1 km and the sunlight collapses.**
+This version replaces the 1 km nudge story (first version, `git log pitch/video-script.md`)
+with a tour of the features: the question, famous sites, solar panels, compare, timeline, the
+mission simulation and the Horizons check.
 
-All scenes use the same link, fixed at 15 Nov 2026 03:00 UTC, so the numbers don't change with
-the day it is recorded:
-`https://darksight.space/#live=-89.6866,-162.81,2026-11-15T03:00:00Z&a=-89.67,129.78,2026-11-15T03:00:00Z`
-(live: Shackleton rim; A: Shackleton crater floor).
-
-| Time | On screen | Caption (numbers read from the page while recording) |
+| Time | On screen | Voiceover |
 |---|---|---|
-| 0:00–0:03 | Title card on the page background | NASA SPACE APPS 2026 · LUNAR LANDING SITE NAVIGATOR · TEAM GLYFT / **DARKSIGHT** / When does a landing site on the Moon have sunlight and a line to Earth? |
-| 0:03–0:07.5 | Problem card | A launch slips by a day. Does the landing site still get sunlight for power, and a line to Earth for radio? Today that answer takes about an hour across three tools. |
-| 0:07.5–0:13.75 | The page scrolls to the Compare card; ring around it | Darksight compares sites in seconds. Shackleton rim: **100.0 %** lit over 30 days. The crater floor next to it: **0.0 %**. |
-| 0:13.75–0:16 | Back to the map; ring around the Nudge panel, which opens | Now move the pin just **1 km north**… |
-| 0:16–0:22.5 | "1.0 km N" pressed: the pin moves 1 km and the panel lists the change in red | …and the sunlight collapses: **−17 days of sunlight in 30 days**, and Earth drops out of sight. One kilometre. |
-| 0:22.5–0:26 | Undo puts the pin back; ring around the Horizons badge in the top bar | Real NASA LOLA terrain and JPL ephemeris. Every angle checked against **JPL Horizons**: largest difference **0.000001°**. |
-| 0:26–0:29.2 | End card | FOR MISSION PLANNERS, EDUCATORS AND THE CURIOUS / **DARKSIGHT** / Free in any browser: darksight.space |
+| 0:00–0:04 | Title card: **DARKSIGHT** · NASA Space Apps 2026 | "Introducing Darksight: a Lunar Landing Site Navigator we developed for NASA Space Apps Challenge 2026." |
+| 0:04–0:09 | Problem card with the question as text | "It lets mission planners and curious minds ponder a mission-critical question: does our lunar lander get enough solar power, and still talk to Earth?" |
+| 0:09–0:12 | Site list opens and Shackleton is picked; the sky panorama shows the skyline | "Look up famous landing sites, with their real terrain skyline." |
+| 0:12–0:14 | Solar panel card: flat against upright panel, battery numbers | "Know your solar panels." |
+| 0:14–0:17 | Compare table; best values highlighted | "Compare sites to find the best one." |
+| 0:17–0:20 | Timeline scrubbed fast; shadows sweep in 3D | "Scrub the timeline to find your perfect landing time." |
+| 0:20–0:25 | "Land here" pressed on a scenario card. The mission card animates the flight from launch pad to touchdown, with the phases and Δv on screen | "Then simulate the launch, all the way to touchdown." |
+| 0:25–0:28 | Zoom on the Horizons badge | "Every angle is checked against NASA JPL Horizons." |
+| 0:28–0:30 | End card: **DARKSIGHT** · darksight.space | "Sunlight and Earth contact, in a single website. Darksight." |
 
-A small label stays in the top-right corner the whole time: "AI-assisted build (Claude Code) ·
-screen recording of the real site". The guide asks for a visible mark on any video made with
-AI help. This video is a screen recording of the site, not generated footage, but the site
-code and the captions were written with AI help, so it carries the label.
+## Fitting it into 30 seconds
 
-## What the video covers ("Done when")
+As written the voiceover is about 95 words; 30 seconds of calm speech holds about 75. Cut in
+this order until it fits:
 
-| Needed | Where |
-|---|---|
-| Compare | 0:07.5–0:13.75 |
-| Nudge | 0:13.75–0:22.5 |
-| Horizons badge | 0:22.5–0:26 |
-| Within the limit | 29.2 s, checked with ffprobe (`duration=29.240000`) |
+1. Title: "Introducing Darksight, built for NASA Space Apps 2026." The challenge name is on the card.
+2. Problem: drop "and curious minds".
+3. End card: just "Darksight." The address is on screen.
 
-## To record it again
+With all three it is about 77 words, and the problem question stays word for word.
 
-After a redeploy, or if the site's wording changes:
+## Notes
 
-```bash
-cd web && npm ci && cd ..
-node pitch/tools/record-demo.mjs
-```
-
-The script stops with an error instead of recording a wrong caption if the page doesn't show
-what it expects: the compare rows, the "1.0 km N" result or the badge number. Stills of each
-scene go to `pitch/demo/frames/` (not committed). For a voice-over, record it over the same
-timings. Any spoken language is fine because the captions are already in English.
-
-## Uploading
-
-The form takes a link, not a file. Upload `darksight-demo.webm` to YouTube (public or unlisted,
-not private), open the link in a private window to check that it plays without signing in, and
-paste the link into the form. Fallback, once this branch has merged: the file on GitHub,
-`https://github.com/glyft-nasa2026/Darksight/blob/main/pitch/demo/darksight-demo.webm`.
+- The mission simulation is a planning model (patched conics, a simulated powered descent), not
+  a flight-dynamics solution. Say "simulate", never "the real flight path".
+- Captions follow the voiceover lines, so the video works with the sound off.
