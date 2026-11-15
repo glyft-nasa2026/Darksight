@@ -6,6 +6,7 @@
 import '../ui/theme.css';
 import './simulation.css';
 import { loadEphemeris } from '../core/ephemeris';
+import { departureFor, earthGroundAt, type Departure } from '../core/departure';
 import { missionAt, SEQUENCE, type OkPlan, type StepId } from '../core/mission';
 import { padById } from '../core/pads';
 import { moonOrbitIcrf } from '../core/sky';
@@ -88,7 +89,7 @@ controls.append(play, speeds, scrub);
 const chapters = make('div', 'sim-steps');
 const note = make('p', 'sim-note muted',
   'A picture of the model: Earth, the Moon and the orbits to scale in the plane of the transfer; the craft, pad and site are markers. ' +
-  'Earth is turned so the pad is under the craft at launch. Drag to look around; the view follows each phase.');
+  'Earth turns on its real, tilted axis; the launch is timed so the pad is under the parking orbit. Drag to look around; the view follows each phase.');
 const hud = make('section', 'card sim-hud');
 hud.setAttribute('aria-label', 'Mission playback');
 hud.append(live, controls, chapters, note);
@@ -120,6 +121,7 @@ back.addEventListener('click', (e) => {
 
 // --- Playback ------------------------------------------------------------------------------------
 let plan: OkPlan | null = null;
+let departure: Departure | null = null;   // the path from the pad to the Moon's sphere of influence
 let picture: MissionScene | null = null;
 let cursor = 0;
 let playing = false;
@@ -217,7 +219,11 @@ function drawFrame(): void {
     ['Speed', speedText(st.speedKmS)],
     ['Propellant', kgText(Math.max(0, st.propellantLeftKg))],
   ];
+  // Over the Moon from the sphere of influence on; over Earth before, as Earth turns under the
+  // craft (core/departure.ts), when the launch window is known.
+  const overEarth = !st.ground && departure ? earthGroundAt(plan, departure, st.tMs) : null;
   if (st.ground) parts.push(['Over', coordText(st.ground.lat, st.ground.lon)]);
+  else if (overEarth) parts.push(['Over Earth', coordText(overEarth.lat, overEarth.lon)]);
   if (st.rangeToGoKm !== null) parts.push(['To the site', kmText(st.rangeToGoKm)]);
   live.replaceChildren(...parts.map(([k, v]) => {
     const span = make('span');
@@ -338,6 +344,7 @@ function render(): void {
     picture?.dispose();
     picture = null;
     plan = null;
+    departure = null;
     shownPlan = null;
     hud.hidden = true;
     trips.replaceChildren();
@@ -355,6 +362,7 @@ function render(): void {
   stop();
   picture?.dispose();
   plan = p;
+  departure = departureFor(p);
   message.hidden = true;
   hud.hidden = false;
   const sc = landingScenario()!;
