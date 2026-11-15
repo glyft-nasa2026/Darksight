@@ -1,6 +1,6 @@
 # T14: Map layers
 
-Status: done on t14-layers, waiting for review: LOLA Sun, Earth and permanent-shadow maps plus the height layer on the south-polar 2D map, with on/off, transparency and fading. Extra scope: two small hooks in web/src/map/index.ts and web/src/scene/index.ts, and the contract entries.
+Status: done (pull request #135): LOLA Sun, Earth and permanent-shadow maps plus the height layer on the south-polar 2D map, with on/off, transparency and fading. Extra scope: two small hooks in web/src/map/index.ts and web/src/scene/index.ts, and the contract entries.
 
 | | |
 |---|---|

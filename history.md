@@ -4,6 +4,23 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: a nudge moves at once (issue #126)
+
+MarsRon raised it; P5 asked for it, with the pole steps, transparency and corner button.
+
+### SPEC.md: F11 Nudge
+
+- Was: "Buttons: 1 km north, south, east, west; +1 day, -1 day. Makes a ghost scenario and states
+  the difference in words", with Keep and Discard to take or drop the ghost.
+- Now a press moves the live scenario at once; where it was stays grey on the map as "Before";
+  Undo goes back. Two more steps go straight to a pole. The panel starts folded.
+- Why: the confirmation got in the way of trying several steps, and most visits never nudge.
+
+### docs/data-contract.md: 5. Page slots, `#nudge`
+
+- Was: the nudge sits in one of four corners, picked with four buttons.
+- Now one button moves it round the corners: top left, top right, bottom left, bottom right.
+
 ## 15 Nov 2026: T16's status line after #93
 
 ### tasks/T16-about.md: `Status:`
@@ -13,6 +30,23 @@ coordinate overlapping edits.
 - Now: the first delivery is done (#93 merged). The second delivery, the M3 collection on
   `t16-about-b`, stays: sources and AI-use notes are still added up to the freeze, and M3 has
   not happened (T26 is not started).
+
+## 15 Nov 2026: status lines checked against what merged
+
+Asked for on 15 Nov 2026: bring the status lines up to date, and call a task done only if its
+"Done when" list really passes. Checked on `main` at `af1766e`: `npm test` (553 passed),
+`npm run build`, and `npm run test:page` (7 passed, map labels included).
+
+### tasks/: `Status:` lines
+
+| Task | Was | Why it changed |
+|---|---|---|
+| T14 | "done on t14-layers, waiting for review: …" | #135 merged; its three "Done when" lines pass on `main` |
+| T18 | "in progress: first delivery (M1) report in qa/m1.md, draft pull request open on t18-qa. Pending: the 60-second test with a person, the Firefox and real-phone passes, Quickmap checks of six sites (F12), the team decision D1 (F18), and posting the bugs in the team chat." | #99, #101 and #102 merged, and M2 did Firefox, the phone, F12 and D1. Still not done: the 60-second test (with the set question and a time) and a full feature list are missing, so three of four lines fail |
+| T19 | "… `t19-ui-design-b` (pull request #94, in review) … #panel placed beside scenarios …" | #94 merged. `#panel` sits under Scenarios since #94, and the nudge panel over the map since #61, so line 5's wording is older than the layout |
+| T27 | "ready for review, phone measured (Realme 6, 15 Nov, branch t27-load-time-c) (Leon, branch t27-load-time, pull request #83). …" | #83, #122 and #131 merged. Not done: line 3 needs a fix or the team's acceptance for #95, and a second row for the phone freeze after #132 |
+| T34 | "fifth delivery in progress (P5, branch `t34-mission-e`, draft pull request #133: …)" | #133 merged. The twelve pad coordinates from #104 are still unchecked. "Not after the M3 freeze" had lost its full stop and ran into the next sentence |
+| T32 | Unchanged: "not started" | Pull request #138 rewrites this line itself; changing it on `main` would conflict with it |
 
 ## 15 Nov 2026: landing trajectories move from Out to If time (#100)
 
