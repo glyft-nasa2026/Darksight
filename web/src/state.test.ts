@@ -12,6 +12,9 @@ import {
 // T32: lines of their own, so the shared import lines above stay as other branches edit them.
 import { countdownText } from './core/windows';
 import { neverLitPendingFor } from './state';
+// T33: also on lines of their own.
+import { existsSync, readFileSync } from 'node:fs';
+import { failedDecades, RETRY_MAX_MS, RETRY_MS, tableGap } from './state';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -519,7 +522,7 @@ describe('decades of the table (loaded as needed)', () => {
     expect(samplesFor(getState().pinned[0], '30d')[0].tMs).toBe(later);
   });
 
-  it('a decade that fails to download reads as outside the table, and is not asked for again', async () => {
+  it('a decade that fails to download reads as failed, and is not asked for again at once', async () => {
     answer = async () => new Response('', { status: 404 });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     setLiveTime(later);
@@ -527,6 +530,7 @@ describe('decades of the table (loaded as needed)', () => {
     expect(getState().eph).not.toBeNull();
     expect(samplesFor(getState().live, '30d')).toEqual([]);
     expect(flipFor(getState().live, 'sun')).toBeNull();
+    expect(tableGap(later)).toBe('failed');
     setLiveTime(later + DAY);
     expect(asked).toHaveLength(1);
     expect(warn).toHaveBeenCalled();
@@ -565,7 +569,7 @@ describe('decades of the table (loaded as needed)', () => {
     await settle();
     stop();
     expect(calls).toBe(2);                    // the change of time, then the file that was no use
-    expect(getState().eph).not.toBeNull();    // reads as outside the table, like any failed decade
+    expect(getState().eph).not.toBeNull();    // reads as failed, like any failed decade
     expect(samplesFor(getState().live, '30d')).toEqual([]);
     setLiveTime(later + DAY);
     expect(asked).toHaveLength(1);
@@ -623,6 +627,167 @@ describe('decades of the table (loaded as needed)', () => {
     expect(neverLitFor(getState().live)).toBe(false);
     await settle();
     expect(asked).toEqual([]);
+  });
+
+  describe('T33: a decade that failed to download is tried again (issue #32, row 4)', () => {
+    // The clock and the retry timer are faked; the downloads are not, so they settle on real turns.
+    const flush = async (): Promise<void> => {
+      for (let k = 0; k < 5; k++) await new Promise((r) => setImmediate(r));
+    };
+    let warn: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      setData({ eph: null });               // stops a retry still waiting
+      vi.useRealTimers();
+      warn.mockRestore();
+    });
+    const failThenServe = (failures: number): void => {
+      let n = 0;
+      answer = async () => (n++ < failures ? new Response('', { status: 404 }) : new Response(second));
+    };
+
+    it('the first download fails, the scenario needs it again after the wait, the second arrives: no reload', async () => {
+      failThenServe(1);
+      setLiveTime(later);
+      await flush();
+      expect(asked).toHaveLength(1);
+      expect(getState().eph).not.toBeNull();
+      expect(samplesFor(getState().live, '30d')).toEqual([]);
+      expect(tableGap(later)).toBe('failed');
+
+      vi.setSystemTime(Date.now() + RETRY_MS);
+      setLiveTime(later + HOUR);              // the scenario needs the decade again
+      expect(getState().eph).toBeNull();      // downloading again: "Loading", as for any decade
+      expect(tableGap(later + HOUR)).toBe('none');
+      await flush();
+
+      expect(asked).toHaveLength(2);
+      const s = getState();
+      expect(s.eph).not.toBeNull();
+      expect(samplesFor(s.live, '30d')[0].tMs).toBe(later + HOUR);
+      expect(tableGap(later + HOUR)).toBe('none');
+      expect(failedDecades()).toEqual([]);
+    });
+
+    it('with nobody touching the page, it is asked for again when the wait is over', async () => {
+      failThenServe(1);
+      setLiveTime(later);
+      await flush();
+      expect(asked).toHaveLength(1);
+      let calls = 0;
+      const stop = subscribe(() => { calls++; });
+      await vi.advanceTimersByTimeAsync(RETRY_MS - 1);
+      await flush();
+      expect(asked).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await flush();
+      stop();
+      expect(asked).toHaveLength(2);
+      expect(calls).toBeGreaterThan(0);
+      expect(getState().eph).not.toBeNull();
+      expect(samplesFor(getState().live, '30d')[0].tMs).toBe(later);
+    });
+
+    it('a decade that keeps failing is not asked for again before the wait is over', async () => {
+      failThenServe(Infinity);
+      setLiveTime(later);
+      await flush();
+      expect(asked).toHaveLength(1);
+
+      vi.setSystemTime(Date.now() + RETRY_MS - 1);
+      setLiveTime(later + HOUR);
+      expect(tableGap(later + HOUR)).toBe('failed');
+      await flush();
+      expect(asked).toHaveLength(1);          // 1 ms short of the wait
+
+      vi.setSystemTime(Date.now() + 1);
+      setLiveTime(later + 2 * HOUR);
+      await flush();                          // fails again: the next wait is twice as long
+      expect(asked).toHaveLength(2);
+
+      vi.setSystemTime(Date.now() + 2 * RETRY_MS - 1);
+      setLiveTime(later + 3 * HOUR);
+      await flush();
+      expect(asked).toHaveLength(2);
+      vi.setSystemTime(Date.now() + 1);
+      setLiveTime(later + 4 * HOUR);
+      await flush();
+      expect(asked).toHaveLength(3);
+
+      // However often it fails, it is tried again within RETRY_MAX_MS.
+      for (let k = 0; k < 6; k++) {
+        vi.setSystemTime(Date.now() + RETRY_MAX_MS);
+        setLiveTime(later + (5 + k) * HOUR);
+        await flush();
+      }
+      expect(asked).toHaveLength(9);
+      expect(getState().eph).not.toBeNull();  // never stuck on "Loading"
+    });
+
+    it('the mission names the decade that did not download, not "outside", and plans once it arrives', async () => {
+      failThenServe(1);
+      setLiveTime(later);
+      setLanding(getState().live);            // the arrival, a day before touchdown, is in the same file
+      await flush();
+      expect(asked).toHaveLength(1);
+      expect(missionFor()).toEqual({ status: 'failed', decadeMs: T0 + DAYS * DAY });
+
+      await vi.advanceTimersByTimeAsync(RETRY_MS);   // the wait is over: tried again, and it arrives
+      await flush();
+      expect(asked).toHaveLength(2);
+      expect(missionFor().status).toBe('ready');
+    });
+
+    it('a decade no longer needed is not asked for again', async () => {
+      failThenServe(Infinity);
+      setLiveTime(later);
+      await flush();
+      setLiveTime(T0);                        // back in the home decade
+      await vi.advanceTimersByTimeAsync(10 * RETRY_MAX_MS);
+      expect(asked).toHaveLength(1);
+      expect(vi.getTimerCount()).toBe(0);     // and nothing keeps waking the page
+    });
+  });
+});
+
+describe('T33: tableGap on the real index (1900 to 2100)', () => {
+  const file = new URL('../public/data/ephemeris.json', import.meta.url);
+  const meta = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+  const real = meta !== null && meta.source !== 'mock' && Array.isArray(meta.chunks);
+  const at = (iso: string): number => Date.parse(iso);
+
+  beforeEach(() => {
+    if (!real) return;
+    const index = indexEphemeris(meta);
+    // The home decade's rows are never read here: zeros of the right length will do.
+    setData({ eph: index.withChunk(meta.home, new ArrayBuffer(meta.chunks[meta.home].rows * 24)) });
+    vi.stubGlobal('fetch', async (url: string) =>
+      url.includes('ephemeris/2050.bin') ? new Response('', { status: 503 }) : new Response('', { status: 404 }));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it.skipIf(!real)('outside before 1900 and after 2100, failed in a failed decade, none otherwise', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(tableGap(at('1899-12-31T21:00:00Z'))).toBe('outside');
+    expect(tableGap(at('2101-01-01T03:00:00Z'))).toBe('outside');
+    expect(tableGap(at('2026-11-15T00:00:00Z'))).toBe('none');   // the home decade, in memory
+    expect(tableGap(at('1900-01-01T00:00:00Z'))).toBe('none');   // the first row: not downloaded, not failed
+    expect(tableGap(at('2101-01-01T00:00:00Z'))).toBe('none');   // the last row
+
+    setLiveTime(at('2055-06-01T00:00:00Z'));
+    expect(tableGap(at('2055-06-01T00:00:00Z'))).toBe('none');   // downloading: "Loading"
+    await new Promise((r) => setTimeout(r, 0));
+    expect(tableGap(at('2055-06-01T00:00:00Z'))).toBe('failed');
+    expect(tableGap(at('2050-01-01T00:00:00Z'))).toBe('failed');
+    expect(tableGap(at('2059-12-31T21:00:00Z'))).toBe('failed');
+    expect(tableGap(at('2049-12-31T21:00:00Z'))).toBe('none');
+    expect(tableGap(at('1850-01-01T00:00:00Z'))).toBe('outside');
+    expect(failedDecades()).toEqual([at('2050-01-01T00:00:00Z')]);
+    setData({ eph: null });                   // stops the retry still waiting
+    warn.mockRestore();
   });
 });
 

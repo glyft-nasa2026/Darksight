@@ -8,9 +8,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Dem } from '../core/dem';
 import { MOON_RADIUS_KM, type Sample, type Site } from '../core/types';
 import {
-  getState, samplesFor, select, selected, setLiveSite, setMode, subscribe, type AppState,
+  getState, samplesFor, select, selected, setLiveSite, setMode, subscribe, tableGap, type AppState,
 } from '../state';
 import { themeColor } from '../ui/plotTheme';
+import { noRowText } from '../ui/tableGap';
 import { moonFromIcrf, multiply, type Mat3 } from '../core/sky';
 import { makeStarField } from './stars';
 import { hiddenByMoon, poleLines, POLES, poleStub, viewportFraction } from './poles';
@@ -628,7 +629,7 @@ export function mount(el: HTMLElement): void {
     stars.turn(multiply(MOON_TO_SCENE, moonFromIcrf(sc.tMs)));
     // vectorsAt answers a time it has no row for (outside 1900-2100, or in a decade that failed
     // to download) with the nearest row it does have. Lighting the scene from that would show a
-    // picture of some other date while the readout says the time is outside the table.
+    // picture of some other date while the readout says the time has no row.
     const tabled = !!s.eph && sc.tMs >= s.eph.startMs && sc.tMs <= s.eph.endMs
       && s.eph.missing(sc.tMs, sc.tMs).length === 0;
     if (s.eph && tabled) {
@@ -647,7 +648,7 @@ export function mount(el: HTMLElement): void {
     if (!lost) {
       message.hidden = tabled && !buildQueued;
       message.textContent = buildQueued ? 'Building the 3D view…'
-        : s.eph ? 'This time is outside the Sun and Earth table' : 'Loading Sun and Earth table…';
+        : s.eph ? noRowText(tableGap(sc.tMs), sc.tMs) : 'Loading Sun and Earth table…';
     }
     // The same cached sample the readout shows, so the two never disagree.
     const now: Sample | undefined = samplesFor(sc, '30d')[0];
