@@ -7,6 +7,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Dem } from '../core/dem';
 import { MOON_RADIUS_KM, type Sample, type Site } from '../core/types';
+import { afterHeightMap } from '../loadOrder';
 import {
   getState, samplesFor, select, selected, setLiveSite, setMode, subscribe, type AppState,
 } from '../state';
@@ -558,8 +559,9 @@ export function mount(el: HTMLElement): void {
   const themeObserver = new MutationObserver(updateTheme);
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
   const unsubscribe = subscribe(update);
-  // Not needed for any number, so it loads beside the rest and the plain sphere shows meanwhile.
-  Promise.all([sharedGlobe(), loadNorth().catch(() => null), loadTileIndex().catch(() => null)]).then(([loaded, cap, tiles]) => {
+  // Not needed for any number, so it loads after the height map (issue #96) and the plain sphere
+  // shows meanwhile.
+  Promise.all([sharedGlobe(), afterHeightMap().then(loadNorth).catch(() => null), loadTileIndex().catch(() => null)]).then(([loaded, cap, tiles]) => {
     if (disposed) return;
     globeHeights = loaded; north = cap; tileIndex = tiles; update(getState());
   }).catch(() => { /* No whole-Moon heights (mock data set): the globe stays a plain sphere. */ });
