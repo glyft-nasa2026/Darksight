@@ -17,7 +17,12 @@
       <div id="status" role="status"></div>
       <section id="scene" aria-label="Map and 3D view"></section>
       <aside id="side">
-        <section id="scenarios" class="card" aria-label="Scenarios"></section>
+        <!-- #sidetabs switches this place between #scenarios and #playback (T40). -->
+        <div id="sidecard">
+          <div id="sidetabs"></div>
+          <section id="scenarios" class="card" aria-label="Scenarios"></section>
+          <section id="playback" class="card" aria-label="Timeline playback" hidden></section>
+        </div>
         <section id="readout" class="card" aria-label="Readout"></section>
         <section id="panel" class="card" aria-label="Solar panel"></section>
       </aside>
