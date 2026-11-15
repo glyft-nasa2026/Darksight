@@ -166,6 +166,9 @@ async function check(page: Page, hash: string, before?: (page: Page) => Promise<
   await expect(page.locator('#mission')).not.toBeEmpty({ timeout: 30_000 });
   await before?.(page);
   await page.waitForTimeout(1500); // let the map and charts finish drawing
+  // Measure end states only: a button caught halfway through its colour transition reads as
+  // low contrast (seen: "3D orbit" at 1.10 to 1 while it turned primary).
+  await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
 
   const fails: string[] = [];
   const { pairs, overPicture } = await page.evaluate(collectText);

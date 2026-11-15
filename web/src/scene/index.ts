@@ -7,7 +7,6 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Dem } from '../core/dem';
 import { MOON_RADIUS_KM, type Sample, type Site } from '../core/types';
-import { afterHeightMap } from '../loadOrder';
 import {
   getState, samplesFor, select, selected, setLiveSite, setMode, subscribe, type AppState,
 } from '../state';
@@ -20,7 +19,7 @@ import {
   detailBounds, drawnDemHeight, edgeHeight, globeGeometry, NORTH_RELIEF, northGeometry, recolorTerrain, restretchTerrain, setTerrainHole,
   terrainGeometry, type GridBounds,
 } from './terrain';
-import { colorTexture, GLOBE_RELIEF, globeNormalNear, loadNorth, normalTexture, sharedGlobe, type GlobeHeights } from './globe';
+import { colorTexture, GLOBE_RELIEF, globeNormalNear, normalTexture, sharedGlobe, sharedNorth, type GlobeHeights } from './globe';
 import {
   groundAngle, loadTileIndex, loadWindow, PATCH_MOVE_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch,
   viewGround, type TileIndex,
@@ -595,7 +594,7 @@ export function mount(el: HTMLElement): void {
   const unsubscribe = subscribe(update);
   // Not needed for any number, so it loads after the height map (issue #96) and the plain sphere
   // shows meanwhile.
-  Promise.all([sharedGlobe(), afterHeightMap().then(loadNorth).catch(() => null), loadTileIndex().catch(() => null)]).then(([loaded, cap, tiles]) => {
+  Promise.all([sharedGlobe(), sharedNorth().catch(() => null), loadTileIndex().catch(() => null)]).then(([loaded, cap, tiles]) => {
     if (disposed) return;
     globeHeights = loaded; north = cap; tileIndex = tiles; update(getState());
   }).catch(() => { /* No whole-Moon heights (mock data set): the globe stays a plain sphere. */ });
