@@ -1,6 +1,6 @@
 # T32: A dark site says it is still checking to 2100
 
-Status: in progress (an agent for Yi Hung, branch `t32-never-lit-checking-b`, draft pull request #186): checking "Done when" line 5 on the pull request's preview. The code merged in #138 (Fabian) and #148 ("checking" while #132's sliced scan runs); lines 1-4 and 6 pass; line 5 passed on a local production build with Fast 4G figures. Follow-up: the mission card (`ui/mission/`, T34), not changed in #138
+Status: in review (an agent for Yi Hung, branch `t32-never-lit-checking-b`, pull request #186): every "Done when" line passes. Line 5 on the preview first found a bug: Compare's floor column stayed on "checking to 2100…" after the scan ended; #186 fixes it in `ui/compare/index.ts` and adds the page test `web/e2e/never-lit-checking.spec.ts`. The code merged in #138 (Fabian) and #148. The mission card's "Working period" says "checking" too (`ui/mission/conditions.ts`, #173)
 
 | | |
 |---|---|
@@ -50,7 +50,7 @@ waiting for decades, the text should say so.
       text is today's "No sunrise in the next 60 days".
 - [x] A state test: a lit site, or a dark site with a sunrise within 60 days, never reads pending.
 - [x] A `countdownText` test for the new wording, and one showing that `neverLit` wins.
-- [ ] On the pull request's preview, with DevTools on "Fast 4G" and the site's data cleared, the
+- [x] On the pull request's preview, with DevTools on "Fast 4G" and the site's data cleared, the
       plain address shows the floor column (A) with the "checking" text, and then
       "Permanently shadowed (until 2100)". Never "No sunrise…" in between.
 - [x] `npm test` and `npm run build` pass.
