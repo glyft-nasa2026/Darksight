@@ -8,15 +8,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
-  approachSeconds, EARTH_SPIN, lunarFrameInEarthPlane, MU_EARTH, missionAt, moonFixedInPlane, R_EARTH, R_MOON, type MissionState, type OkPlan, type StepId,
+  EARTH_SPIN, lunarFrameInEarthPlane, missionAt, moonFixedInPlane, R_EARTH, R_MOON, type MissionState, type OkPlan, type StepId,
 } from '../core/mission';
 import type { Pad } from '../core/pads';
 import { disposeScene, earthDirection, makeEarth, prefersReducedMotion, themeLength } from '../ui/launch/earth';
 import { themeColor } from '../ui/plotTheme';
-import { alignFrames } from '../core/sky';
+import { alignFrames, apply } from '../core/sky';
 import type { Vec3 } from '../core/ephemeris';
 import { makeStarField } from '../scene/stars';
-import { lambert, propagate } from '../core/lambert';
+import { departureAt, departureFor } from '../core/departure';
 
 export type Scale = 'near' | 'earth' | 'moon' | 'descent';
 
@@ -102,17 +102,24 @@ export function createScene(
   // the Moon's real orbit plane at touchdown (core/sky.ts moonOrbitIcrf), with the Moon where it
   // really is then. Without the table's Earth vectors there are no stars.
   const stars = makeStarField();
+  // Earth's north pole in missionAt's frame (x, y in the Moon's orbit plane, z its normal), from
+  // the same turn: ICRF's z is Earth's pole. Without it the departure stays in the Moon's plane.
+  let earthPole: [number, number, number] | null = null;
   if (sky) {
     const moonAt = P(missionAt(plan, td).earthPlane.moon).normalize();
-    stars.turn(alignFrames(sky.toMoon, sky.pole, [moonAt.x, moonAt.y, moonAt.z], [0, 1, 0]));
+    const icrfToScene = alignFrames(sky.toMoon, sky.pole, [moonAt.x, moonAt.y, moonAt.z], [0, 1, 0]);
+    stars.turn(icrfToScene);
     scene.add(stars.object);
+    const [x, y, z] = apply(icrfToScene, [0, 0, 1]);
+    earthPole = [x, -z, y];
   }
+  const departure = departureFor(plan, earthPole);
 
   // Earth, turned so the pad is under the craft at launch.
   const earth = makeEarth(R_EARTH * KM, true);
   scene.add(earth);
   const padDir = earthDirection(pad.lat, pad.lon);
-  const launchDir = P(missionAt(plan, launch).earthPlane.craft).normalize();
+  const launchDir = P3(departureAt(plan, departure, launch)!).normalize();
   const tilt = new THREE.Quaternion().setFromUnitVectors(padDir, launchDir);
   const spin = new THREE.Quaternion();
   const yAxis = new THREE.Vector3(0, 1, 0);
@@ -212,31 +219,23 @@ export function createScene(
     return [before, flown];
   };
   const doi = step('doi').startMs;
-  // Where the craft is drawn (issue #192). From the Moon's sphere of influence on, it is on its
-  // Moon-centred path, carried with the Moon. Before that, after TLI, it is on the one orbit
-  // round Earth that leaves the TLI point and reaches the arrival hyperbola's first point in the
-  // coast's time (core/lambert.ts): TLI sets the course, and the coast is a single smooth conic,
-  // tilted out of the plane as far as the arrival needs. Worked out for each plan.
-  // The first whole millisecond inside the sphere of influence: at loi - approachSeconds itself,
-  // rounding can leave missionAt just outside it, with no Moon-centred position yet.
-  let arrive = Math.ceil(loi - approachSeconds(plan) * 1000);
-  while (!missionAt(plan, arrive).moonPlane && arrive < loi) arrive++;
+  // Where the craft is drawn (issue #192). Until the Moon's sphere of influence: core's
+  // departure, in the plane inclined to Earth's equator by the parking orbit's inclination that
+  // holds the arrival, with the coast the one orbit from TLI to the arrival (core/departure.ts).
+  // From there on: its Moon-centred path, carried with the Moon. Worked out for each plan.
+  const arrive = departure.entryMs;
   const atMoon = (st: MissionState): THREE.Vector3 =>
     P(st.earthPlane.moon).add(P(st.moonPlane!).applyQuaternion(moon.quaternion));
-  const onCoast = (t: number): THREE.Vector3 => P(missionAt(plan, t).earthPlane.craft);
-  // In km, in the scene's axes: the transfer plane is the floor, so its normal is +y.
-  const tliKm = onCoast(tli).divideScalar(KM).toArray();
-  const aim = lambert(tliKm, atMoon(missionAt(plan, arrive)).divideScalar(KM).toArray(), (arrive - tli) / 1000, MU_EARTH, [0, 1, 0]);
   const inScene = (st: MissionState): THREE.Vector3 => {
-    if (st.moonPlane) return atMoon(st);
-    if (!aim || st.tMs <= tli) return P(st.earthPlane.craft);
-    return new THREE.Vector3(...propagate(tliKm, aim.v1, (st.tMs - tli) / 1000, MU_EARTH)).multiplyScalar(KM);
+    const d = departureAt(plan, departure, st.tMs);
+    if (d) return P3(d);
+    return st.moonPlane ? atMoon(st) : P(st.earthPlane.craft);
   };
   // The arrival hyperbola's times, densely near the periapsis, where it bends.
   const approachTimes: number[] = [];
   for (let i = 0; i <= 400; i++) approachTimes.push(Math.min(loi - 1, loi - (loi - arrive) * (1 - i / 400) ** 3));
   // The transfer from the pad to LOI as one line, in the scene: launch, the parking orbit, the
-  // bent coast and, inside the sphere of influence, the arrival as it is seen from Earth.
+  // coast from TLI and, inside the sphere of influence, the arrival as it is seen from Earth.
   const transfer = { times: [] as number[], points: [] as THREE.Vector3[] };
   const toTliTimes = Array.from({ length: 501 }, (_, i) => launch + ((tli - launch) * i) / 500);
   // Densest just after TLI, where the craft is fastest and the near view shows the departure.
