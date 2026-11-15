@@ -5,6 +5,10 @@ import type { Dem } from './core/dem';
 import { loadEphemerisChunk, type Ephemeris } from './core/ephemeris';
 import { sunAltAz } from './core/geometry';
 import { skylineAt, skylineElev } from './core/horizon';
+import {
+  APOLLO_11_TIMES, earthMoonKmAt, EXAMPLE_LANDER, planMission, type Lander, type MissionPlan,
+} from './core/mission';
+import { DEFAULT_PAD_ID, padById } from './core/pads';
 import type { Body, CuratedSite, Flip, Sample, Site, Skyline, Summary } from './core/types';
 import { nextFlip, series, summary, SUN_RADIUS } from './core/windows';
 
@@ -18,6 +22,11 @@ export type AppState = {
   // eph is null until the table has loaded, and again while a decade that the live or a pinned
   // scenario needs is still downloading, so every module shows "Loading" by itself.
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
+  // The mission (T34): where it lands (a copy of a scenario's site and time, so it stays put
+  // while the scenarios change), from which launch pad, with which lander.
+  landing: { site: Site; tMs: number } | null;
+  padId: string;
+  lander: Lander;
 };
 
 export const LIVE_ID = 'live';
@@ -28,6 +37,8 @@ export const PIN_SLOTS: readonly { id: string; label: string; color: string }[] 
   { id: 'c', label: 'C', color: '--scn-c' },
 ];
 export const MAX_PINNED = PIN_SLOTS.length;
+/** The id landingScenario() gives the mission's landing point. */
+export const LANDING_ID = 'land';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
@@ -47,7 +58,8 @@ const EXAMPLE_PAIRS: readonly { rim: string; floor: string }[] = [
 // ---------------------------------------------------------------------------------------------
 // The page address (F17). Everything a shared link must reopen is kept after the '#':
 //   #live=-89.5,0,2026-11-14T10:00:00Z&a=-88,45,2027-01-01T00:00:00Z&sel=a&range=90d&mode=3d
-// A scenario is lat,lon,time and, only if it was set, eye height in metres.
+// A scenario is lat,lon,time and, only if it was set, eye height in metres. The mission (T34)
+// adds land= (the same form), pad=<id> and lander=mass,dry,isp,thrust, each only when set.
 // ---------------------------------------------------------------------------------------------
 
 const round6 = (v: number): number => Number(v.toFixed(6));
@@ -66,7 +78,7 @@ function cleanSite(s: Site): Site {
   return out;
 }
 
-function scenarioToText(sc: Scenario): string {
+function scenarioToText(sc: { site: Site; tMs: number }): string {
   const iso = new Date(sc.tMs).toISOString().replace('.000Z', 'Z');
   const parts = [String(sc.site.lat), String(sc.site.lon), iso];
   if (sc.site.eye_m !== undefined) parts.push(String(sc.site.eye_m));
@@ -88,6 +100,23 @@ function textToSiteTime(text: string | null): { site: Site; tMs: number } | null
   }
   return { site: cleanSite(site), tMs };
 }
+
+/** A lander the model can fly: positive numbers, more mass than dry mass. */
+function validLander(l: Lander): boolean {
+  return [l.massKg, l.dryKg, l.ispS, l.thrustN].every((v) => Number.isFinite(v) && v > 0) && l.massKg > l.dryKg;
+}
+
+function textToLander(text: string | null): Lander | null {
+  if (!text) return null;
+  const parts = text.split(',');
+  if (parts.length !== 4 || parts.some((x) => x.trim() === '')) return null;
+  const [massKg, dryKg, ispS, thrustN] = parts.map(Number);
+  const l: Lander = { massKg, dryKg, ispS, thrustN };
+  return validLander(l) ? l : null;
+}
+
+const sameLander = (a: Lander, b: Lander): boolean =>
+  a.massKg === b.massKg && a.dryKg === b.dryKg && a.ispS === b.ispS && a.thrustN === b.thrustN;
 
 /** The state an address describes, and whether it names any scenario (live or pinned). */
 function stateFromAddress(hash: string, nowMs: number): { next: AppState; named: boolean } {
@@ -115,6 +144,9 @@ function stateFromAddress(hash: string, nowMs: number): { next: AppState; named:
     mode: q.get('mode') === '3d' ? '3d' : '2d',
     windowStartMs: live.tMs,
     eph: null, dem: null, sites: [],
+    landing: textToSiteTime(q.get('land')),
+    padId: padById(q.get('pad')).id,
+    lander: textToLander(q.get('lander')) ?? { ...EXAMPLE_LANDER },
   };
   return { next, named: liveAt !== null || pinned.length > 0 };
 }
@@ -129,6 +161,12 @@ export function stateToAddress(): string {
   if (state.selectedId !== LIVE_ID) parts.push(`sel=${state.selectedId}`);
   if (state.range !== '30d') parts.push(`range=${state.range}`);
   if (state.mode !== '2d') parts.push(`mode=${state.mode}`);
+  if (state.landing) parts.push(`land=${scenarioToText(state.landing)}`);
+  if (state.padId !== DEFAULT_PAD_ID) parts.push(`pad=${state.padId}`);
+  if (!sameLander(state.lander, EXAMPLE_LANDER)) {
+    const l = state.lander;
+    parts.push(`lander=${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}`);
+  }
   return parts.join('&');
 }
 
@@ -403,6 +441,30 @@ export function setMode(m: '2d' | '3d'): void {
   notify();
 }
 
+/**
+ * Copies a scenario's site and time as the mission's landing point (T34). A copy: editing the
+ * live scenario afterwards leaves it where it was. Null clears it.
+ */
+export function setLanding(sc: Scenario | null): void {
+  if (sc && (!validSite(sc.site) || !Number.isFinite(sc.tMs))) return;
+  state = { ...state, landing: sc ? { site: cleanSite(sc.site), tMs: sc.tMs } : null };
+  notify();
+}
+
+/** The mission's launch pad, by id (core/pads.ts). Ignores an unknown id. */
+export function setPad(id: string): void {
+  if (padById(id).id !== id || id === state.padId) return;
+  state = { ...state, padId: id };
+  notify();
+}
+
+/** The mission's lander. Ignores one the model can't fly (a number not above 0, or dry >= mass). */
+export function setLander(l: Lander): void {
+  if (!validLander(l) || sameLander(l, state.lander)) return;
+  state = { ...state, lander: { ...l } };
+  notify();
+}
+
 /** The live or pinned scenario named by selectedId. */
 export function selected(): Scenario {
   return state.pinned.find((p) => p.id === state.selectedId) ?? state.live;
@@ -422,6 +484,7 @@ const flipCache = new Map<string, Flip>();
 const litScans = new Map<string, { litMs: number; fromMs: number }>();
 
 function clearCaches(): void {
+  missionCache = null;
   skylineCache.clear();
   seriesCache.clear();
   summaryCache.clear();
@@ -535,4 +598,69 @@ function lastLitMs(eph: Ephemeris, sc: Scenario, downToMs: number): number {
     }
   }
   return scan.litMs;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The mission (T34)
+// ---------------------------------------------------------------------------------------------
+
+const sameSiteTime = (sc: { site: Site; tMs: number }, land: { site: Site; tMs: number }): boolean =>
+  sc.tMs === land.tMs && Math.abs(sc.site.lat - land.site.lat) < 1e-6 && Math.abs(sc.site.lon - land.site.lon) < 1e-6;
+
+/** True when the scenario is where and when the mission lands. */
+export function isLanding(sc: Scenario): boolean {
+  return state.landing !== null && sameSiteTime(sc, state.landing);
+}
+
+/**
+ * The landing point as a scenario, so the accessors above work on it: the label and colour of a
+ * pinned or live scenario at the same place and time, or "Landing site" in the accent colour.
+ */
+export function landingScenario(): Scenario | null {
+  const land = state.landing;
+  if (!land) return null;
+  const same = [...state.pinned, state.live].find((sc) => sameSiteTime(sc, land));
+  return {
+    id: LANDING_ID,
+    label: same ? same.label : 'Landing site',
+    color: same ? same.color : '--accent',
+    site: { ...land.site },
+    tMs: land.tMs,
+  };
+}
+
+export type MissionResult =
+  | { status: 'none' }        // no landing point chosen
+  | { status: 'loading' }     // the table, or the decade of the arrival, is on its way
+  | { status: 'outside' }     // the arrival or touchdown is outside the Sun and Earth table
+  | { status: 'ready'; plan: MissionPlan };
+
+let missionCache: { key: string; plan: MissionPlan } | null = null;
+
+/**
+ * The mission to the landing point (core/mission.ts), worked out once per landing point, pad,
+ * lander and table. The Earth-Moon distance comes from the table at the arrival, about a day
+ * before touchdown with Apollo 11's lunar-orbit time.
+ */
+export function missionFor(): MissionResult {
+  const land = state.landing;
+  if (!land) return { status: 'none' };
+  const eph = state.eph;
+  if (!eph) return { status: 'loading' };
+  const arrivalMs = land.tMs - APOLLO_11_TIMES.lunarOrbitS * 1000 - 2 * HOUR_MS;
+  if (arrivalMs < eph.startMs || land.tMs > eph.endMs) return { status: 'outside' };
+  const end = readableTo(arrivalMs, land.tMs);
+  if (end === null) return { status: 'loading' };
+  if (end < land.tMs) return { status: 'outside' };
+  const earthMoonKm = earthMoonKmAt(eph, arrivalMs);
+  if (earthMoonKm === null) return { status: 'loading' };
+  const l = state.lander;
+  const key = `${siteKey(land.site)}|${land.tMs}|${state.padId}|${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}|${earthMoonKm}`;
+  if (missionCache?.key !== key) {
+    missionCache = {
+      key,
+      plan: planMission({ site: land.site, touchdownMs: land.tMs, pad: padById(state.padId), lander: l, earthMoonKm }),
+    };
+  }
+  return { status: 'ready', plan: missionCache.plan };
 }

@@ -21,8 +21,9 @@ seconds, and showing how much a 1 km move or a 1 day slip changes the answer.
 |---|---|---|
 | F1-F13, F17, F18, F19 below | F14 map layers | Atmospheric refraction (the Moon has none) |
 | | F15 solar panel choice | GPS, relay satellites, constellations |
-| | F16 animated 2D to 3D transition | Landing trajectories, thermal models |
-| | | Server, database, accounts |
+| | F16 animated 2D to 3D transition | Thermal models |
+| | F20 mission simulation, launch to touchdown | Server, database, accounts |
+| | F21 mission report, print and download | |
 
 ## 3. Screen
 
@@ -73,6 +74,8 @@ can be pinned.
 | F17 | Share link | Scenarios are stored in the page address, so a link reopens the same comparison | Reloading the page keeps the pinned scenarios |
 | F18 | Look and feel | One dark theme, one layout and one chart style across every module, from shared variables. Works from 1280 px desktop down to a phone | Text contrast 4.5 to 1; no colour code outside the theme files; nothing overlaps at 1280 px or 390 px |
 | F19 | Example on first open | A link with no scenarios in it opens on a ready comparison: the crater rim (live) against the crater floor (pinned as A), at the current hour. A link with scenarios in it opens exactly those | The plain link shows two different columns in the compare table, Live and A; unpinning A and reloading leaves nothing pinned |
+| F20 | Mission simulation (if time) | "Land here" on a scenario card makes its site and time the landing point. A mission card shows the flight from a chosen launch pad to touchdown at that site and time: an animation, the five flight-sequence phases, Δv and propellant per phase, and the Sun and Earth at the site at touchdown. A planning model (patched conics, a simulated powered descent), not a flight-dynamics solution | Touchdown is at the scenario's site and time; the numbers match `core/mission.test.ts`; a shared link reopens the same mission |
+| F21 | Mission report (if time) | The planned mission as a report that can be printed, saved as PDF and downloaded as data files, built in the browser from the same plan as the mission card | The report and the mission card show the same numbers |
 
 ## 5. How it works
 

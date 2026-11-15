@@ -4,6 +4,21 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: landing trajectories move from Out to If time (#100)
+
+The team agreed the change on 15 Nov 2026, after P5 built T34 in pull request #100.
+
+### SPEC.md: 2. Cut line
+
+- Was: the Out column's third row read "Landing trajectories, thermal models", and the If time
+  column ended at "F16 animated 2D to 3D transition".
+- Now the Out row reads "Thermal models", and If time adds "F20 mission simulation, launch to
+  touchdown" (T34) and "F21 mission report, print and download" (T35). Section 4 has the two
+  feature rows.
+- Why: the brief draws a launch pad list, a flight sequence and mission telemetry (pages 4 to 7,
+  and the report on page 8) that no feature covered (`docs/design.md`, "Needs team decision",
+  item 5). The model is a planning model, not a flight-dynamics solution, and says so on screen.
+
 ## 14 Nov 2026: slot list moves to site.ts (#88)
 
 P1 agreed the change on 14 Nov 2026.

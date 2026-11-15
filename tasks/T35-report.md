@@ -1,6 +1,6 @@
 # T35: Mission report, print and download
 
-Status: proposed, not started. Waits for T34 and the same team agreement (T34, step 1). Not
+Status: not started. The team agreed on 15 Nov 2026 (F21 in `SPEC.md`). Waits for T34. Not
 before M2, and not after the M3 freeze
 
 | | |

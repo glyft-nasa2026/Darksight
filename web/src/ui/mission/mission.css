@@ -1,0 +1,65 @@
+/* Styles for #mission (T34), after docs/design/mission.png. Only ui/theme.css variables. */
+#mission { display: flex; flex-direction: column; gap: var(--space-4); }
+.ms-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ms-body { display: flex; flex-direction: column; gap: var(--space-4); }
+.ms-top { display: grid; grid-template-columns: calc(var(--space-5) * 12) minmax(0, 1fr); gap: var(--space-4); }
+.ms-side, .ms-main { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.ms-info, .ms-stat, .ms-step {
+  display: grid; gap: var(--space-1); background: var(--panel-2);
+  border: thin solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3);
+}
+.ms-info b { font-size: var(--fs-lg); font-weight: 500; display: flex; align-items: center; gap: var(--space-2); }
+.ms-k { font-family: var(--font-num); font-size: var(--fs-sm); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.ms-coord, .ms-when, .ms-num, .ms-live, .ms-v { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.ms-coord, .ms-when, .ms-note, .ms-label, .ms-unit, .ms-live { font-size: var(--fs-sm); }
+.ms-dot { width: var(--space-3); height: var(--space-3); border-radius: 50%; background: var(--ms-site); }
+.ms-label { color: var(--muted); }
+.ms-lander { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.ms-field { display: grid; gap: var(--space-1); min-width: 0; }
+.ms-unit-row { display: flex; align-items: center; gap: var(--space-1); }
+.ms-unit-row .field { flex: 1; min-width: 0; width: 100%; text-align: right; }
+.ms-unit { color: var(--muted); }
+.ms-error, .ms-error-text, .ms-bad { color: var(--bad); }
+.ms-error:empty { display: none; }
+.ms-small { font-size: var(--fs-sm); padding: var(--space-1) var(--space-3); }
+.ms-view { position: relative; background: var(--bg); border: thin solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.ms-view-label { position: absolute; left: var(--space-3); top: var(--space-2); font-family: var(--font-num); font-size: var(--fs-sm); color: var(--muted); }
+.ms-svg { display: block; width: 100%; height: auto; aspect-ratio: 5 / 2; }
+.ms-live { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); padding: var(--space-2) var(--space-3); border-top: thin solid var(--border); color: var(--muted); }
+.ms-live b { color: var(--text); font-weight: 400; }
+.ms-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.ms-seg { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.ms-scrub { flex: 1; min-width: calc(var(--space-5) * 6); accent-color: var(--accent); }
+.ms-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); }
+.ms-step { font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.ms-step b { font-weight: 500; }
+.ms-step.ms-done { opacity: 0.7; }
+.ms-step[aria-current='step'] { border-color: var(--accent); }
+.ms-bottom { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--space-5) * 15); gap: var(--space-4); align-items: start; }
+.ms-table-wrap { overflow-x: auto; }
+.ms-table td { text-align: right; white-space: nowrap; }
+.ms-table tbody th, .ms-table tfoot th { white-space: nowrap; color: var(--text); }
+.ms-conds-box { display: flex; flex-direction: column; gap: var(--space-2); }
+.ms-conds { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.ms-warnings { display: grid; gap: var(--space-2); }
+.ms-flag { color: var(--warn); border: thin solid var(--warn); border-radius: var(--radius); padding: var(--space-2) var(--space-3); }
+.ms-flag-bad { color: var(--bad); border-color: var(--bad); }
+.ms-svg .ms-earth { fill: var(--earth); }
+.ms-svg .ms-moon { fill: var(--terrain-lo); stroke: var(--terrain-hi); }
+.ms-svg .ms-faint { opacity: 0.4; }
+.ms-svg .ms-orbit, .ms-svg .ms-moon-orbit, .ms-svg .ms-gridl { fill: none; stroke: var(--border); }
+.ms-svg .ms-moon-orbit { stroke-dasharray: var(--space-1) var(--space-2); }
+.ms-svg .ms-ground { stroke: var(--terrain-hi); }
+.ms-svg .ms-ahead { fill: none; stroke: var(--muted); stroke-dasharray: var(--space-2) var(--space-2); }
+.ms-svg .ms-flown { fill: none; stroke: var(--accent); stroke-width: calc(var(--space-1) / 2); }
+.ms-svg .ms-craft { fill: var(--text); stroke: var(--accent); stroke-width: calc(var(--space-1) / 2); }
+.ms-svg .ms-site { fill: var(--ms-site); stroke: var(--bg); }
+.ms-svg .ms-tick { fill: var(--muted); font-family: var(--font-num); font-size: var(--fs-sm); }
+
+@media (max-width: 800px) {
+  .ms-top, .ms-bottom { grid-template-columns: minmax(0, 1fr); }
+  .ms-main { order: -1; }
+  .ms-steps { grid-template-columns: 1fr 1fr; }
+  /* Too narrow to lay the label over the picture: it goes above it. */
+  .ms-view-label { position: static; display: block; padding: var(--space-2) var(--space-3) 0; }
+}

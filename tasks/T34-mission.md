@@ -1,12 +1,11 @@
 # T34: Mission simulation, launch to touchdown
 
-Status: proposed, not started. Needs the team's agreement first: `SPEC.md` section 2 lists
-"Landing trajectories" as Out (step 1). Not before M2, and not after the M3 freeze
+Status: in review (P5, branch `t34-mission`, pull request #100). The team agreed on 15 Nov 2026 (F20 in `SPEC.md`); every "Done when" line passes. Not after the M3 freeze
 
 | | |
 |---|---|
 | Tier | if time |
-| Waits for | M2, and the team's agreement (step 1). Uses T08, T15, T19, T22 (all merged) |
+| Waits for | M2 (the team agreed on 15 Nov 2026). Uses T08, T15, T19, T22 (all merged) |
 | Branch | `t34-mission` |
 
 ## Goal
@@ -184,14 +183,14 @@ scene files.
 
 ## Done when
 
-- [ ] The team's agreement is recorded: `docs/decisions.md`, `SPEC.md` section 2 and its feature
+- [x] The team's agreement is recorded: `docs/decisions.md`, `SPEC.md` section 2 and its feature
       rows, `history.md`.
-- [ ] `docs/design/mission.png` and the phone picture exist, made from `mockup.html` with contract
+- [x] `docs/design/mission.png` and the phone picture exist, made from `mockup.html` with contract
       section 6 names only.
-- [ ] "Land here" on each of Live, A, B and C sets the landing point and moves the badge; editing
+- [x] "Land here" on each of Live, A, B and C sets the landing point and moves the badge; editing
       Live afterwards leaves the landing point alone; reloading the shared link restores the
       landing point, pad and lander inputs.
-- [ ] `core/mission.test.ts` checks, with these expected values (computed from the formulas with
+- [x] `core/mission.test.ts` checks, with these expected values (computed from the formulas with
       a short Python check while writing this ticket):
   - TLI from a 185 km circular orbit to a Hohmann ellipse reaching 384,400 km: 3.135 ± 0.005
     km/s, coast 4.98 ± 0.01 days; a shorter coast needs more Δv.
@@ -204,15 +203,15 @@ scene files.
   - Rocket equation: propellant for a Δv, and the Δv back from that propellant, agree to 1e-9.
   - Touchdown is at the scenario's time exactly, and within 0.01 degrees of its site.
   - Phases are in order, touch end to start, and have positive durations.
-- [ ] At the crater floor (`shackleton-floor`) the card warns "Touchdown in darkness" whenever the
+- [x] At the crater floor (`shackleton-floor`) the card warns "Touchdown in darkness" whenever the
       readout says the Sun is hidden there; the same for Earth.
-- [ ] With `eph` null the card shows "Loading" and never crashes; with mock data it says so.
-- [ ] Every number in the card comes from `core/`; `ui/mission/` computes no angle, Δv or mass.
-- [ ] With reduced motion on, nothing plays by itself.
-- [ ] At 1280 and 390 px wide nothing overlaps or scrolls sideways; `#mission` is full width after
+- [x] With `eph` null the card shows "Loading" and never crashes; with mock data it says so.
+- [x] Every number in the card comes from `core/`; `ui/mission/` computes no angle, Δv or mass.
+- [x] With reduced motion on, nothing plays by itself.
+- [x] At 1280 and 390 px wide nothing overlaps or scrolls sideways; `#mission` is full width after
       the sky panorama, and last on the phone. Searching `web/src/ui/mission/` for `#` colour codes
       finds none.
-- [ ] `npm test` and `npm run build` pass.
+- [x] `npm test` and `npm run build` pass.
 
 ## Sources to start from
 

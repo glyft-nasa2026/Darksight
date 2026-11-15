@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseDem } from './core/dem';
 import { indexEphemeris, parseEphemeris, type Ephemeris } from './core/ephemeris';
 import type { CuratedSite } from './core/types';
+import { EXAMPLE_LANDER } from './core/mission';
 import {
-  flipFor, getState, LIVE_ID, neverLitFor, pin, restoreFromAddress, samplesFor, select, selected,
-  setData, setGhost, setLiveSite, setLiveTime, setMode, setRange, shiftWindow, skylineFor,
-  stateToAddress, subscribe, summaryFor, timelineFor, unpin, type Scenario,
+  flipFor, getState, isLanding, LANDING_ID, landingScenario, LIVE_ID, missionFor, neverLitFor, pin,
+  restoreFromAddress, samplesFor, select, selected, setData, setGhost, setLander, setLanding,
+  setLiveSite, setLiveTime, setMode, setPad, setRange, shiftWindow, skylineFor, stateToAddress,
+  subscribe, summaryFor, timelineFor, unpin, type Scenario,
 } from './state';
 
 const HOUR = 3_600_000;
@@ -689,5 +691,97 @@ describe('"never lit" from the chosen time to the end of the table', () => {
     expect(neverLitFor(getState().live)).toBe(true);
     setLiveTime(T0 + 50 * DAY);                          // the Sun is up then
     expect(neverLitFor(getState().live)).toBe(false);
+  });
+});
+
+describe('the mission (T34)', () => {
+  it('starts with no landing point, Kennedy LC-39A and the example lander', () => {
+    const s = getState();
+    expect(s.landing).toBeNull();
+    expect(s.padId).toBe('ksc-39a');
+    expect(s.lander).toEqual(EXAMPLE_LANDER);
+    expect(landingScenario()).toBeNull();
+    expect(missionFor()).toEqual({ status: 'none' });
+  });
+
+  it('"Land here" copies a scenario: editing live afterwards leaves the landing point alone', () => {
+    setLiveSite({ lat: -88, lon: 45 });
+    setLanding(getState().live);
+    expect(getState().landing).toEqual({ site: { lat: -88, lon: 45 }, tMs: T0 });
+    expect(isLanding(getState().live)).toBe(true);
+    setLiveSite({ lat: -87, lon: 10 });
+    setLiveTime(T0 + DAY);
+    expect(getState().landing).toEqual({ site: { lat: -88, lon: 45 }, tMs: T0 });
+    expect(isLanding(getState().live)).toBe(false);
+    setLanding(null);
+    expect(getState().landing).toBeNull();
+  });
+
+  it('the landing point takes the label and colour of the pinned scenario it matches', () => {
+    setLiveSite({ lat: -88, lon: 45 });
+    pin();
+    setLanding(getState().pinned[0]);
+    expect(landingScenario()).toMatchObject({ id: LANDING_ID, label: 'A', color: '--scn-a', tMs: T0 });
+    // Once nothing matches, it is the plain landing site, in the accent colour.
+    unpin('a');
+    setLiveSite({ lat: -80, lon: 0 });
+    expect(landingScenario()).toMatchObject({ label: 'Landing site', color: '--accent' });
+  });
+
+  it('goes into the page address and comes back from it, with the pad and the lander', () => {
+    setLiveSite({ lat: -88, lon: 45 });
+    setLanding(getState().live);
+    setPad('mahia-lc1');
+    setLander({ massKg: 2000, dryKg: 700, ispS: 315, thrustN: 4000 });
+    const address = stateToAddress();
+    expect(address).toContain('land=-88,45,2027-01-01T00:00:00Z');
+    expect(address).toContain('pad=mahia-lc1');
+    expect(address).toContain('lander=2000,700,315,4000');
+    restoreFromAddress('');
+    expect(getState().landing).toBeNull();
+    restoreFromAddress('#' + address);
+    const s = getState();
+    expect(s.landing).toEqual({ site: { lat: -88, lon: 45 }, tMs: T0 });
+    expect(s.padId).toBe('mahia-lc1');
+    expect(s.lander).toEqual({ massKg: 2000, dryKg: 700, ispS: 315, thrustN: 4000 });
+  });
+
+  it('leaves the defaults out of the address, and ignores parts that make no sense', () => {
+    expect(stateToAddress()).not.toMatch(/land=|pad=|lander=/);
+    restoreFromAddress('#live=-89,0,2027-01-01T00:00:00Z&land=-95,0,2027-01-01T00:00:00Z&pad=moon-base&lander=100,200,300,400');
+    const s = getState();
+    expect(s.landing).toBeNull();
+    expect(s.padId).toBe('ksc-39a');
+    expect(s.lander).toEqual(EXAMPLE_LANDER);
+  });
+
+  it('refuses a lander the model can\'t fly and an unknown pad', () => {
+    setLander({ massKg: 500, dryKg: 600, ispS: 300, thrustN: 2000 });
+    setLander({ massKg: 500, dryKg: 100, ispS: 0, thrustN: 2000 });
+    setPad('moon-base');
+    expect(getState().lander).toEqual(EXAMPLE_LANDER);
+    expect(getState().padId).toBe('ksc-39a');
+  });
+
+  it('is "loading" until the table is in, then a plan that touches down at the landing time', () => {
+    setLiveTime(T0 + 10 * DAY);
+    setLanding(getState().live);
+    expect(missionFor()).toEqual({ status: 'loading' });
+    setData({ eph: circlingSun(60) });
+    const m = missionFor();
+    expect(m.status).toBe('ready');
+    if (m.status !== 'ready' || !m.plan.ok) throw new Error('no plan');
+    expect(m.plan.touchdownMs).toBe(T0 + 10 * DAY);
+    expect(m.plan.orbit.earthMoonKm).toBeCloseTo(384400, 0);
+    // The same plan object while nothing changes; a new one for another pad.
+    expect((missionFor() as { plan: unknown }).plan).toBe(m.plan);
+    setPad('csg-ela4');
+    expect((missionFor() as { plan: unknown }).plan).not.toBe(m.plan);
+  });
+
+  it('is "outside" when the arrival falls before the start of the table', () => {
+    setData({ eph: circlingSun(60) });
+    setLanding(getState().live);   // touchdown at the very start: the arrival is a day earlier
+    expect(missionFor()).toEqual({ status: 'outside' });
   });
 });
