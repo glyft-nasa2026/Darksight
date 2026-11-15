@@ -13,6 +13,7 @@ import {
 import { themeColor } from '../ui/plotTheme';
 import { moonFromIcrf, multiply, type Mat3 } from '../core/sky';
 import { makeStarField } from './stars';
+import { sunSpriteScale, sunTexture } from './sun';
 import { mount as mountMap, unmount as unmountMap } from '../map';
 import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import {
@@ -32,6 +33,8 @@ const RAD = Math.PI / 180;
 const EARTH_RADIUS_KM = 6371;
 /** The Earth sprite is drawn this far from the site, scaled to its true apparent size. */
 const EARTH_DRAWN_KM = 20_000;
+/** The Sun sprite is drawn a little beyond the Earth's, so the Earth passes in front of it. */
+const SUN_DRAWN_KM = EARTH_DRAWN_KM * 1.05;
 /**
  * The starting view of a site off the south-pole height map takes in about this much ground each
  * way, in km: most of the level-of-detail patch round it (patch.ts, about 180 km each way).
@@ -165,6 +168,9 @@ export function mount(el: HTMLElement): void {
   // A faint fill, so ground in shadow still shows its shape (through the height colours) instead of
   // matching the background; a shadowed crater floor stays dark. Illustrative, like the shadows.
   const ambient = new AmbientLight(); ambient.intensity = 0.3; world.add(ambient);
+  // The Sun's disc in the sky (issue #120), where the light comes from. The Moon hides it by depth.
+  const sunMaterial = new SpriteMaterial({ map: sunTexture(themeColor('--sun')), depthTest: true, depthWrite: false });
+  const sunDisc = new Sprite(sunMaterial); sunDisc.name = 'Sun'; sunDisc.visible = false; world.add(sunDisc);
   const terrainMaterial = new MeshLambertMaterial({ vertexColors: true });
   const detailMaterial = terrainMaterial.clone();
   // The globe is always drawn, with the terrain set into its south cap. Pushed back in depth so
@@ -216,7 +222,7 @@ export function mount(el: HTMLElement): void {
     // range tight around what can be seen, or near surfaces fight and far ones vanish.
     const fromCentre = orbitCamera.position.distanceTo(globe.position);
     orbitCamera.near = Math.min(1000, Math.max(0.005, (fromCentre - MOON_RADIUS_KM - Math.max(relief, northRelief, patchRelief)) / 2));
-    orbitCamera.far = fromCentre + MOON_RADIUS_KM + EARTH_DRAWN_KM * 1.1;
+    orbitCamera.far = fromCentre + MOON_RADIUS_KM + SUN_DRAWN_KM * 1.1;
     orbitCamera.updateProjectionMatrix();
     sizePins();
     fitShadow();
@@ -515,12 +521,14 @@ export function mount(el: HTMLElement): void {
       const vectors = s.eph.vectorsAt(sc.tMs);
       sun.position.copy(target).addScaledVector(moonDirection(vectors.sun), 2000); sun.intensity = 3;
       sun.castShadow = polar;
+      sunDisc.position.copy(target).addScaledVector(moonDirection(vectors.sun), SUN_DRAWN_KM);
+      sunDisc.scale.setScalar(sunSpriteScale(SUN_DRAWN_KM)); sunDisc.visible = true;
       // Seen from the site, not the Moon's centre: Earth is close enough for that to matter.
       const toEarth = moonDirection(vectors.earthKm).add(globe.position).sub(target);
       const distance = toEarth.length();
       earth.position.copy(target).addScaledVector(toEarth.normalize(), EARTH_DRAWN_KM);
       earth.scale.setScalar(2 * EARTH_RADIUS_KM * EARTH_DRAWN_KM / distance); earth.visible = true;
-    } else { sun.intensity = 0; earth.visible = false; }
+    } else { sun.intensity = 0; earth.visible = false; sunDisc.visible = false; }
     if (!lost) {
       message.hidden = tabled;
       message.textContent = s.eph ? 'This time is outside the Sun and Earth table' : 'Loading Sun and Earth table…';
@@ -549,6 +557,7 @@ export function mount(el: HTMLElement): void {
     // Until the height map arrives there is no 0 m colour; the middle of the ramp stands in.
     globeMaterial.color.set(themeColor('--terrain-lo')).lerp(new Color(themeColor('--terrain-hi')), 0.5);
     const old = earthMaterial.map; earthMaterial.map = earthTexture(); old?.dispose();
+    const oldSun = sunMaterial.map; sunMaterial.map = sunTexture(themeColor('--sun')); oldSun?.dispose();
     stars.recolor();
     update(getState());
   }
@@ -608,6 +617,7 @@ export function mount(el: HTMLElement): void {
     slider.removeEventListener('input', onStretch); reset.removeEventListener('click', centre);
     buttons.forEach((b) => b.removeEventListener('click', changeMode)); window.removeEventListener('pagehide', onPageHide);
     orbitControls.dispose(); clearTerrain(); clearPins(); northMesh?.geometry.dispose(); clearPatch(); unmountMap(mapHost);
+    sunMaterial.map?.dispose(); sunMaterial.dispose();
     pinGeometry.dispose(); globe.geometry.dispose(); globeMaterial.map?.dispose(); globeMaterial.normalMap?.dispose(); globeMaterial.dispose(); terrainMaterial.dispose(); detailMaterial.dispose();
     earthMaterial.map?.dispose(); earthMaterial.dispose(); sun.dispose(); stars.dispose();
     // Free the WebGL context now: browsers allow only a few, and a remount would leak one.
