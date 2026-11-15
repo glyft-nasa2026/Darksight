@@ -1,6 +1,6 @@
 # T36: Upcoming mission targets in the site list
 
-Status: in progress (Yi Hung, with Claude Code), branch `t36-planned-sites`, draft pull request open. Step 1 is done: the team agreed on 15 Nov 2026 that the list may hold 25 sites (the 20 stay, and up to 5 upcoming targets are added; `docs/decisions.md`, F12 in `SPEC.md`). Next: step 2, finding the targets
+Status: in progress (Yi Hung, with Claude Code), branch `t36-planned-sites`, draft pull request #162. Steps 1 to 6 are done apart from the person's check: four planned sites (`im-3`, `blue-ghost-2`, `blue-ghost-3`, `chandrayaan-4`) pass the gazetteer check and `npm test`, and the contact sheet is made (`cd web && node scripts/quickmap-sheet.mjs`, into `data-prep/raw/quickmap/index.html`). Next: a person checks every pin on the contact sheet and signs the table in `docs/sources/T36.md`; the team agrees the "(planned)" label (step 4); then the pull request is marked ready
 
 | | |
 |---|---|
