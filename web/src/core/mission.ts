@@ -390,8 +390,9 @@ export function simulateDescent(
 
 /** Where braking hands over to the approach: the "high gate" altitude, km (issue #181). */
 export const HIGH_GATE_KM = 2;
-/** Braking ends when the along-track speed is down to this, km/s. */
-const BRAKING_END_KMS = 0.05;
+/** Braking ends when the along-track speed is down to this, km/s: the approach then takes the
+ * rest off over several km of ground, not straight down (issue #192 follow-up). */
+const BRAKING_END_KMS = 0.12;
 /** How fast the altitude loop follows its profile in braking, rad/s (a time constant of 33 s). */
 const ALT_LOOP = 0.03;
 /**
