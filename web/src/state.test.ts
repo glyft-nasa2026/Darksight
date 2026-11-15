@@ -916,6 +916,29 @@ describe('"never lit" on a long table: the scan runs in slices (issue #32, row 1
     expect(neverLitFor(getState().live)).toBe(true);
   });
 
+  it('reads "still checking" while the scan runs, whichever of the two is asked first', async () => {
+    setData({ eph: table(() => false) });
+    const sc = getState().live;
+    expect(neverLitPendingFor(sc)).toBe(true);    // asked first: starts the scan itself
+    expect(neverLitFor(sc)).toBe(false);
+    let calls = 0;
+    const stop = subscribe(() => { calls++; });
+    for (let i = 0; i < 10 && calls === 0; i++) await tick();
+    stop();
+    expect(calls).toBe(1);                         // one scan, one notify
+    expect(neverLitFor(getState().live)).toBe(true);
+    expect(neverLitPendingFor(getState().live)).toBe(false);
+  });
+
+  it('stops "still checking" when the scan finds sunlight', async () => {
+    setData({ eph: table((r) => r >= 2400 && r < 2412) });
+    expect(neverLitFor(getState().live)).toBe(false);
+    expect(neverLitPendingFor(getState().live)).toBe(true);
+    for (let i = 0; i < 10 && neverLitPendingFor(getState().live); i++) await tick();
+    expect(neverLitPendingFor(getState().live)).toBe(false);
+    expect(neverLitFor(getState().live)).toBe(false);
+  });
+
   it('stops a scan whose table was replaced, without notifying for it', async () => {
     setData({ eph: table(() => false) });
     neverLitFor(getState().live);

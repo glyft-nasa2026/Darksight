@@ -472,7 +472,7 @@ timelineFor(sc: Scenario, range: Range): Sample[]    // hourly from the window s
 summaryFor(sc: Scenario): Summary                     // over 30 days from sc.tMs
 flipFor(sc: Scenario, body: Body): Flip               // next rise or set after sc.tMs
 neverLitFor(sc: Scenario): boolean                    // no sunlight there from sc.tMs to the end of 2100
-neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still waits for decades to 2100
+neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still waits for decades to 2100, or its scan
 tableGap(tMs: number): 'none' | 'outside' | 'failed'  // T33: why a time may have no row
 failedDecades(): number[]                             // T33: start of each failed decade, for the status line
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
@@ -532,10 +532,10 @@ hours. It reads false while the scan runs, as while decades download, and `state
 the modules when it is done.
 
 **Still checking (T32, issue #32 row 3).** While `neverLitFor` still waits for those decades,
-`neverLitPendingFor` reads true, so the countdown says `No sunrise in the next 60 days · checking
+or for its scan to finish once they are in (issue #32 row 1), `neverLitPendingFor` reads true, so the countdown says `No sunrise in the next 60 days · checking
 to 2100…` and then, once they are in, `Permanently shadowed (until 2100)` (or plain "No sunrise"
 if the Sun does come back before 2100). A never-lit site never shows plain "No sunrise" in
-between. `neverLitPendingFor` is false once the decades are in, false while one of them waits to
+between. `neverLitPendingFor` is false once `neverLitFor` answers, false while one of the decades waits to
 be tried again after a failed download (the text is then plain `No sunrise in the next 60 days`;
 true again while the retry downloads), and false wherever `neverLitFor` is false at once,
 including within 60 days of the end of the table.
