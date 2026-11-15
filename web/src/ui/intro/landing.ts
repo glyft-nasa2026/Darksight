@@ -27,7 +27,7 @@ export const ABOUT: Section = {
     'Darksight compares lunar landing sites and dates side by side: when each one has sunlight ' +
       '(power) and a line of sight to Earth (radio), measured against the real terrain skyline.',
     'Every number is worked out in your browser, from a table of Sun and Earth positions ' +
-      '(JPL DE421, through Skyfield) and a height map of the south pole (NASA LRO LOLA). ' +
+      '(JPL DE440, through Skyfield) and a height map of the south pole (NASA LRO LOLA). ' +
       'The Moon has no atmosphere, so no refraction is applied.',
     'Built in 48 hours by Team GLYFT from Kuala Lumpur, for the NASA Space Apps Challenge 2026.',
   ],

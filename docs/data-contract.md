@@ -369,7 +369,7 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` · `sunAltAzAtSite(eph, site): (tMs) => AltAz` (issue #32: `sunAltAz` for one site at many times, the site's axes worked out once; the same numbers bit for bit) |
 | `horizon.ts` | T00 flat skyline, then T05 | `skylineAt(dem: Dem | null, site: Site): Skyline` · `skylineElev(s: Skyline, az: number): number` (interpolated) |
 | `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
-| `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
+| `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height, out?: Float32Array): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each; written into `out` and returned when `out` is long enough) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
 | `sky.ts` | issue #80 | `Mat3` (three rows; `apply(m, v)` takes a vector from the first frame to the second) · `moonFromIcrf(tMs)` (ICRF to the Moon-fixed frame: the IAU WGCCRE lunar model, Archinal et al. 2011; within 0.02 degrees of DE440's mean-Earth frame) · `earthFromIcrf(tMs)` (ICRF to Earth-fixed: IAU 1976 precession and 1982 sidereal time, UTC for UT1, no nutation) · `moonFromEarthIcrf(earthKm, tMs)` · `moonOrbitIcrf(eph, tMs): { toMoon, pole }` · `alignFrames(fromX, fromZ, toX, toZ)` · `apply`, `applyInverse`, `multiply`, `angleBetween`. Turns the star map only; Sun and Earth angles still come from `geometry.ts` |
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
@@ -473,8 +473,11 @@ summaryFor(sc: Scenario): Summary                     // over 30 days from sc.tM
 flipFor(sc: Scenario, body: Body): Flip               // next rise or set after sc.tMs
 neverLitFor(sc: Scenario): boolean                    // no sunlight there from sc.tMs to the end of 2100
 neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still waits for decades to 2100
+tableGap(tMs: number): 'none' | 'outside' | 'failed'  // T33: why a time may have no row
+failedDecades(): number[]                             // T33: start of each failed decade, for the status line
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
-missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan: MissionPlan }
+missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'failed'; decadeMs: number }
+  | { status: 'ready'; plan: MissionPlan }            // 'failed' (T33): a decade it needs did not download
 ```
 
 **Selected and live.** `selectedId` is the live scenario's id or a pinned one's. The readout,
@@ -496,8 +499,24 @@ has touched anything.
 **Decades.** `eph` is null until the table has loaded, and null again while a decade that the
 live scenario (its time plus 60 days, and its timeline window) or a pinned scenario (its time
 plus 60 days or the range, whichever is longer) needs is still downloading. So a module that
-shows "Loading" while `eph` is null needs nothing more. `state.ts` fetches each decade once; one
-that fails to download reads as outside the table.
+shows "Loading" while `eph` is null needs nothing more.
+
+**A decade that fails to download (T33, issue #32 row 4)** (a dropped connection, a phone in a
+tunnel) is asked for again once a wait is over: 10 s (`RETRY_MS`) after the first failure,
+doubling after each failure in a row to at most 60 s (`RETRY_MAX_MS`), so a dead connection
+isn't asked over and over. A timer wakes the page when the wait is over, so a decade a scenario
+still needs is tried again with nobody touching the page; one no longer needed waits until it
+is. The browser's `online` event makes every failed decade due at once. While a retry
+downloads, the decade counts as downloading again: `eph` is null and modules show "Loading".
+Between tries its hours have no rows, as outside the table. `tableGap(tMs)` tells the two
+apart: `'outside'` before 1900 or after 2100, `'failed'` in a decade that failed, `'none'`
+otherwise. A module with no row for a time says so with `noRowText(tableGap(tMs), tMs)` from
+`ui/tableGap.ts`: `The Sun and Earth table for the 2050s did not download. Trying again…`, or
+`This time is outside the Sun and Earth table`. The status line lists `failedDecades()`.
+`missionFor` answers `{ status: 'failed', decadeMs }` (the start of that decade) when a decade
+from the arrival to touchdown failed, and `'outside'` only before 1900 or after 2100; the mission
+and launch simulation pages say `noRowText('failed', decadeMs)`, and the mission page's status
+line lists `failedDecades()` too.
 
 **Never lit.** `neverLitFor` is true when no part of the Sun's disc clears the skyline at any
 hour from the scenario's time to the end of the table (2100-12-31), whatever time is chosen. It
@@ -516,10 +535,10 @@ the modules when it is done.
 `neverLitPendingFor` reads true, so the countdown says `No sunrise in the next 60 days · checking
 to 2100…` and then, once they are in, `Permanently shadowed (until 2100)` (or plain "No sunrise"
 if the Sun does come back before 2100). A never-lit site never shows plain "No sunrise" in
-between. `neverLitPendingFor` is false once the decades are in, false when one of them failed to
-download (the text is then plain `No sunrise in the next 60 days`: no verdict can come before a
-reload), and false wherever `neverLitFor` is false at once, including within 60 days of the end
-of the table.
+between. `neverLitPendingFor` is false once the decades are in, false while one of them waits to
+be tried again after a failed download (the text is then plain `No sunrise in the next 60 days`;
+true again while the retry downloads), and false wherever `neverLitFor` is false at once,
+including within 60 days of the end of the table.
 
 **Timeline window.** `timelineFor` starts at the scenario's own time for a pinned scenario and
 at `windowStartMs` for live. `setLiveTime` leaves the window alone while the new time is inside

@@ -22,6 +22,7 @@ import {
   speedText, utcText,
 } from './format';
 import { BURN_SPEED, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
+import { noRowText } from '../tableGap';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const W = 1000;   // the picture's viewBox
@@ -796,6 +797,7 @@ export function mount(el: HTMLElement): void {
       shownKey = null;
       if (m.status === 'loading') message.textContent = 'Loading';
       else if (m.status === 'outside') message.textContent = 'This landing time is too near the edge of the Sun and Earth table (1900 to 2100) for the mission.';
+      else if (m.status === 'failed') message.textContent = noRowText('failed', m.decadeMs);
       else if (m.status === 'ready' && !m.plan.ok) message.textContent = ERRORS[m.plan.error];
       message.className = m.status === 'loading' ? 'muted' : 'ms-error-text';
       body.replaceChildren(top);

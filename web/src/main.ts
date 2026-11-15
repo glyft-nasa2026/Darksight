@@ -13,7 +13,8 @@ import { loadEphemeris } from './core/ephemeris';
 import type { CuratedSite } from './core/types';
 import { holdUntilHeightMap } from './loadOrder';
 import { whenPlotly } from './ui/plotly';
-import { setData } from './state';
+import { failedDecades, setData, subscribe } from './state';
+import { failedDecadesText } from './ui/tableGap';
 import { startIntro } from './ui/intro/index';
 
 type Slot = [id: string, mount: (el: HTMLElement) => void];
@@ -65,17 +66,26 @@ function showStatus(): void {
     dem: files['height map'],
     demFraction,
   });
+  writeStatus();
+}
+
+/** The status line: the files that did not load, then those still loading. */
+function writeStatus(): void {
   const el = document.getElementById('status');
   if (!el) return;
   const names = Object.keys(files) as (keyof typeof files)[];
-  const missing = names.filter((n) => files[n] === 'missing');
+  const missing: string[] = names.filter((n) => files[n] === 'missing');
+  // A decade of the table that failed to download, which state.ts tries again (T33).
+  const decades = failedDecadesText(failedDecades());
+  if (decades) missing.push(decades);
   const loading = names
     .filter((n) => files[n] === 'loading')
     .map((n) => (n === 'height map' && demFraction > 0 ? `${n} ${Math.round(demFraction * 100)} %` : n));
   const parts: string[] = [];
   if (missing.length > 0) parts.push(`Data not loaded: ${missing.join(', ')}.`);
   if (loading.length > 0) parts.push(`Loading ${loading.join(', ')}.`);
-  el.textContent = parts.join(' ');
+  const text = parts.join(' ');
+  if (el.textContent !== text) el.textContent = text;
 }
 
 async function loadSites(): Promise<CuratedSite[]> {
@@ -105,6 +115,8 @@ function track<T>(name: keyof typeof files, job: Promise<T>, done: (value: T) =>
 }
 
 showStatus();
+// A decade failing or arriving changes the line too; the check above keeps a drag from rewriting it.
+subscribe(writeStatus);
 const ephJob = loadEphemeris();
 track('Sun and Earth table', ephJob, (eph) => setData({ eph }));
 track('site list', loadSites(), (sites) => setData({ sites }));
