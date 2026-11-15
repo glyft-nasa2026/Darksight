@@ -1,5 +1,5 @@
-// The mission planner page (T34): the mission card on a page of its own. "Open mission" on the
-// landing scenario card opens it with the same page address, which state.ts reads, so it plans
+// The mission planner page (T34): the mission card on a page of its own. "Open mission" in the
+// Scenarios panel (beside "Copy share link", once a landing point is chosen) opens it with the same page address, which state.ts reads, so it plans
 // the mission to the same landing point, pad and lander. It loads the same data files as the
 // site (the skyline needs the height map for the landing window's numbers) and mounts
 // ui/mission into #mission. "Back to landing sites" returns to the site.

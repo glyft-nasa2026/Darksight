@@ -34,8 +34,8 @@ P5 asked for it.
 
 - Was: "`#mission` (T34) is a full-width card after `#sky`, and last on a phone", on the site's
   page; the launch simulation's "Back" went to `index.html`.
-- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" on the
-  landing scenario's card; the simulation's "Back" goes to `mission.html`.
+- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" beside
+  "Copy share link" in the Scenarios panel, once a landing point is chosen; the simulation's "Back" goes to `mission.html`.
 - Why: the card is long and sat at the very bottom of the site, far from the "Land here" that
   fills it.
 
