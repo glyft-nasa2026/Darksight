@@ -84,6 +84,10 @@ export function mount(el: HTMLElement): void {
         <button class="btn" type="button" data-mode="3d">3D orbit</button>
       </div>
       <button class="btn scene-reset" type="button">Centre selected site</button>
+      <div class="scene-modes scene-drag" role="group" aria-label="What a drag turns in 3D">
+        <button class="btn" type="button" data-drag="site" title="Drag to orbit the selected site, never below its horizon">Orbit site</button>
+        <button class="btn" type="button" data-drag="globe" title="Drag to turn the whole Moon like a ball, north up">Turn Moon</button>
+      </div>
       <label class="scene-stretch">Vertical stretch
         <input type="range" min="1" max="5" step="1" value="1" aria-label="Vertical stretch">
         <output>1×</output>
@@ -100,6 +104,8 @@ export function mount(el: HTMLElement): void {
   const output = el.querySelector<HTMLOutputElement>('output')!;
   const reset = el.querySelector<HTMLButtonElement>('.scene-reset')!;
   const buttons = [...el.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+  const dragButtons = [...el.querySelectorAll<HTMLButtonElement>('[data-drag]')];
+  const dragGroup = el.querySelector<HTMLDivElement>('.scene-drag')!;
   // The 2D map is a flat canvas of its own (web/src/map/, T31), shown in place of the 3D canvas in
   // 2D mode. It needs no WebGL, so it works even where the 3D scene can't.
   const mapHost = document.createElement('div');
@@ -115,6 +121,7 @@ export function mount(el: HTMLElement): void {
       b.disabled = !is2d; b.classList.toggle('btn-primary', is2d); b.setAttribute('aria-pressed', String(is2d));
     }
     slider.disabled = true;
+    dragGroup.hidden = true;
     help.textContent = 'The 3D view needs WebGL, which this browser has switched off · Click to pick a site · drag to pan · scroll to zoom';
     caption.textContent = 'Lighting is illustrative; use the readout for visibility';
     message.hidden = true;
@@ -133,6 +140,10 @@ export function mount(el: HTMLElement): void {
   let frame = 0, disposed = false, lost = false, framed = false;
   let mode: AppState['mode'] = getState().mode;
   let polar = false, stretch = 1, drawnStretch = 1, pinPx = 1;
+  // What a drag does in 3D: orbit the selected site (as since issue #77), or turn the whole Moon
+  // like a ball about its centre, north up (the choice SPEC section 10 left open).
+  let drag: 'site' | 'globe' = 'site';
+  let facedKey = '';   // the site the globe view last turned to face
   let dem: Dem | null = null, coarse: Mesh | null = null, detail: Mesh | null = null;
   let bounds: GridBounds | undefined;
   let siteKey = '', coarseKey = '', detailKey = '', pinKey = '', themeKey = '', globeKey = '';
@@ -203,9 +214,11 @@ export function mount(el: HTMLElement): void {
     const controls = new OrbitControls(orbitCamera, canvas);
     controls.addEventListener('change', invalidate);
     controls.addEventListener('change', followView);
-    controls.minDistance = 0.2;
+    controls.minDistance = drag === 'globe' ? MOON_RADIUS_KM * 1.05 : 0.2;
     controls.maxDistance = MOON_RADIUS_KM * 6;
-    controls.maxPolarAngle = Math.PI * 0.49;
+    // Orbiting the site: never below its horizon. Turning the Moon: all the way round, pole to pole.
+    controls.maxPolarAngle = drag === 'globe' ? Math.PI : Math.PI * 0.49;
+    controls.enablePan = drag !== 'globe';
     controls.enabled = mode === '3d';
     return controls;
   }
@@ -278,8 +291,44 @@ export function mount(el: HTMLElement): void {
     const aspect = width / height;
     orbitCamera.aspect = aspect; orbitCamera.updateProjectionMatrix(); invalidate();
   }
+  /**
+   * The globe view: the camera on the Moon's centre with north up, far enough out to see the
+   * whole Moon, looking at the selected site (faceSite) or from where it already is.
+   */
+  function globeView(faceSite: boolean): void {
+    const middle = moonCentre();
+    const north = siteUp({ lat: 90, lon: 0 });
+    const site = selected().site;
+    let dir = faceSite ? siteUp(site) : orbitCamera.position.clone().sub(middle).normalize();
+    // Straight over a pole the view would have no "up": lean off it a little, toward longitude 0.
+    if (Math.abs(dir.dot(north)) > 0.97) {
+      const across = siteUp({ lat: 0, lon: site.lon }).addScaledVector(north, -siteUp({ lat: 0, lon: site.lon }).dot(north)).normalize();
+      dir = dir.clone().addScaledVector(across, 0.35).normalize();
+    }
+    const dist = Math.max(orbitCamera.position.distanceTo(middle), MOON_RADIUS_KM * 2.6);
+    orbitControls.dispose();
+    orbitControls = makeOrbitControls(north);
+    orbitControls.target.copy(middle);
+    orbitCamera.position.copy(middle).addScaledVector(dir, Math.min(dist, MOON_RADIUS_KM * 4));
+    orbitCamera.lookAt(middle); orbitControls.update();
+    facedKey = `${site.lat},${site.lon}`;
+    invalidate();
+  }
+  /** Switches what a drag does, and frames the view for it. */
+  function setDrag(next: 'site' | 'globe'): void {
+    if (next === drag) return;
+    drag = next;
+    for (const b of dragButtons) {
+      const on = b.dataset.drag === drag;
+      b.classList.toggle('btn-primary', on); b.setAttribute('aria-pressed', String(on));
+    }
+    if (drag === 'globe') globeView(true);
+    else centre();
+    update(getState());
+  }
   /** Resets the orbit camera, and the flat map, to their starting view of the selected site. */
   function centre(): void {
+    if (drag === 'globe') { globeView(true); centreMap(); resize(); return; }
     // The patch goes back to the site with the view, not 200 ms later through followView.
     clearTimeout(patchTimer); patchCentre = selected().site; updatePatch();
     const up = siteUp(selected().site);
@@ -301,6 +350,12 @@ export function mount(el: HTMLElement): void {
   }
   /** Brings the selected site back to the middle of the orbit view, keeping zoom and viewing angle. The map follows by itself. */
   function follow(): void {
+    if (drag === 'globe') {
+      // Turning the Moon: a new site turns the Moon to face it; anything else leaves the view be.
+      const site = selected().site;
+      if (`${site.lat},${site.lon}` !== facedKey) globeView(true);
+      return;
+    }
     const offset = orbitCamera.position.clone().sub(orbitControls.target);
     // Off the height map the next site may be far round the Moon: the orbit's axis turns to its
     // vertical, and the camera keeps its place in the site's own frame. On the height map, sites
@@ -559,7 +614,9 @@ export function mount(el: HTMLElement): void {
       stretch > 1 && dem ? 'Heights exaggerated; shadows are illustrative' : 'Lighting is illustrative; use the readout for visibility',
     ].filter(Boolean).join(' · ');
     help.textContent = mode === '2d' ? 'Click to pick a site · drag to pan · scroll to zoom'
-      : 'Click to pick a site · drag to orbit · right-drag to pan · scroll to zoom';
+      : drag === 'globe' ? 'Click to pick a site · drag to turn the Moon · scroll to zoom'
+        : 'Click to pick a site · drag to orbit · right-drag to pan · scroll to zoom';
+    dragGroup.hidden = mode === '2d';
     invalidate();
   }
   function updateTheme(): void {
@@ -609,6 +666,12 @@ export function mount(el: HTMLElement): void {
   canvas.addEventListener('webglcontextlost', onLost); canvas.addEventListener('webglcontextrestored', onRestored);
   const changeMode = (event: Event): void => setMode((event.currentTarget as HTMLButtonElement).dataset.mode as AppState['mode']);
   buttons.forEach((b) => b.addEventListener('click', changeMode));
+  const changeDrag = (event: Event): void => setDrag((event.currentTarget as HTMLButtonElement).dataset.drag as 'site' | 'globe');
+  dragButtons.forEach((b) => b.addEventListener('click', changeDrag));
+  for (const b of dragButtons) {
+    const on = b.dataset.drag === drag;
+    b.classList.toggle('btn-primary', on); b.setAttribute('aria-pressed', String(on));
+  }
   // The camera follows the site up or down with the stretch; it isn't reset.
   const onStretch = (): void => { stretch = Number(slider.value); output.value = `${stretch}×`; update(getState()); };
   slider.addEventListener('input', onStretch); reset.addEventListener('click', centre);
@@ -630,7 +693,7 @@ export function mount(el: HTMLElement): void {
     canvas.removeEventListener('pointerup', pick); canvas.removeEventListener('pointercancel', cancel);
     canvas.removeEventListener('webglcontextlost', onLost); canvas.removeEventListener('webglcontextrestored', onRestored);
     slider.removeEventListener('input', onStretch); reset.removeEventListener('click', centre);
-    buttons.forEach((b) => b.removeEventListener('click', changeMode)); window.removeEventListener('pagehide', onPageHide);
+    buttons.forEach((b) => b.removeEventListener('click', changeMode)); dragButtons.forEach((b) => b.removeEventListener('click', changeDrag)); window.removeEventListener('pagehide', onPageHide);
     orbitControls.dispose(); clearTerrain(); clearPins(); northMesh?.geometry.dispose(); clearPatch(); unmountMap(mapHost);
     pinGeometry.dispose(); globe.geometry.dispose(); globeMaterial.map?.dispose(); globeMaterial.normalMap?.dispose(); globeMaterial.dispose(); terrainMaterial.dispose(); detailMaterial.dispose();
     earthMaterial.map?.dispose(); earthMaterial.dispose(); sun.dispose(); stars.dispose();
