@@ -54,8 +54,8 @@ reads them from the page while it records.
 | 0.000001°, 18 cases, 0.1° tolerance | Horizons badge and About panel, from `web/public/data/validation.json` |
 | Real terrain everywhere: 240 m cells south of 85° S, 3.8 km elsewhere; 150 km skyline; 1900–2100 every 3 h | About panel, "Known limits"; `SPEC.md` sections 5, 6 and 8 |
 | 24 curated sites (14 landed, 4 planned, 4 candidates, 2 references) | About panel; `web/public/data/sites.json` |
-| 782 tests | `npm test` on this branch after merging main (fe6955c), 15 Nov 2026 |
-| 302 distinct sources from 67 files, 236 AI-use records from 70 files | `references.md`, `ai-use.md`, built from `docs/` |
+| 785 tests | `npm test` on this branch after merging main (047b560), 15 Nov 2026 |
+| 304 distinct sources from 68 files, 237 AI-use records from 71 files | `references.md`, `ai-use.md`, built from `docs/` |
 
 ## "Done when" (tasks/T17-pitch.md)
 
@@ -94,10 +94,10 @@ If the panel is missing one, arrange one more T16 delivery (or a redeploy of `ma
 again; anyone can take it. Then paste the "Space Agency Partner Data and Other References" block
 again.
 
-Run on 15 Nov 2026 against this branch (after merging main at 3f917e7) and the live site (4626e8e):
+Run on 15 Nov 2026 against this branch (after merging main at 047b560) and the live site:
 
 ```
-PASS submission lists: 68 docs/sources files and 70 docs/ai-use files, all collected
+PASS submission lists: 69 docs/sources files and 71 docs/ai-use files, all collected
 note docs/sources/issue-58.md: no entries yet
 FAIL About panel on https://darksight.space/ is missing:
   docs/sources/T17.md
