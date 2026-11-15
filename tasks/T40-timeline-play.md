@@ -1,6 +1,6 @@
 # T40: Play the timeline
 
-Status: in progress (P5, branch `t40-timeline-play`, draft pull request #164). As P5 asked, Play sits in a "Timeline" tab beside Scenarios in the side card, with the Sun, Earth, communication and battery as it plays; the solar panel card gains the battery inputs (`core/battery.ts`).
+Status: done (P5, pull request #164, merged 15 Nov 2026; the battery boxes keep a value typed beside a rejected one, #189). The "Done when" boxes were not ticked before the merge: "After the merge" says what has been checked since. As P5 asked, Play sits in a "Timeline" tab beside Scenarios in the side card, with the Sun, Earth, communication and battery as it plays; the solar panel card gains the battery inputs (`core/battery.ts`).
 
 | | |
 |---|---|
@@ -56,6 +56,17 @@ strips, sky panorama and 3D shadows follow it exactly as they follow a drag.
 
 T23 may be polishing `timeline.css`: agree an order. The mission card's `pace.ts`
 (`web/src/ui/mission/`) already changes speed smoothly; reuse it if it fits.
+
+## After the merge
+
+- **Audit before submission (15 Nov 2026, pull request #189), headless Chromium on `main` at
+  8c12601 with real data.** Play, pause and the four speeds work. The clock, time box, readout
+  and timeline marker agree. A typed time or a selected pin pauses it. In a fresh browser profile
+  it plays across 1 Jan 2030 and stops at the end of the table (2100) with a message. With
+  reduced motion on it steps (6 moves in 6.9 s). No page errors.
+- **Not checked:** the 3D shadows moving with Play ("Done when" line 2), and the speed on an idle
+  machine (1.80, 5.29, 10.73 and 15.54 h/s measured for 2, 6, 12 and 24 at load 17: never faster
+  than labelled). *cosmetic*
 
 ## Prompt to paste into Claude Code
 
