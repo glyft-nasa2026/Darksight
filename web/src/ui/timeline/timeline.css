@@ -21,6 +21,13 @@
   gap: var(--space-1);
 }
 
+/* T23 (docs/design/timeline.png): the range buttons are the picture's small ones, the mock-up's
+   .btn-sm. Full-size, the five of them took two rows on a phone. */
+#timeline .timeline-buttons .btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-sm);
+}
+
 #timeline .btn[aria-pressed='true'] {
   border-color: var(--accent);
   color: var(--accent);
