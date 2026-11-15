@@ -8,6 +8,7 @@ import {
   byTask, parseAiUse, parseSources, repoPath, toolsNamed, REPO_URL,
   type AiEntry, type Cell, type DocFile, type SourceEntry,
 } from './collect';
+import { EXPLAIN, EXPLAIN_INTRO, type ExplainPoint } from './explain';
 import { badgeSentence, badgeText, formatDeg, readValidation, type HorizonsCheck } from './validation';
 
 // --- The panel's text, in one place: update it here at the freeze ----------------------------
@@ -15,20 +16,41 @@ import { badgeSentence, badgeText, formatDeg, readValidation, type HorizonsCheck
 const WHAT_IT_SHOWS = [
   'Darksight compares lunar landing sites and dates side by side: when each one has sunlight ' +
     '(power) and a line of sight to Earth (radio), measured against the real terrain skyline.',
-  'Pick a site on the map, from the curated list or by typing its latitude and longitude, pick a ' +
-    'time, and pin up to three scenarios to compare. Every number comes from the same calculation ' +
-    'in the browser, from a table of Sun and Earth positions and a height map of the south pole.',
+  'Pick a site anywhere on the Moon, on the map, from the curated list or by typing its latitude ' +
+    'and longitude, pick a time, and pin up to three scenarios to compare. Every number comes from ' +
+    'the same calculation in the browser, from a table of Sun and Earth positions and LOLA height ' +
+    'maps: a fine one near the south pole and a coarser one for the whole Moon.',
+  'Map layers show sunlight, Earth in view, permanent shadow, height and slope over the whole Moon. ' +
+    '"Find a date" looks for the first window with enough sunlight and Earth in view, and the ' +
+    'Timeline tab plays the time forward with the battery\'s charge. "Open mission" plans a flight ' +
+    'from a launch pad to the chosen site and time, as an animation and a printable report.',
 ];
+
+// "Why the Moon is different" (T39) is in explain.ts, where a test keeps it short.
 
 const NO_REFRACTION =
   'The Moon has no atmosphere, so nothing bends the light: the Sun and Earth are exactly where ' +
   'the geometry puts them. Darksight applies no refraction, unlike sunrise tables on Earth.';
 
+const LIBRATION = [
+  'The Moon keeps the same face towards Earth, but not exactly. It rocks a little as it goes ' +
+    'round (libration), and its distance from Earth changes through the month. So from a site on ' +
+    'the near side, Earth doesn\'t stand still in the sky: over a month it traces a small loop ' +
+    'round one spot. Near the edge of the near side, which includes the south pole, the loop dips ' +
+    'below the horizon, so Earth rises and sets there.',
+  'Darksight includes both. Every Sun and Earth position comes from NASA JPL\'s DE440 ephemeris, ' +
+    'with the Moon turned by its own measured orientation (NAIF\'s moon_pa_de440 file), so the ' +
+    'rocking and the changing distance are in every number on the page. The sky panorama draws ' +
+    'Earth\'s loop over the next 30 days.',
+];
+
 const KNOWN_LIMITS = [
   // SPEC.md section 8, plus where the terrain applies (section 6).
-  'Real terrain applies south of 85° S, from the LOLA height map, looking out to 150 km. ' +
-    'Anywhere else the Moon is treated as smooth, and the page says so.',
-  'The height map is 240 m per cell. Rocks and small craters near the lander aren\'t seen.',
+  'Real terrain applies everywhere, looking out to 150 km. South of 85° S it comes from the LOLA ' +
+    'south-pole height map, 240 m per cell. Anywhere else it comes from LOLA\'s whole-Moon height ' +
+    'map, 3.8 km per cell: crater walls and massifs show, a ridge under a few km across doesn\'t. ' +
+    'The page says which applies, and treats the Moon as smooth while a height map is loading.',
+  'The height map is 240 m per cell near the south pole. Rocks and small craters near the lander aren\'t seen.',
   'The skyline looks out to 150 km. A very tall peak further away is missed.',
   'The Sun\'s visible fraction is by height of the disc, not by area.',
   'Earth is treated as a point for "visible or hidden".',
@@ -146,9 +168,13 @@ function buildDialog(): Panel {
   body.append(
     head,
     section('What it shows', ...WHAT_IT_SHOWS.map((t) => h('p', undefined, t))),
+    section('Why the Moon is different', h('p', undefined, EXPLAIN_INTRO), h('ul', 'about-explain',
+      ...EXPLAIN.map((p) => h('li', undefined, h('strong', undefined, p.lead), ` ${p.text} `,
+        jumpButton(dialog, p))))),
     section('Checked against JPL Horizons', checkP, dataP),
     section('Known limits', h('ul', undefined, ...KNOWN_LIMITS.map((t) => h('li', undefined, t)))),
     section('Why there is no refraction', h('p', undefined, NO_REFRACTION)),
+    section('Libration and the Moon\'s orbit', ...LIBRATION.map((t) => h('p', undefined, t))),
     section('Data sources', sourcesBox),
     section('How AI was used', h('p', undefined, AI_INTRO), aiBox),
   );
@@ -181,11 +207,16 @@ function buildDialog(): Panel {
     setCheck(c) {
       if (c.state === 'real') {
         const passed = !(c.maxDiffDeg > c.toleranceDeg);
-        checkP.textContent = `${badgeSentence(c)} Our angles were compared with NASA JPL's Horizons ` +
-          `system for ${c.cases} cases (Sun and Earth, several sites and times), ` +
+        // The figure in validation.json is the data pipeline's (contract section 2: `ours` is the
+        // Python calculation). The page's own code is held to PAGE_VS_HORIZONS_DEG on the same
+        // cases by core/horizons.test.ts: keep the two in step.
+        checkP.textContent = `${badgeSentence(c)} That is our data pipeline (Skyfield with JPL's DE440 ` +
+          `file) compared with NASA JPL's Horizons system for ${c.cases} cases (Sun and Earth, several ` +
+          `sites and times), ` +
           `${Number.isFinite(c.toleranceDeg) ? `against a tolerance of ${formatDeg(c.toleranceDeg)} degrees` : ''}` +
           `${passed ? '' : ' — over the tolerance'}. Checked ${c.checkedAt.replace('T', ' ').replace(/:\d\dZ$/, ' UTC')}. ` +
-          'A test runs the same comparison on the code in this page on every change.';
+          'The code in this page matches Horizons on the same cases to within 0.001 degrees, and a ' +
+          'test checks that on every change.';
       } else {
         checkP.textContent = badgeSentence(c);
       }
@@ -198,6 +229,33 @@ function buildDialog(): Panel {
         : 'Loading';
     },
   };
+}
+
+/**
+ * A link-like button that closes the panel and brings a part of the page into view: the first of
+ * `targets` that is on screen (the map layers are hidden in 3D, so the map itself stands in).
+ * The panel's own close handler puts focus back on the About button first; this then scrolls and
+ * moves focus to the point's own control there, or else the first one, if there is one.
+ */
+function jumpButton(dialog: HTMLDialogElement, p: ExplainPoint): HTMLButtonElement {
+  const b = h('button', 'about-jump', p.jump);
+  b.type = 'button';
+  b.addEventListener('click', () => {
+    const target = p.targets
+      .map((t) => document.querySelector<HTMLElement>(t))
+      .find((el): el is HTMLElement => !!el && el.getClientRects().length > 0);
+    if (target) {
+      dialog.addEventListener('close', () => {
+        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        target.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+        const control = (p.focus ? target.querySelector<HTMLElement>(p.focus) : null) ??
+          target.querySelector<HTMLElement>('button, input, select, a[href]');
+        control?.focus({ preventScroll: true });
+      }, { once: true });
+    }
+    dialog.close();
+  });
+  return b;
 }
 
 function section(title: string, ...kids: Node[]): HTMLElement {

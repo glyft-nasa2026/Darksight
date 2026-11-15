@@ -1,16 +1,20 @@
 // App state, as docs/data-contract.md section 4.
 // UI modules read state and call actions. They never call each other.
 
+import { EXAMPLE_BATTERY, validBattery, type Battery } from './core/battery';
 import type { Dem } from './core/dem';
 import { loadEphemerisChunk, type Ephemeris } from './core/ephemeris';
-import { sunAltAz } from './core/geometry';
-import { skylineAt, skylineElev } from './core/horizon';
+import { sunAltAzAtSite } from './core/geometry';
+import type { GlobeHeights } from './core/globe';
+import { groundAt, skylineAt, skylineElev, SKYLINE_MIN_LAT } from './core/horizon';
 import {
   APOLLO_11_TIMES, earthMoonKmAt, EXAMPLE_LANDER, planMission, type Lander, type MissionPlan,
 } from './core/mission';
 import { DEFAULT_PAD_ID, padById } from './core/pads';
 import type { Body, CuratedSite, Flip, Sample, Site, Skyline, Summary } from './core/types';
 import { nextFlip, series, summary, SUN_RADIUS } from './core/windows';
+// T42: a line of its own, so the shared import lines above stay as other branches edit them.
+import { END_LOOK_DAYS, firstWindow, monthsLater, type DateSearch, type Need } from './core/datesearch';
 
 export type Scenario = { id: string; label: string; color: string; site: Site; tMs: number };
 // color is the name of a theme variable, for example '--scn-a'. Never a colour code.
@@ -22,11 +26,17 @@ export type AppState = {
   // eph is null until the table has loaded, and again while a decade that the live or a pinned
   // scenario needs is still downloading, so every module shows "Loading" by itself.
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
+  // T37: globe.bin, the coarse skyline for sites north of 85 S (contract section 3, "Skyline").
+  // 'missing' once it failed or isn't there (the mock data set has none).
+  globe: GlobeHeights | null;
+  globeStatus: 'loading' | 'ready' | 'missing';
   // The mission (T34): where it lands (a copy of a scenario's site and time, so it stays put
   // while the scenarios change), from which launch pad, with which lander.
   landing: { site: Site; tMs: number } | null;
   padId: string;
   lander: Lander;
+  // The battery that the solar panel card and the timeline playback run (T40).
+  battery: Battery;
 };
 
 export const LIVE_ID = 'live';
@@ -60,6 +70,7 @@ const EXAMPLE_PAIRS: readonly { rim: string; floor: string }[] = [
 //   #live=-89.5,0,2026-11-14T10:00:00Z&a=-88,45,2027-01-01T00:00:00Z&sel=a&range=90d&mode=3d
 // A scenario is lat,lon,time and, only if it was set, eye height in metres. The mission (T34)
 // adds land= (the same form), pad=<id> and lander=mass,dry,isp,thrust, each only when set.
+// The battery (T40) adds bat=capacityWh,panelW,useW when it differs from the example.
 // ---------------------------------------------------------------------------------------------
 
 const round6 = (v: number): number => Number(v.toFixed(6));
@@ -115,6 +126,18 @@ function textToLander(text: string | null): Lander | null {
   return validLander(l) ? l : null;
 }
 
+function textToBattery(text: string | null): Battery | null {
+  if (!text) return null;
+  const parts = text.split(',');
+  if (parts.length !== 3 || parts.some((x) => x.trim() === '')) return null;
+  const [capacityWh, panelW, useW] = parts.map(Number);
+  const b: Battery = { capacityWh, panelW, useW };
+  return validBattery(b) ? b : null;
+}
+
+const sameBattery = (a: Battery, b: Battery): boolean =>
+  a.capacityWh === b.capacityWh && a.panelW === b.panelW && a.useW === b.useW;
+
 const sameLander = (a: Lander, b: Lander): boolean =>
   a.massKg === b.massKg && a.dryKg === b.dryKg && a.ispS === b.ispS && a.thrustN === b.thrustN;
 
@@ -143,10 +166,11 @@ function stateFromAddress(hash: string, nowMs: number): { next: AppState; named:
     range: range === '90d' || range === '365d' ? range : '30d',
     mode: q.get('mode') === '3d' ? '3d' : '2d',
     windowStartMs: live.tMs,
-    eph: null, dem: null, sites: [],
+    eph: null, dem: null, sites: [], globe: null, globeStatus: 'loading',
     landing: textToSiteTime(q.get('land')),
     padId: padById(q.get('pad')).id,
     lander: textToLander(q.get('lander')) ?? { ...EXAMPLE_LANDER },
+    battery: textToBattery(q.get('bat')) ?? { ...EXAMPLE_BATTERY },
   };
   return { next, named: liveAt !== null || pinned.length > 0 };
 }
@@ -167,6 +191,10 @@ export function stateToAddress(): string {
     const l = state.lander;
     parts.push(`lander=${l.massKg},${l.dryKg},${l.ispS},${l.thrustN}`);
   }
+  if (!sameBattery(state.battery, EXAMPLE_BATTERY)) {
+    const b = state.battery;
+    parts.push(`bat=${b.capacityWh},${b.panelW},${b.useW}`);
+  }
   return parts.join('&');
 }
 
@@ -182,6 +210,8 @@ export function restoreFromAddress(hash: string, nowMs: number = Date.now()): vo
     next.eph = state.eph;
     next.dem = state.dem;
     next.sites = state.sites;
+    next.globe = state.globe;
+    next.globeStatus = state.globeStatus;
   }
   state = next;
   notify(false);
@@ -243,17 +273,29 @@ export function subscribe(fn: (s: AppState) => void): () => void {
   return () => { listeners.delete(fn); };
 }
 
-/** Called by main.ts as each data file arrives. Not for UI modules. */
-export function setData(patch: { eph?: Ephemeris | null; dem?: Dem | null; sites?: CuratedSite[] }): void {
+/**
+ * Called by main.ts as each data file arrives. Not for UI modules. `globe: null` (T37) says
+ * globe.bin failed or is missing, so a site north of 85 S stays a smooth Moon.
+ */
+export function setData(patch: {
+  eph?: Ephemeris | null; dem?: Dem | null; sites?: CuratedSite[]; globe?: GlobeHeights | null;
+}): void {
   if ('eph' in patch) {
     table = patch.eph ?? null;
     pending.clear();
     failed.clear();
+    failures.clear();
+    scheduleRetry();                    // nothing failed: stops a waiting retry
   }
-  const { eph: _ignored, ...rest } = patch;
+  const { eph: _ignored, globe, ...rest } = patch;
   state = { ...state, ...rest };
+  if ('globe' in patch) {
+    state = { ...state, globe: globe ?? null, globeStatus: globe ? 'ready' : 'missing' };
+  }
   const example = 'sites' in patch && exampleWanted && addExample();
-  clearCaches();
+  // globe.bin alone changes only the sites north of 85 S (T37).
+  if (Object.keys(patch).every((k) => k === 'globe')) clearNorthCaches();
+  else clearCaches();
   notify(example);   // the example goes into the address, like any other change
 }
 
@@ -287,14 +329,67 @@ function addExample(): boolean {
 // ---------------------------------------------------------------------------------------------
 // Decades of the Sun and Earth table (core/ephemeris.ts). main.ts hands over the table with its
 // home decade (the 2020s) loaded; any other decade is fetched here the first time a scenario
-// needs it. A decade that fails to download is not asked for again; its times then read as
-// outside the table.
+// needs it. A decade that fails to download (a dropped connection, a phone in a tunnel) reads as
+// failed, not as outside the table (tableGap), and is asked for again once a short wait is
+// over, or at once when the browser says it is back online (T33, issue #32 row 4).
 // ---------------------------------------------------------------------------------------------
 
 let table: Ephemeris | null = null;   // every decade loaded so far
 const pending = new Set<number>();
-const failed = new Set<number>();
+/** Decades that failed to download, each with the time it may be asked for again. */
+const failed = new Map<number, number>();
+/** How many times in a row each decade has failed: the wait before the next try grows with it. */
+const failures = new Map<number, number>();
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
 const FLIP_DAYS = 60;                 // nextFlip's default look-ahead
+
+/**
+ * The wait after a decade's download fails, before it is asked for again: RETRY_MS the first
+ * time, doubled after each failure in a row, at most RETRY_MAX_MS. So a dead connection is
+ * tried now and then, not over and over.
+ */
+export const RETRY_MS = 10_000;
+export const RETRY_MAX_MS = 60_000;
+
+/** Asks for decade i, unless it is downloading or failed less than its wait ago. */
+function ask(i: number): void {
+  const retryAt = failed.get(i);
+  if (retryAt !== undefined && Date.now() < retryAt) return;
+  fetchChunk(i);
+}
+
+/**
+ * Wakes the page when the next failed decade's wait is over. notify() then asks again for every
+ * decade a scenario still needs, so it is tried again without anyone touching the page; one no
+ * longer needed waits until it is.
+ */
+function scheduleRetry(): void {
+  if (retryTimer !== undefined) clearTimeout(retryTimer);
+  retryTimer = undefined;
+  const now = Date.now();
+  let next = Infinity;
+  for (const at of failed.values()) if (at > now) next = Math.min(next, at);
+  if (next === Infinity) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = undefined;
+    scheduleRetry();
+    notify(false);
+  }, next - now);
+}
+
+if (hasPage) {
+  // Back online: every failed decade may be asked for again now, from the shortest wait.
+  window.addEventListener('online', () => {
+    if (failed.size === 0) return;
+    for (const i of failed.keys()) failed.set(i, 0);
+    failures.clear();
+    scheduleRetry();
+    notify(false);
+  });
+}
+
+const chunkStartMs = (eph: Ephemeris, i: number): number =>
+  Date.parse(eph.meta.chunks?.[i]?.start ?? eph.meta.start);
 
 /**
  * True when every decade from fromMs to toMs is in memory; asks for the ones that aren't.
@@ -303,25 +398,23 @@ const FLIP_DAYS = 60;                 // nextFlip's default look-ahead
 function covered(fromMs: number, toMs: number, settled = false): boolean {
   if (!table) return false;
   const need = table.missing(fromMs, toMs);
-  for (const i of need) if (!failed.has(i)) fetchChunk(i);
+  for (const i of need) ask(i);
   return settled ? need.every((i) => failed.has(i)) : need.length === 0;
 }
 
 /**
  * How far the table can be read from fromMs towards toMs. toMs when every decade on the way is
  * in memory. The start of the first decade that failed to download when one is in the way: its
- * times read as outside the table, so the days before it are still good. Null while a decade
- * on the way is downloading, or when fromMs itself is in a failed one. Asks for the decades
- * not asked for yet.
+ * times have no rows yet, so the days before it are still good. Null while a decade on the way
+ * is downloading, or when fromMs itself is in a failed one. Asks for the decades not asked for
+ * yet, and again for a failed one whose wait is over.
  */
 function readableTo(fromMs: number, toMs: number): number | null {
   if (!table) return null;
   const need = table.missing(fromMs, toMs);
+  for (const i of need) ask(i);
   let end = toMs;
-  for (const i of need) {
-    if (failed.has(i)) end = Math.min(end, Date.parse(table.meta.chunks?.[i]?.start ?? table.meta.start));
-    else fetchChunk(i);
-  }
+  for (const i of need) if (failed.has(i)) end = Math.min(end, chunkStartMs(table, i));
   if (!(end > fromMs)) return null;
   // Anything still missing before `end` is on its way; a decade past it no longer matters.
   return table.missing(fromMs, end).some((i) => !failed.has(i)) ? null : end;
@@ -330,17 +423,30 @@ function readableTo(fromMs: number, toMs: number): number | null {
 function fetchChunk(i: number): void {
   if (!table || pending.has(i)) return;
   pending.add(i);
+  failed.delete(i);                     // a retry counts as downloading again: "Loading"
   const asked = table;
   loadEphemerisChunk(asked, i).then(
     (buffer) => {
       if (table?.meta !== asked.meta || !pending.delete(i)) return; // a new table came meanwhile
+      const hadFailed = failures.delete(i);
       table = table.withChunk(i, buffer);   // the loader has checked the length: this can't throw
+      // While this decade had failed, a window reaching into it was cut short where the decade
+      // starts, and remembered that way. Forget those, or the strips, the 30-day figures and the
+      // countdowns keep the cut-short answer until the site or the time changes.
+      if (hadFailed) {
+        seriesCache.clear();
+        summaryCache.clear();
+        flipCache.clear();
+      }
       notify(false);
     },
     (err: unknown) => {
       if (table?.meta !== asked.meta || !pending.delete(i)) return;
-      failed.add(i);
+      const times = (failures.get(i) ?? 0) + 1;
+      failures.set(i, times);
+      failed.set(i, Date.now() + Math.min(RETRY_MS * 2 ** (times - 1), RETRY_MAX_MS));
       console.warn(`Data not loaded (Sun and Earth table, decade ${i}):`, err instanceof Error ? err.message : err);
+      scheduleRetry();
       notify(false);
     },
   );
@@ -359,6 +465,26 @@ function scenariosCovered(): boolean {
 function refreshEph(): void {
   const eph = table && scenariosCovered() ? table : null;
   if (eph !== state.eph) state = { ...state, eph };
+}
+
+export type TableGap = 'none' | 'outside' | 'failed';
+
+/**
+ * Why the table may have no row for tMs, so a module can say which. 'outside': before the
+ * table's start (1900) or after its end (2100). 'failed': inside, but the decade holding tMs did
+ * not download; it is being tried again. 'none' otherwise: the row is in memory or on its way
+ * (eph is null and the modules show "Loading"), or the table itself has not loaded.
+ */
+export function tableGap(tMs: number): TableGap {
+  if (!table || !Number.isFinite(tMs)) return 'none';
+  if (tMs < table.startMs || tMs > table.endMs) return 'outside';
+  return table.missing(tMs, tMs).some((i) => failed.has(i)) ? 'failed' : 'none';
+}
+
+/** The start (ms) of each decade that failed to download and waits to be tried again, earliest first. */
+export function failedDecades(): number[] {
+  const t = table;
+  return t ? [...failed.keys()].sort((a, b) => a - b).map((i) => chunkStartMs(t, i)) : [];
 }
 
 /** Moves the live scenario and selects it. Ignores a latitude outside -90..90 or a non-number. */
@@ -465,6 +591,13 @@ export function setLander(l: Lander): void {
   notify();
 }
 
+/** The battery the panel card and the playback run (T40). Ignores values outside BATTERY_LIMITS. */
+export function setBattery(b: Battery): void {
+  if (!validBattery(b) || sameBattery(b, state.battery)) return;
+  state = { ...state, battery: { ...b } };
+  notify();
+}
+
 /** The live or pinned scenario named by selectedId. */
 export function selected(): Scenario {
   return state.pinned.find((p) => p.id === state.selectedId) ?? state.live;
@@ -480,8 +613,10 @@ const skylineCache = new Map<string, Skyline>();
 const seriesCache = new Map<string, Sample[]>();
 const summaryCache = new Map<string, Summary>();
 const flipCache = new Map<string, Flip>();
-// Per site: the latest sunlit hour found scanning back from 2100, and how far back it got.
-const litScans = new Map<string, { litMs: number; fromMs: number }>();
+// Per site: the latest sunlit hour found scanning back from 2100, how far back it got, and how
+// far back it has been asked to go. A scan longer than one slice carries on in the background.
+type LitScan = { litMs: number; fromMs: number; toMs: number; running: boolean };
+const litScans = new Map<string, LitScan>();
 
 function clearCaches(): void {
   missionCache = null;
@@ -490,6 +625,20 @@ function clearCaches(): void {
   summaryCache.clear();
   flipCache.clear();
   litScans.clear();
+}
+
+/**
+ * T37: when globe.bin arrives, only sites north of 85 S change (they use it for their skyline and
+ * ground). Every cache key starts with siteKey, so its latitude; polar sites keep their skyline,
+ * series and never-lit scan, which can be 650,000 hours long. A dropped scan that is still running
+ * sees it is no longer in litScans and stops.
+ */
+function clearNorthCaches(): void {
+  missionCache = null;
+  const northOf85 = (key: string): boolean => !(Number.parseFloat(key) <= SKYLINE_MIN_LAT);
+  for (const cache of [skylineCache, seriesCache, summaryCache, flipCache, litScans] as Map<string, unknown>[]) {
+    for (const key of [...cache.keys()]) if (northOf85(key)) cache.delete(key);
+  }
 }
 
 function cached<T>(cache: Map<string, T>, key: string, make: () => T): T {
@@ -503,9 +652,9 @@ function cached<T>(cache: Map<string, T>, key: string, make: () => T): T {
 
 const siteKey = (s: Site): string => `${s.lat},${s.lon},${s.eye_m ?? ''}`;
 
+/** T37: the site's ground height from the same grid as its skyline (dem.bin or globe.bin), else 0. */
 function groundFor(site: Site): number {
-  const dem = state.dem;
-  return dem && dem.covers(site.lat, site.lon) ? dem.heightAt(site.lat, site.lon) : 0;
+  return groundAt(state.dem, site, state.globe);
 }
 
 function hourly(sc: Scenario, startMs: number, range: Range): Sample[] {
@@ -517,7 +666,7 @@ function hourly(sc: Scenario, startMs: number, range: Range): Sample[] {
 }
 
 export function skylineFor(sc: Scenario): Skyline {
-  return cached(skylineCache, siteKey(sc.site), () => skylineAt(state.dem, sc.site));
+  return cached(skylineCache, siteKey(sc.site), () => skylineAt(state.dem, sc.site, state.globe));
 }
 
 /** Hourly from sc.tMs: strips, sky paths. */
@@ -552,7 +701,8 @@ export function flipFor(sc: Scenario, body: Body): Flip {
  * clears the skyline at any hour. False within 60 days of the end, where that proves nothing. Answers false at once when the Sun is up or rises within 60
  * days, which needs no extra download. Otherwise it needs every decade from sc.tMs to 2100;
  * until they arrive it answers false (the countdown then reads "No sunrise in the next 60
- * days", which is also true) and the readout updates when they are in.
+ * days", which is also true) and the readout updates when they are in. The same while the scan
+ * itself runs: a long one carries on in slices between frames (issue #32, row 1).
  */
 export function neverLitFor(sc: Scenario): boolean {
   const eph = state.eph;
@@ -560,7 +710,29 @@ export function neverLitFor(sc: Scenario): boolean {
   if (!eph || sc.tMs < eph.startMs || eph.endMs - sc.tMs < FLIP_DAYS * DAY_MS) return false;
   if (sunlitTest(eph, sc)(sc.tMs) || flipFor(sc, 'sun') !== null) return false;
   if (!covered(sc.tMs, eph.endMs)) return false;
-  return lastLitMs(eph, sc, sc.tMs) < sc.tMs;
+  const litMs = lastLitMs(eph, sc, sc.tMs);
+  return litMs !== null && litMs < sc.tMs;
+}
+
+/**
+ * True while neverLitFor can't answer yet but will: the Sun is down there, it doesn't rise
+ * within 60 days, and either a decade from sc.tMs to the end of the table is still downloading
+ * (issue #32, row 3) or they are all in and the scan back from 2100 is still running in slices
+ * (issue #32, row 1). The countdown then says it is still checking, rather than "No sunrise in
+ * the next 60 days" turning into "Permanently shadowed" a moment later. False once neverLitFor
+ * answers, false while one of the decades waits to be tried again after a failed download (true
+ * again while the retry downloads), and false wherever neverLitFor answers false at once: the
+ * Sun up, a sunrise within 60 days, or within 60 days of the end of the table. Downloads nothing
+ * itself; with every decade in, it starts the scan if neverLitFor hasn't yet, so the order the
+ * two are called in doesn't matter.
+ */
+export function neverLitPendingFor(sc: Scenario): boolean {
+  const eph = state.eph;
+  if (!eph || !table || sc.tMs < eph.startMs || eph.endMs - sc.tMs < FLIP_DAYS * DAY_MS) return false;
+  if (sunlitTest(eph, sc)(sc.tMs) || flipFor(sc, 'sun') !== null) return false;
+  const need = table.missing(sc.tMs, eph.endMs);
+  if (need.length > 0) return !need.some((i) => failed.has(i));
+  return lastLitMs(eph, sc, sc.tMs) === null;   // null while the scan is still running
 }
 
 /**
@@ -568,36 +740,78 @@ export function neverLitFor(sc: Scenario): boolean {
  * and skyline are looked up once here, not once per hour: the scan below asks 650,000 times.
  */
 function sunlitTest(eph: Ephemeris, sc: Scenario): (tMs: number) => boolean {
-  const ground = groundFor(sc.site);
   const skyline = skylineFor(sc);
+  const sunAt = sunAltAzAtSite(eph, sc.site);   // the site's axes once, not once an hour
   return (tMs) => {
-    const sun = sunAltAz(eph, sc.site, ground, tMs);
+    const sun = sunAt(tMs);
     return sun.alt - skylineElev(skyline, sun.az) + SUN_RADIUS > 0;
   };
 }
 
 /**
- * The latest hour with sunlight there, at or after downToMs, or -Infinity if none. Scans back
- * hour by hour from the end of the table and remembers how far it got, so dragging the time
- * earlier only scans the new hours, and a site that sees the Sun again before 2100 stops at once.
+ * Hours scanned in one go. A dark spot near the pole scans about 650,000 hours from 2100 back
+ * to today: about 0.75 s in one piece on a mid-range phone (T27, issue #32 row 1). In slices of
+ * this size each takes about 15 ms there, and the page keeps drawing in between. A count, not a
+ * time limit, so the tests are the same on every machine.
  */
-function lastLitMs(eph: Ephemeris, sc: Scenario, downToMs: number): number {
+export const LIT_SCAN_SLICE_HOURS = 20_000;
+
+/**
+ * The latest hour with sunlight there, at or after downToMs, or -Infinity if none; null while
+ * the scan is still running. Scans back hour by hour from the end of the table and remembers
+ * how far it got, so dragging the time earlier only scans the new hours, and a site that sees
+ * the Sun again before 2100 stops at once. The first slice runs now; a longer scan carries on in
+ * slices between frames and calls notify() when it is done, so the modules read the answer.
+ */
+function lastLitMs(eph: Ephemeris, sc: Scenario, downToMs: number): number | null {
   const key = siteKey(sc.site);
   let scan = litScans.get(key);
   if (!scan) {
     if (litScans.size >= CACHE_LIMIT) litScans.clear();
-    scan = { litMs: -Infinity, fromMs: eph.endMs + HOUR_MS };
+    scan = { litMs: -Infinity, fromMs: eph.endMs + HOUR_MS, toMs: downToMs, running: false };
     litScans.set(key, scan);
   }
-  if (scan.litMs === -Infinity && scan.fromMs > downToMs) {
-    const sunlit = sunlitTest(eph, sc);
-    while (scan.litMs === -Infinity && scan.fromMs > downToMs) {
-      const t = scan.fromMs - HOUR_MS;
-      scan.fromMs = t;
-      if (sunlit(t)) scan.litMs = t;
-    }
+  scan.toMs = Math.min(scan.toMs, downToMs);
+  if (scan.running) return null;
+  if (!scanSlice(scan, sunlitTest(eph, sc))) return scan.litMs;
+  // Not done in one slice: carry on in the background. A scan dropped meanwhile (the caches were
+  // cleared, or the site fell out of them) stops at its next slice.
+  scan.running = true;
+  const sunlit = sunlitTest(eph, sc);
+  const next = (): void => {
+    if (litScans.get(key) !== scan) return;
+    if (scanSlice(scan, sunlit)) { soon(next); return; }
+    scan.running = false;
+    notify(false);
+  };
+  soon(next);
+  return null;
+}
+
+// Runs fn as a new task, after the browser has had its turn. A message, not setTimeout(fn, 0):
+// browsers hold nested timeouts back by 4 ms each, which made 30-odd slices 0.2 s slower.
+const slices: (() => void)[] = [];
+const sliceChannel = typeof MessageChannel === 'function' ? new MessageChannel() : null;
+if (sliceChannel) {
+  sliceChannel.port1.onmessage = () => { slices.shift()?.(); };
+  // In Node (the tests) an open port would keep the process alive; browsers have no unref.
+  (sliceChannel.port1 as { unref?: () => void }).unref?.();
+}
+function soon(fn: () => void): void {
+  if (!sliceChannel) { setTimeout(fn, 0); return; }
+  slices.push(fn);
+  sliceChannel.port2.postMessage(null);
+}
+
+/** Scans up to one slice of hours. True when there is more to scan. */
+function scanSlice(scan: LitScan, sunlit: (tMs: number) => boolean): boolean {
+  for (let i = 0; i < LIT_SCAN_SLICE_HOURS; i++) {
+    if (scan.litMs !== -Infinity || scan.fromMs <= scan.toMs) return false;
+    const t = scan.fromMs - HOUR_MS;
+    scan.fromMs = t;
+    if (sunlit(t)) scan.litMs = t;
   }
-  return scan.litMs;
+  return scan.litMs === -Infinity && scan.fromMs > scan.toMs;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -633,6 +847,7 @@ export type MissionResult =
   | { status: 'none' }        // no landing point chosen
   | { status: 'loading' }     // the table, or the decade of the arrival, is on its way
   | { status: 'outside' }     // the arrival or touchdown is outside the Sun and Earth table
+  | { status: 'failed'; decadeMs: number }   // T33: a decade it needs did not download (its start); tried again
   | { status: 'ready'; plan: MissionPlan };
 
 let missionCache: { key: string; plan: MissionPlan } | null = null;
@@ -649,9 +864,12 @@ export function missionFor(): MissionResult {
   if (!eph) return { status: 'loading' };
   const arrivalMs = land.tMs - APOLLO_11_TIMES.lunarOrbitS * 1000 - 2 * HOUR_MS;
   if (arrivalMs < eph.startMs || land.tMs > eph.endMs) return { status: 'outside' };
+  // Asks for the decades from the arrival to touchdown, again for a failed one whose wait is over.
   const end = readableTo(arrivalMs, land.tMs);
+  // One of them did not download (T33): say which, not "outside". It is tried again.
+  const gone = table?.missing(arrivalMs, land.tMs).find((i) => failed.has(i));
+  if (table && gone !== undefined) return { status: 'failed', decadeMs: chunkStartMs(table, gone) };
   if (end === null) return { status: 'loading' };
-  if (end < land.tMs) return { status: 'outside' };
   const earthMoonKm = earthMoonKmAt(eph, arrivalMs);
   if (earthMoonKm === null) return { status: 'loading' };
   const l = state.lander;
@@ -663,4 +881,48 @@ export function missionFor(): MissionResult {
     };
   }
   return { status: 'ready', plan: missionCache.plan };
+}
+
+// ---------------------------------------------------------------------------------------------
+// T42: date search. The first window, from a scenario's time, in which the Sun, Earth or both
+// stay up for at least minHours (core/datesearch.ts). The decades it reads are fetched here,
+// like a scenario's own, without holding the page on "Loading".
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * core's answer, or 'loading' while the table, or a decade the search needs, is still on its
+ * way; 'failed' (T33) when the decade holding the scenario's time did not download. A decade
+ * further on that failed stops the search there: core answers 'no-rows' at its first missing hour.
+ */
+export type DateSearchFor = DateSearch | { status: 'loading' } | { status: 'failed'; decadeMs: number };
+
+let lastSearch: { key: string; skyline: Skyline; result: DateSearch } | null = null;
+
+/**
+ * The first window from sc.tMs, starting within `months` calendar months, in which `need` holds
+ * for at least minHours. Asks for every decade from sc.tMs to the search's end plus the look
+ * for the window's end (END_LOOK_DAYS); 'loading' until they are in. The last answer is kept,
+ * so a module may ask on every redraw.
+ */
+export function dateSearchFor(sc: Scenario, need: Need, minHours: number, months: number): DateSearchFor {
+  const t = table;
+  if (!state.eph || !t) return { status: 'loading' };
+  const endMs = monthsLater(sc.tMs, months);
+  const lookMs = Math.max(minHours * HOUR_MS, END_LOOK_DAYS * DAY_MS);
+  const toMs = Math.min(endMs + lookMs, t.endMs);
+  let readTo = toMs;
+  if (sc.tMs >= t.startMs && toMs > sc.tMs) {
+    const r = readableTo(sc.tMs, toMs);
+    if (r === null) {
+      return tableGap(sc.tMs) === 'failed' ? { status: 'failed', decadeMs: sc.tMs } : { status: 'loading' };
+    }
+    readTo = r;
+  }
+  const skyline = skylineFor(sc);
+  // readTo and the table are in the key: a decade that arrives later gives a new answer.
+  const key = `${siteKey(sc.site)}|${sc.tMs}|${need}|${minHours}|${months}|${readTo}|${t.missing(t.startMs, t.endMs).length}`;
+  if (lastSearch && lastSearch.key === key && lastSearch.skyline === skyline) return lastSearch.result;
+  const result = firstWindow(t, sc.site, groundFor(sc.site), skyline, sc.tMs, endMs, need, minHours);
+  lastSearch = { key, skyline, result };
+  return result;
 }

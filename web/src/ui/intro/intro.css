@@ -101,35 +101,55 @@ body.intro-open {
 .intro-hero {
   position: absolute;
   inset: 0;
-  display: grid;
-  align-content: center;
-  padding: var(--space-5) calc(var(--space-5) * 2);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
+/* The first screen: the hero itself. The lower sections (more.css) follow it.
+   Issue #178: on a wide screen it keeps to a centred column (--hero-col), so the big logo stays
+   beside the title instead of at the window's far edge. --hero-side is the space left on each
+   side of that column: none up to the column's width, where the layout is as before. The big
+   logo is 78vmin as before, at most --space-5 x 36 on a large, tall screen (--hero-logo); the
+   glow, the logo and the small mark are placed from these three. */
+.intro-first {
+  --hero-col: calc(var(--space-5) * 64);
+  --hero-side: max(0%, (100% - var(--hero-col)) / 2);
+  --hero-logo: min(78vmin, calc(var(--space-5) * 36));
+  position: relative;
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  padding: var(--space-5) calc(var(--hero-side) + var(--space-5) * 2);
+}
+
+/* The logo's circle a little larger (85 to 78), round the same centre. */
 .intro-glow {
   position: absolute;
-  right: -15vmin;
-  top: 8vmin;
-  width: 85vmin;
-  height: 85vmin;
+  right: calc(var(--hero-side) - var(--hero-logo) * 15 / 78);
+  top: calc(12vmin + (78vmin - var(--hero-logo)) / 2 - var(--hero-logo) * 4 / 78);
+  width: calc(var(--hero-logo) * 85 / 78);
+  height: calc(var(--hero-logo) * 85 / 78);
   border-radius: 50%;
   background: radial-gradient(circle, var(--accent), transparent 65%);
   opacity: 0.1;
   pointer-events: none;
 }
 
+/* Past the column's right edge by 12/78 of its size, as before; its centre stays at 51vmin from
+   the top when the cap makes it smaller. */
 .intro-logo-big {
   position: absolute;
-  right: -12vmin;
-  top: 12vmin;
-  width: 78vmin;
-  height: 78vmin;
+  right: calc(var(--hero-side) - var(--hero-logo) * 12 / 78);
+  top: calc(12vmin + (78vmin - var(--hero-logo)) / 2);
+  width: var(--hero-logo);
+  height: var(--hero-logo);
   pointer-events: none;
 }
 
 .intro-mark {
   position: absolute;
-  left: var(--space-5);
+  left: calc(var(--hero-side) + var(--space-5));
   top: var(--space-5);
   display: flex;
   align-items: center;
@@ -283,7 +303,7 @@ body.intro-open {
 }
 
 @media (max-width: 800px) {
-  .intro-hero {
+  .intro-first {
     padding: var(--space-5);
     align-content: end;
     padding-bottom: calc(var(--space-5) * 3);

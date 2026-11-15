@@ -59,17 +59,17 @@ const lowSun = table(60, () => -1);
 
 // ---- made-up skylines ------------------------------------------------------------------------
 
-const level = (deg: number): Skyline => ({ elev: new Float32Array(360).fill(deg), terrain: deg !== 0 });
+const level = (deg: number): Skyline => ({ elev: new Float32Array(360).fill(deg), terrain: deg !== 0, grid: deg !== 0 ? 'dem' : null, cellM: deg !== 0 ? 240 : null });
 const flat = level(0);
 /** Rolling hills, 0.5 to 3.5 degrees. */
 const bumpy: Skyline = {
   elev: Float32Array.from({ length: 360 }, (_, az) => 2 + 1.5 * Math.sin(3 * az * RAD)),
-  terrain: true,
+  terrain: true, grid: 'dem', cellM: 240,
 };
 /** Level ground with one mountain, 5 degrees tall, from azimuth 100 to 140. */
 const peak: Skyline = {
   elev: Float32Array.from({ length: 360 }, (_, az) => (az >= 100 && az <= 140 ? 5 : 0)),
-  terrain: true,
+  terrain: true, grid: 'dem', cellM: 240,
 };
 
 // ---- sites -----------------------------------------------------------------------------------
@@ -348,7 +348,7 @@ describe('nextFlip', () => {
   it('finds a late sunrise over a wall to the east', () => {
     const wall: Skyline = {
       elev: Float32Array.from({ length: 360 }, (_, az) => (az >= 45 && az <= 135 ? 10 : 0)),
-      terrain: true,
+      terrain: true, grid: 'dem', cellM: 240,
     };
     const flip = nextFlip(eph, equator, 0, wall, sunAt(180), 'sun');
     expect(flip?.type).toBe('rise');
@@ -484,6 +484,20 @@ describe('countdownText', () => {
     expect(countdownText('sun', true, set, t, true)).toBe('Sunset in 3 d 4 h');
     expect(countdownText('sun', false, rise, t, true)).toBe('Permanently shadowed (until 2100)');
     expect(countdownText('earth', false, null, t, true)).toBe('Earth never visible');
+  });
+
+  // T32: while the decades to 2100 download, a dark site says it is still checking.
+  it('says it is still checking to 2100 when the Sun is down, no rise is found and checking is true', () => {
+    expect(countdownText('sun', false, null, t, false, true)).toBe('No sunrise in the next 60 days · checking to 2100…');
+    expect(countdownText('sun', false, null, t, false, false)).toBe('No sunrise in the next 60 days');
+  });
+
+  it('lets neverLit win over checking, and a found flip or the Sun up win over both', () => {
+    expect(countdownText('sun', false, null, t, true, true)).toBe('Permanently shadowed (until 2100)');
+    expect(countdownText('sun', false, rise, t, false, true)).toBe('Sunrise in 3 d 4 h');
+    expect(countdownText('sun', true, null, t, false, true)).toBe('No sunset in the next 60 days');
+    expect(countdownText('sun', true, set, t, false, true)).toBe('Sunset in 3 d 4 h');
+    expect(countdownText('earth', false, null, t, false, true)).toBe('Earth never visible');
   });
 
   // The same wording, reached from a table through series and nextFlip as the readout does.

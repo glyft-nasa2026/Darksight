@@ -3,7 +3,6 @@
 
 import type { Dem } from './dem';
 import type { Vec3 } from './ephemeris';
-import { polarInverse } from './projection';
 import { MOON_RADIUS_KM } from './types';
 
 const RAD = Math.PI / 180;
@@ -53,19 +52,25 @@ function polarGround(dem: Dem, stride: number): PolarGround {
   const z = new Float32Array(size * size), covered = new Uint8Array(size * size);
   const height = new Float32Array(size * size);
   let lo = Infinity, hi = -Infinity;
+  // Every layer cell is a stored cell of the height map, so its height is read straight from the
+  // grid, and it is covered when it is not north of min_lat (it is always inside the grid). Going
+  // through latitude and longitude for each (covers, heightAt) took about 0.5 s on the real
+  // height map, as the map first drew (issue #118). With k = r / 2R, the stereographic radius
+  // over twice the Moon's, k = tan(c / 2) for the angle c from the pole, so cos c is
+  // (1 - k^2) / (1 + k^2), and "not north of min_lat" is c <= 90 + min_lat: no trigonometry a cell.
+  const kMax2 = Math.tan(((90 + meta.min_lat) / 2) * RAD) ** 2;
   for (let row = 0; row < size; row++) {
     const y = meta.y_max_m - row * cell_m;
     for (let col = 0; col < size; col++) {
       const x = meta.x_min_m + col * cell_m;
-      const { lat, lon } = polarInverse(x, y);
+      const k2 = (x * x + y * y) / (4 * R_M * R_M);
       const i = row * size + col;
-      covered[i] = dem.covers(lat, lon) ? 1 : 0;
-      const h = covered[i] ? dem.heightAt(lat, lon) : 0;
+      covered[i] = k2 <= kMax2 ? 1 : 0;
+      const h = covered[i] ? dem.cell(row * stride, col * stride) : 0;
       height[i] = covered[i] ? h : NaN;
       if (covered[i]) { lo = Math.min(lo, h); hi = Math.max(hi, h); }
-      // Angle from the pole at the Moon's centre, and the point's height above the polar plane.
-      const c = (90 + lat) * RAD;
-      z[i] = (R_M + h) * Math.cos(c) - R_M;
+      // The point's height above the plane touching the pole.
+      z[i] = (R_M + h) * ((1 - k2) / (1 + k2)) - R_M;
     }
   }
   const heightRange: [number, number] = lo <= hi ? [lo, hi] : [0, 0];
@@ -99,18 +104,29 @@ function sweep(g: PolarGround, lx: number, ly: number, elevDeg: number, lit: Uin
   const step = Math.sign(main);
   const rise = slope * g.cell_m * Math.hypot(1, side);
   const shadow = new Float32Array(size * size);
-  const at = (m: number, s: number): number => alongCols ? s * size + m : m * size + s;
+  // Cell (m, s) is at index m * mStride + s * sStride.
+  const mStride = alongCols ? 1 : size, sStride = alongCols ? size : 1;
   const first = step > 0 ? size - 1 : 0;
-  for (let s = 0; s < size; s++) { const i = at(first, s); shadow[i] = z[i]; lit[i] = 1; }
+  for (let s = 0; s < size; s++) { const i = first * mStride + s * sStride; shadow[i] = z[i]; lit[i] = 1; }
+  // Every cell of a line takes its blocker from the same two neighbours on the line before:
+  // the same offset `side` along it, so the split into a whole cell and a fraction is the same.
+  const shift = Math.floor(side), f = side - shift;
   for (let m = first - step; m >= 0 && m < size; m -= step) {
-    const up = m + step;
+    const row = m * mStride, upRow = (m + step) * mStride;
     for (let s = 0; s < size; s++) {
-      const i = at(m, s), u = s + side;
-      if (u < 0 || u > size - 1) { shadow[i] = z[i]; lit[i] = 1; continue; }
-      const s0 = Math.min(Math.floor(u), size - 2), f = u - s0;
-      const blocker = shadow[at(up, s0)] * (1 - f) + shadow[at(up, s0 + 1)] * f - rise;
-      lit[i] = z[i] >= blocker ? 1 : 0;
-      shadow[i] = Math.max(z[i], blocker);
+      const i = row + s * sStride, s0 = s + shift;
+      if (s0 < 0 || s0 >= size - 1) {
+        // The ray comes in from beyond the grid's side (or exactly on its last cell).
+        if (f === 0 && s0 === size - 1) {
+          const blocker = shadow[upRow + s0 * sStride] - rise;
+          lit[i] = z[i] >= blocker ? 1 : 0; shadow[i] = Math.max(z[i], blocker);
+        } else { shadow[i] = z[i]; lit[i] = 1; }
+        continue;
+      }
+      const blocker = shadow[upRow + s0 * sStride] * (1 - f) + shadow[upRow + (s0 + 1) * sStride] * f - rise;
+      const zi = z[i];
+      lit[i] = zi >= blocker ? 1 : 0;
+      shadow[i] = zi > blocker ? zi : blocker;
     }
   }
 }
@@ -145,7 +161,7 @@ export function shadePolar(dem: Dem, sun: Vec3, maxCells = 1300): PolarShade {
       const dzdx = (z[row * size + c1] - z[row * size + c0]) / ((c1 - c0) * cell_m);
       // Rows grow down and y grows up.
       const dzdy = (z[r0 * size + col] - z[r1 * size + col]) / ((r1 - r0) * cell_m);
-      cosI[i] = (-dzdx * lx - dzdy * ly + lz) / Math.hypot(dzdx, dzdy, 1);
+      cosI[i] = (-dzdx * lx - dzdy * ly + lz) / Math.sqrt(dzdx * dzdx + dzdy * dzdy + 1);
     }
   }
   return { size, stride, frac, cosI, height: g.height, heightRange: g.heightRange };
@@ -155,13 +171,15 @@ export function shadePolar(dem: Dem, sun: Vec3, maxCells = 1300): PolarShade {
  * Cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, `width`
  * cells from 180 W to 180 E and `height` cells from 90 N to 90 S. Above 0 is day.
  * With `rowStart` and `rowEnd`, only those rows (`rowStart` to `rowEnd - 1`) are worked out and
- * returned, `width` values each: a polar map needs only the rows near its pole.
+ * returned, `width` values each: a polar map needs only the rows near its pole. With `out` (at
+ * least that long), the values go into it and it is returned, so a redraw needs no new array.
  */
-export function shadeGlobal(sun: Vec3, width: number, height: number, rowStart = 0, rowEnd = height): Float32Array {
+export function shadeGlobal(sun: Vec3, width: number, height: number, rowStart = 0, rowEnd = height, out?: Float32Array): Float32Array {
   const n = Math.hypot(sun[0], sun[1], sun[2]) || 1;
   const [sx, sy, sz] = [sun[0] / n, sun[1] / n, sun[2] / n];
   const j0 = Math.max(0, rowStart), j1 = Math.min(height, rowEnd);
-  const out = new Float32Array(width * Math.max(0, j1 - j0));
+  const count = width * Math.max(0, j1 - j0);
+  if (!out || out.length < count) out = new Float32Array(count);
   // The longitude terms are the same on every row: work them out once.
   const cosLon = new Float64Array(width), sinLon = new Float64Array(width);
   for (let i = 0; i < width; i++) {

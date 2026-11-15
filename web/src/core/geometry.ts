@@ -40,6 +40,16 @@ export function sunAltAz(eph: Ephemeris, site: Site, _groundM: number, tMs: numb
   return toAltAz(eph.vectorsAt(tMs).sun, localAxes(site.lat, site.lon));
 }
 
+/**
+ * sunAltAz for one site at many times: the site's axes are worked out once, not at every call.
+ * The same numbers as sunAltAz, bit for bit. For scans over hundreds of thousands of hours
+ * (state.ts's "never lit" check, issue #32 row 1).
+ */
+export function sunAltAzAtSite(eph: Ephemeris, site: Site): (tMs: number) => AltAz {
+  const axes = localAxes(site.lat, site.lon);
+  return (tMs) => toAltAz(eph.vectorsAt(tMs).sun, axes);
+}
+
 /** Earth altitude and azimuth at a site, allowing for where the site stands on the Moon. */
 export function earthAltAz(eph: Ephemeris, site: Site, groundM: number, tMs: number): AltAz {
   const axes = localAxes(site.lat, site.lon);

@@ -9,6 +9,7 @@
   <body>
     <!-- The slots of docs/data-contract.md section 5.
          #nudge is not here: the scene makes it inside its map viewport (issue #58).
+         #mission is not here: it has its own page, mission.html, opened by "Open mission" in the Scenarios panel.
          Each slot is filled by its module's mount(el); web/src/ui/layout.css places them.
          #status is not a slot: main.ts writes the data-loading message there. -->
     <div id="app">
@@ -16,7 +17,12 @@
       <div id="status" role="status"></div>
       <section id="scene" aria-label="Map and 3D view"></section>
       <aside id="side">
-        <section id="scenarios" class="card" aria-label="Scenarios"></section>
+        <!-- #sidetabs switches this place between #scenarios and #playback (T40). -->
+        <div id="sidecard">
+          <div id="sidetabs"></div>
+          <section id="scenarios" class="card" aria-label="Scenarios"></section>
+          <section id="playback" class="card" aria-label="Timeline playback" hidden></section>
+        </div>
         <section id="readout" class="card" aria-label="Readout"></section>
         <section id="panel" class="card" aria-label="Solar panel"></section>
       </aside>
@@ -24,7 +30,6 @@
       <div id="bottom">
         <section id="timeline" class="card" aria-label="Timeline"></section>
         <section id="sky" class="card" aria-label="Sky panorama"></section>
-        <section id="mission" class="card" aria-label="Mission simulation"></section>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -2,7 +2,7 @@
 // Kept apart from the page so it can be tested. Every number comes from core/ through state.ts;
 // this file only compares and words them.
 
-import type { Flip } from '../../core/types';
+import type { Flip, TerrainGrid } from '../../core/types';
 
 const HOUR_MS = 3_600_000;
 /** Hours in the 30 days that summaryFor covers. */
@@ -16,7 +16,8 @@ export const WINDOW_H = 30 * 24;
 export const MEANINGFUL_H = 6;
 
 /** One step. Bearings are clockwise from north, as for destination(). */
-export type Nudge = { id: string; text: string; bearing?: number; days?: number };
+/** A step: a bearing (moved the slider's distance), a number of days, or straight to a latitude (a pole). */
+export type Nudge = { id: string; text: string; bearing?: number; days?: number; lat?: number };
 export const NUDGES: readonly Nudge[] = [
   { id: 'n', text: 'N', bearing: 0 },
   { id: 'w', text: 'W', bearing: 270 },
@@ -24,6 +25,12 @@ export const NUDGES: readonly Nudge[] = [
   { id: 'e', text: 'E', bearing: 90 },
   { id: 'minus-day', text: '−1 day', days: -1 },
   { id: 'plus-day', text: '+1 day', days: 1 },
+];
+
+/** Straight to a pole (issue #126), beside the N step: the live site's latitude becomes ±90. */
+export const POLES: readonly Nudge[] = [
+  { id: 'n-pole', text: 'N pole', lat: 90 },
+  { id: 's-pole', text: 'S pole', lat: -90 },
 ];
 
 /** The distance slider, km. */
@@ -46,7 +53,9 @@ export const stepText = (n: Nudge, km: number): string =>
 /** The same, spelled out for a screen reader. */
 const WORDS: Record<string, string> = { n: 'north', s: 'south', e: 'east', w: 'west' };
 export const stepLabel = (n: Nudge, km: number): string =>
-  n.bearing === undefined
+  n.lat !== undefined
+    ? `Move the live site to the ${n.lat > 0 ? 'north' : 'south'} pole`
+    : n.bearing === undefined
     ? `Move the live time ${n.text.replace('−', 'back ').replace('+', 'forward ')}`
     : `Move the live site ${kmText(km)} ${WORDS[n.id]}`;
 
@@ -56,8 +65,8 @@ export const CORNERS: readonly Corner[] = ['tl', 'tr', 'bl', 'br'];
 export const CORNER_NAMES: Record<Corner, string> = {
   tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right',
 };
-/** Where the panel starts. */
-export const START_CORNER: Corner = 'bl';
+/** Where the panel starts (issue #177): top left, clear of the layer icons in the top right. */
+export const START_CORNER: Corner = 'tl';
 /** Where to look next when a corner is taken: round the map clockwise from it. */
 const CLOCKWISE: readonly Corner[] = ['tl', 'tr', 'br', 'bl'];
 
@@ -72,6 +81,19 @@ export function freeCorner(wanted: Corner, taken: ReadonlySet<Corner>): Corner |
     if (!taken.has(c)) return c;
   }
   return null;
+}
+
+/** The one corner button's order (issue #126): top left, top right, bottom left, bottom right, round again. */
+export const CYCLE: readonly Corner[] = ['tl', 'tr', 'bl', 'br'];
+
+/** The corner after `at` in that order that the map's own controls leave free; `at` if none is. */
+export function nextCorner(at: Corner, taken: ReadonlySet<Corner>): Corner {
+  const i = CYCLE.indexOf(at);
+  for (let k = 1; k <= CYCLE.length; k++) {
+    const c = CYCLE[(i + k) % CYCLE.length];
+    if (!taken.has(c)) return c;
+  }
+  return at;
 }
 
 /** A corner name read back from the page (a data attribute), or null if it isn't one. */
@@ -89,7 +111,7 @@ export type Facts = {
   earthUp: boolean;
   sunFlip: Flip;       // flipFor: next rise or set within 60 days, or null
   earthFlip: Flip;
-  terrain: boolean;    // skylineFor(...).terrain
+  grid: TerrainGrid | null;    // T37: skylineFor(...).grid: 240 m, 3.8 km, or null for a smooth Moon
 };
 
 export type Tone = 'ok' | 'bad' | 'muted';
@@ -117,26 +139,26 @@ type Words = { set: [string, string]; rise: [string, string]; upNow: string; dow
 const SUN: Words = {
   set: ['sunset {t} later', 'sunset {t} earlier'],
   rise: ['sunrise {t} sooner', 'sunrise {t} later'],
-  upNow: 'Sun up there now (hidden here)',
-  downNow: 'Sun hidden there now (up here)',
-  noSet: 'no sunset there in the next 60 days',
-  noRise: 'no sunrise there in the next 60 days',
-  setSoon: 'sunset there within 60 days (none here)',
-  riseSoon: 'sunrise there within 60 days (none here)',
+  upNow: 'Sun up now (hidden before)',
+  downNow: 'Sun hidden now (up before)',
+  noSet: 'no sunset now in the next 60 days',
+  noRise: 'no sunrise now in the next 60 days',
+  setSoon: 'sunset now within 60 days (none before)',
+  riseSoon: 'sunrise now within 60 days (none before)',
 };
 const EARTH: Words = {
   set: ['keeps Earth {t} longer', 'loses Earth {t} earlier'],
   rise: ['sees Earth {t} sooner', 'sees Earth {t} later'],
-  upNow: 'Earth in view there now (hidden here)',
-  downNow: 'Earth hidden there now (in view here)',
+  upNow: 'Earth in view now (hidden before)',
+  downNow: 'Earth hidden now (in view before)',
   noSet: 'keeps Earth for the next 60 days',
-  noRise: 'no Earth there in the next 60 days',
-  setSoon: 'loses Earth there within 60 days (keeps it here)',
-  riseSoon: 'sees Earth there within 60 days (not here)',
+  noRise: 'no Earth now in the next 60 days',
+  setSoon: 'loses Earth now within 60 days (kept it before)',
+  riseSoon: 'sees Earth now within 60 days (not before)',
 };
 
 /**
- * The next rise or set at the ghost against the one here. The events are compared as moments in
+ * The next rise or set now against the one before the step (issue #126: the step is taken at once). The events are compared as moments in
  * time, so a ±1 day nudge, which sees the same sunset from a day nearer or further, reports no
  * change here; the countdown lines show the day.
  */
@@ -159,19 +181,21 @@ function flipLine(upL: boolean, upG: boolean, fL: Flip, fG: Flip, w: Words): Lin
   return { text: w.rise[dh < 0 ? 0 : 1].replace('{t}', amountText(dh)), tone: dh < 0 ? 'ok' : 'bad' };
 }
 
-/** Shown in place of the comparison when one point has terrain and the other doesn't. */
+/** Shown in place of the comparison when the two points' skylines come from different terrain models. */
 export const ACROSS_EDGE =
-  'This step crosses 85° S, where the terrain model stops: one point has real terrain, the other a '
-  + 'smooth Moon. The difference between them is the model changing, not the ground.';
+  'This step crosses 85° S, where the terrain model changes: one point uses the 240 m polar height '
+  + 'map, the other the 3.8 km whole-Moon map or a smooth Moon. The difference between them is the '
+  + 'model changing, not the ground.';
 
 /**
- * The difference in plain words, the most important first. heightMapLoaded is false while the
- * height map is missing, when every point is a smooth Moon whatever its latitude.
+ * The difference in plain words, the most important first. `note` names the terrain when it
+ * isn't the detailed polar map (T37, ui/terrain.ts terrainNote): coarse, or a smooth Moon and why.
  */
-export function compare(live: Facts, ghost: Facts, heightMapLoaded = true): Line[] {
-  // Across the edge of the terrain model the two skylines aren't the same kind of thing: a
-  // step of 1 km north from 85.01 S read as "+11.5 days of sunlight". No gain or loss is claimed.
-  if (live.terrain !== ghost.terrain) return [{ text: ACROSS_EDGE, tone: 'muted' }];
+export function compare(live: Facts, ghost: Facts, note = ''): Line[] {
+  // Across the edge of a terrain model the two skylines aren't the same kind of thing: a step
+  // of 1 km north from 85.01 S read as "+11.5 days of sunlight" when the far side was a smooth
+  // Moon, and a 240 m skyline against a 3.8 km one is no fairer. No gain or loss is claimed.
+  if (live.grid !== ghost.grid) return [{ text: ACROSS_EDGE, tone: 'muted' }];
   const lines: Line[] = [];
   const add = (l: Line | null): void => {
     if (l) lines.push(l);
@@ -183,13 +207,6 @@ export function compare(live: Facts, ghost: Facts, heightMapLoaded = true): Line
   if (lines.length === 0) {
     lines.push({ text: `No meaningful change (under ${MEANINGFUL_H} h)`, tone: 'muted' });
   }
-  if (!live.terrain) {
-    lines.push({
-      text: heightMapLoaded
-        ? 'Terrain isn\'t modelled north of 85° S, so the ground here is a smooth Moon.'
-        : 'The height map isn\'t loaded, so the ground here is a smooth Moon.',
-      tone: 'muted',
-    });
-  }
+  if (note) lines.push({ text: `${note}.`, tone: 'muted' });
   return lines;
 }

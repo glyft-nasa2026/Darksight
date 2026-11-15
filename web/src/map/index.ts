@@ -6,6 +6,8 @@
 // comes from core/ (projection.ts, shade.ts); this file only draws them and turns pointer
 // positions into calls to core/. The whole-Moon picture is coloured by height and its relief
 // lit from the whole-Moon height grid (globe.bin, issue #66): illustration, as on the 3D globe.
+// The scene (web/src/scene/) shows and hides the map, fading between it and the 3D view (T29);
+// viewOf tells it what the map shows, so the 3D camera can start from the same view.
 
 import type { Dem } from '../core/dem';
 import type { Ephemeris, Vec3 } from '../core/ephemeris';
@@ -16,16 +18,20 @@ import {
 import { shadeGlobal, shadePolar, subPoint, type PolarShade } from '../core/shade';
 import { MOON_RADIUS_KM, type Site } from '../core/types';
 import { sharedNorth } from '../scene/globe';
-import { globeSlopes, sharedGlobe, type GlobeHeights } from '../scene/globeHeights';
+import { GLOBE_RELIEF, globeSlopes, sharedGlobe, type GlobeHeights } from '../scene/globeHeights';
 import { getState, select, selected, setLiveSite, subscribe, type AppState } from '../state';
+import { drawLayers, onLayersChange } from '../ui/layers';
 import { themeColor } from '../ui/plotTheme';
 import './map.css';
 
 type Kind = Pole | 'global';
 type Rgb = [number, number, number];
 type Pin = { site: Site; color: string; scenarioId?: string; big: boolean };
+/** What the map shows: its projection, and how many km of ground from the top of the picture to the bottom. */
+export type MapLook = { kind: Kind; kmTall: number };
 
 const mounts = new WeakMap<HTMLElement, () => void>();
+const looks = new WeakMap<HTMLElement, () => MapLook | null>();
 const demIds = new WeakMap<Dem, number>();
 let nextDemId = 1;
 /** A number per height map object, so a new grid (even with the same metadata) rebuilds the layers. */
@@ -40,8 +46,50 @@ const GLOBAL_W = 1440, GLOBAL_H = 720;            // the whole-Moon layer withou
 const RELIEF_LIGHT = 1.2;
 /** Cosine of the Sun's zenith angle at which the whole-Moon map reaches full daylight (about 5 degrees up). */
 const DAWN = 0.08;
+/**
+ * Ground the Sun does not reach, on both maps (issue #154): lit by a soft light from the top left
+ * of the screen, as on a shaded relief map, so its shape shows without the Sun. Flat ground gets
+ * AMBIENT_FLAT; a slope gains AMBIENT_GAIN times how much it faces that light (the sideways part
+ * of its normal), between AMBIENT_LO and AMBIENT_HI. Sunlit ground keeps the full range from 0.3
+ * and is never drawn darker than this light. AMBIENT_HI stays under 0.58, the darkest fully lit
+ * ground on a polar map, so shadow still reads as shadow. (A flat 0.3 went nearly black; a flat
+ * 0.5 everywhere looked like fog and took a third of the contrast off lit relief.)
+ */
+const AMBIENT_FLAT = 0.4, AMBIENT_GAIN = 0.6, AMBIENT_LO = 0.28, AMBIENT_HI = 0.54;
+const ambientLight = (facing: number): number =>
+  Math.min(AMBIENT_HI, Math.max(AMBIENT_LO, AMBIENT_FLAT + AMBIENT_GAIN * facing));
+/** The whole-Moon map keeps each cell's ambient light as one of this many levels. */
+const AMBIENT_LEVELS = 32;
+const AMBIENT_OF_LEVEL = Float32Array.from({ length: AMBIENT_LEVELS },
+  (_, i) => AMBIENT_LO + ((AMBIENT_HI - AMBIENT_LO) * i) / (AMBIENT_LEVELS - 1));
+const ambientLevel = (facing: number): number =>
+  Math.round(((ambientLight(facing) - AMBIENT_LO) / (AMBIENT_HI - AMBIENT_LO)) * (AMBIENT_LEVELS - 1));
+const RAD = Math.PI / 180;
+
+/**
+ * Where the top left of the screen lies from a whole-Moon cell, as its north and east parts (a
+ * unit vector along the ground). On the whole-Moon map it is north-west. Around a polar cap,
+ * where the same cells are drawn in the polar view, it turns with longitude: from the south pole's
+ * view, north points away from the pole; from the north pole's, toward it.
+ */
+function towardTopLeft(frame: Kind, lon: number): [north: number, east: number] {
+  const s = Math.SQRT1_2, sl = Math.sin(lon * RAD), cl = Math.cos(lon * RAD);
+  if (frame === 'south') return [(cl - sl) * s, (-sl - cl) * s];
+  if (frame === 'north') return [(cl + sl) * s, (sl - cl) * s];
+  return [s, -s];
+}
 /** A press that moves less than this many CSS pixels is a click, not a drag (as in the 3D scene). */
 const CLICK_SLOP = 5;
+/** Time changes closer together than this are a drag: the light layers are drawn coarser until they stop. */
+const DRAG_GAP_MS = 250;
+/** Cells per side of the polar light layer while the time is dragged (about 1 km a cell at the south), and otherwise. */
+const DRAG_CELLS = 650, FULL_CELLS = 1300;
+/**
+ * The whole-Moon picture shows every `step`th cell of its grid each way: as coarse as the screen
+ * allows (one screen pixel already covering `step` cells or more), up to MAX_STEP, and at least
+ * DRAG_STEP while the time is dragged.
+ */
+const DRAG_STEP = 2, MAX_STEP = 4;
 const POLAR_STEPS = [5, 2, 1, 0.5, 0.25, 0.1];    // parallels, degrees apart
 const MERIDIAN_STEPS = [90, 45, 30, 15, 10, 5, 2, 1];
 const GLOBAL_STEPS = [30, 15, 10, 5, 2, 1, 0.5, 0.25, 0.1];
@@ -49,6 +97,15 @@ const GLOBAL_STEPS = [30, 15, 10, 5, 2, 1, 0.5, 0.25, 0.1];
 const POLAR_REACH = 20;
 /** Pixels per side of the fading ring's layer (about 2 km a pixel; the whole-Moon grid is 3.8 km a cell). */
 const RING_PX = 640;
+
+// The whole-Moon picture is written a pixel (four bytes, RGBA) at a time, as one 32-bit word: the
+// bytes' order inside the word is the machine's.
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+const [SHIFT_R, SHIFT_G, SHIFT_B, SHIFT_A] = LITTLE_ENDIAN ? [0, 8, 16, 24] : [24, 16, 8, 0];
+/** An opaque pixel as one word of a Uint32Array over ImageData's bytes; each channel 0..255, rounded. */
+function rgbaWord(r: number, g: number, b: number): number {
+  return ((r + 0.5) << SHIFT_R) | ((g + 0.5) << SHIFT_G) | ((b + 0.5) << SHIFT_B) | (255 << SHIFT_A);
+}
 
 /** A theme length in CSS pixels (theme.css may write it in rem). */
 function themeLength(host: HTMLElement, name: string): number {
@@ -82,6 +139,9 @@ function tabled(eph: Ephemeris | null, tMs: number): eph is Ephemeris {
 
 export function unmount(el: HTMLElement): void { mounts.get(el)?.(); }
 
+/** What the map mounted on `el` shows (T29: where the 3D camera starts a fade). Null before it has a size. */
+export function viewOf(el: HTMLElement): MapLook | null { return looks.get(el)?.() ?? null; }
+
 export function mount(el: HTMLElement): void {
   unmount(el);
   el.classList.add('map');
@@ -109,10 +169,24 @@ export function mount(el: HTMLElement): void {
   let ring: HTMLCanvasElement | null = null, ringKey = '';
   let ringCells: { key: string; cell: Int32Array; alpha: Uint8Array } | null = null;
   let shade: PolarShade | null = null, shadeKey = '';
+  // A timeline drag: the time it last changed, whether changes are coming fast, and the full redraw after.
+  let lastT = NaN, lastTimeChange = -Infinity, dragging = false, settle = 0;
   let sunPoint: LatLon | null = null, earthPoint: LatLon | null = null;
   // The whole-Moon heights, once fetched; the map is plain grey outside the polar grid until then.
   let globe: GlobeHeights | null = null, slopes: Int8Array | null = null;
   let tones: Uint8Array | null = null, tonesKey = '';
+  // Which rows of `slopes` and `tones` are worked out: only the rows a picture needs, when it
+  // first needs them (issue #118). A polar view needs about a tenth of the grid.
+  let slopeRows: Uint8Array | null = null, toneRows: Uint8Array | null = null;
+  // Each whole-Moon cell's ambient light level, for the light from the top left of the view that
+  // `ambientFrame` says (the whole-Moon map, or the ring around a polar cap), and its rows done.
+  let ambient: Uint8Array | null = null, ambientRows: Uint8Array | null = null, ambientFrame: Kind = 'global';
+  // A polar cap's ambient light, per cell of its light layer: by cap, layer size and pole.
+  const capAmbient = new Map<string, Float32Array>();
+  // The whole-Moon picture's pixels and Sun table, kept between redraws: 16 MB each at full size,
+  // too much to allocate again for every step of a timeline drag.
+  let pixels: ImageData | null = null, dayBuf: Float32Array | undefined;
+  let baseStep = 0;
   let theme = { key: '', lo: [0, 0, 0] as Rgb, hi: [0, 0, 0] as Rgb, pinPx: 0, fontPx: 0, font: '' }; // set by readTheme()
 
   function readTheme(): void {
@@ -136,11 +210,43 @@ export function mount(el: HTMLElement): void {
     data[i + 3] = 255;
   }
   /**
-   * Brightness from core's light layer. Shadow keeps a little, so the ground's shape still shows
-   * through the height colours. Flat ground under a low Sun reads as lit, slopes facing it brighter.
+   * Brightness from core's light layer, over the ambient light `amb`. Flat ground under a low Sun
+   * reads as lit, slopes facing it brighter; ground in shadow keeps the ambient light.
    */
-  const brightness = (frac: number, cosI: number): number =>
-    0.3 + 0.7 * frac * Math.min(1, Math.max(0, 0.4 + 2 * cosI));
+  const brightness = (frac: number, cosI: number, amb: number): number =>
+    Math.max(amb, 0.3 + 0.7 * frac * Math.min(1, Math.max(0, 0.4 + 2 * cosI)));
+
+  /**
+   * A polar cap's ambient light per cell of its light layer, from the layer's heights: how much
+   * each cell faces the top left of the screen. The north cap is drawn upside down (see draw), so
+   * its light comes from what is the layer's bottom left.
+   */
+  function polarAmbient(grid: Dem, sh: PolarShade): Float32Array {
+    const key = `${demId(grid)}|${sh.size}|${kind}`;
+    const known = capAmbient.get(key);
+    if (known) return known;
+    const { size, height } = sh;
+    const cell = grid.meta.pixel_m * sh.stride;
+    const up = kind === 'north' ? -1 : 1;   // the screen's top, along the layer's rows
+    const out = new Float32Array(size * size);
+    // Half the height step across a cell; one-sided at the edge of the data.
+    const step = (a: number, b: number, mid: number): number =>
+      Number.isNaN(a) ? (Number.isNaN(b) ? 0 : mid - b) : Number.isNaN(b) ? a - mid : (a - b) / 2;
+    for (let r = 0; r < size; r++) {
+      for (let c = 0, i = r * size; c < size; c++, i++) {
+        const h = height[i];
+        if (Number.isNaN(h)) continue;
+        const dzdx = step(c + 1 < size ? height[i + 1] : NaN, c > 0 ? height[i - 1] : NaN, h) / cell;
+        // Rows run down the layer; y runs up it.
+        const dzdy = step(r > 0 ? height[i - size] : NaN, r + 1 < size ? height[i + size] : NaN, h) / cell;
+        // The normal's sideways part along (-1, up) / sqrt 2: toward the top left.
+        out[i] = ambientLight((dzdx - up * dzdy) * Math.SQRT1_2 / Math.hypot(dzdx, dzdy, 1));
+      }
+    }
+    if (capAmbient.size >= 4) capAmbient.clear();
+    capAmbient.set(key, out);
+    return out;
+  }
 
   function buildPolarBase(s: AppState, lit: boolean): void {
     const sc = selected();
@@ -148,14 +254,16 @@ export function mount(el: HTMLElement): void {
     const sun: Vec3 | null = vectors ? vectors.sun : null;
     const grid = cap()!;
     buildRing(vectors);
-    const key = `polar|${theme.key}|${demId(grid)}|${demId(dem)}|${sun ? sun.join(',') : 'unlit'}`;
+    // While the time is dragged, a coarser layer keeps up with the pointer (issue #112 follow-up).
+    const cells = dragging ? DRAG_CELLS : FULL_CELLS;
+    const key = `polar|${theme.key}|${demId(grid)}|${demId(dem)}|${cells}|${sun ? sun.join(',') : 'unlit'}`;
     if (base && baseKey === key && shade) return;
-    const sunKey = `${demId(grid)}|${sun ? sun.join(',') : 'unlit'}`;
+    const sunKey = `${demId(grid)}|${cells}|${sun ? sun.join(',') : 'unlit'}`;
     if (!shade || shadeKey !== sunKey) {
       // With no Sun, any direction gives the heights; the light is then left out below. The north
       // cap is stored mirrored about the equator, so the Sun is mirrored too: the shadows match.
       const toSun: Vec3 = sun ? (kind === 'north' ? [sun[0], sun[1], -sun[2]] : sun) : [0, 0, -1];
-      shade = shadePolar(grid, toSun);
+      shade = shadePolar(grid, toSun, cells);
       shadeKey = sunKey;
     }
     // The south cap uses its own colour ramp; the north cap the whole-Moon map's, so its colours
@@ -164,9 +272,10 @@ export function mount(el: HTMLElement): void {
     const [lo, hi] = kind === 'north' ? rampRange() : shade.heightRange;
     const image = new ImageData(size, size);
     const span = Math.max(1, hi - lo);
+    const amb = sun ? polarAmbient(grid, shade) : null;
     for (let i = 0; i < size * size; i++) {
       if (Number.isNaN(height[i])) continue;   // outside coverage: transparent
-      paint(image.data, i * 4, (height[i] - lo) / span, sun ? brightness(frac[i], cosI[i]) : 0.6);
+      paint(image.data, i * 4, (height[i] - lo) / span, amb ? brightness(frac[i], cosI[i], amb[i]) : 0.6);
     }
     base = base && base.width === size ? base : document.createElement('canvas');
     base.width = base.height = size;
@@ -177,16 +286,29 @@ export function mount(el: HTMLElement): void {
   function buildGlobalBase(s: AppState, lit: boolean): void {
     const sc = selected();
     const vectors = lit ? s.eph!.vectorsAt(sc.tMs) : null;
-    const key = `global|${theme.key}|${demId(dem)}|${globe ? 'heights' : 'plain'}|${vectors ? vectors.sun.join(',') : 'unlit'}`;
+    const step = globalStep();
+    const key = `global|${theme.key}|${demId(dem)}|${globe ? 'heights' : 'plain'}|${step}|${vectors ? vectors.sun.join(',') : 'unlit'}`;
     sunPoint = vectors ? subPoint(vectors.sun) : null;
     earthPoint = vectors ? subPoint(vectors.earthKm) : null;
     if (base && baseKey === key) return;
-    const image = globalPixels(vectors ? vectors.sun : null, 0, Infinity);
+    const image = globalPixels(vectors ? vectors.sun : null, 0, Infinity, step, 'global');
     const W = image.width, H = image.height;
-    base = base && base.width === W ? base : document.createElement('canvas');
-    base.width = W; base.height = H;
+    base ??= document.createElement('canvas');
+    if (base.width !== W || base.height !== H) { base.width = W; base.height = H; }
     base.getContext('2d')!.putImageData(image, 0, 0);
-    baseKey = key;
+    baseKey = key; baseStep = step;
+  }
+  /**
+   * How many cells of the whole-Moon grid the picture steps over: the most (up to MAX_STEP) that
+   * still leaves a picture pixel for each screen pixel, and at least DRAG_STEP while the time is
+   * dragged. The whole Moon in a few hundred pixels needs a quarter of the grid each way.
+   */
+  function globalStep(): number {
+    const cells = globe ? globe.meta.width : GLOBAL_W;
+    const screenPx = 2 * HALF_WORLD_KM * view.scale * (canvas.width / Math.max(1, view.width));
+    let step = 1;
+    while (step < MAX_STEP && screenPx * step * 2 <= cells) step *= 2;
+    return dragging ? Math.max(step, DRAG_STEP) : step;
   }
   /** The ramp's range: the same as the south polar map's, so a site keeps its colour when the map changes. */
   function rampRange(): [number, number] {
@@ -194,16 +316,21 @@ export function mount(el: HTMLElement): void {
   }
   /**
    * The whole-Moon picture, one pixel a cell of the whole-Moon grid (or of a plain grid until it
-   * arrives): rows `j0` to `j1 - 1` of it, so the image's row 0 is grid row `j0`.
+   * arrives), or with a `step` above 1 a pixel every `step`th cell each way: rows `j0` to `j1 - 1`
+   * of that picture, so the image's row 0 is its row `j0`. The image is reused by the next call.
+   * `frame` is the view it is drawn in (the whole-Moon map, or the ring around a polar cap), which
+   * sets where the ambient light comes from.
    */
-  function globalPixels(sun: Vec3 | null, j0: number, j1: number): ImageData {
-    const W = globe ? globe.meta.width : GLOBAL_W, H = globe ? globe.meta.height : GLOBAL_H;
+  function globalPixels(sun: Vec3 | null, j0: number, j1: number, step: number, frame: Kind): ImageData {
+    const W = Math.floor((globe ? globe.meta.width : GLOBAL_W) / step);
+    const H = Math.floor((globe ? globe.meta.height : GLOBAL_H) / step);
     const rows: [number, number] = [Math.max(0, j0), Math.min(H, j1)];
-    const day = sun ? shadeGlobal(sun, W, H, rows[0], rows[1]) : null;
-    const image = new ImageData(W, rows[1] - rows[0]);
+    const day = sun ? (dayBuf = shadeGlobal(sun, W, H, rows[0], rows[1], dayBuf)) : null;
+    if (!pixels || pixels.width !== W || pixels.height !== rows[1] - rows[0]) pixels = new ImageData(W, rows[1] - rows[0]);
+    const image = pixels;
     const range = rampRange();
     const span = Math.max(1, range[1] - range[0]);
-    if (globe) paintHeights(image.data, globe, range, span, sun, day, rows);
+    if (globe) paintHeights(new Uint32Array(image.data.buffer), globe, range, span, sun, day, rows, step, frame);
     else {
       // No whole-Moon heights: the polar cap's own, where the height map covers it; grey elsewhere.
       for (let j = rows[0]; j < rows[1]; j++) {
@@ -215,7 +342,7 @@ export function mount(el: HTMLElement): void {
             t = Math.min(1, Math.max(0, (dem.heightAt(lat, lon) - range[0]) / span));
           }
           const k = (j - rows[0]) * W + i;
-          paint(image.data, k * 4, t, day ? (day[k] > 0 ? 0.6 + 0.4 * day[k] : 0.3) : 0.6);
+          paint(image.data, k * 4, t, day ? (day[k] > 0 ? 0.6 + 0.4 * day[k] : AMBIENT_FLAT) : 0.6);
         }
       }
     }
@@ -257,7 +384,7 @@ export function mount(el: HTMLElement): void {
     // Only the rows near the pole are painted.
     const rows = Math.ceil((POLAR_REACH * H) / 180) + 1;
     const j0 = p === 'north' ? 0 : H - rows;
-    const image = globalPixels(vectors ? vectors.sun : null, j0, p === 'north' ? rows : H);
+    const image = globalPixels(vectors ? vectors.sun : null, j0, p === 'north' ? rows : H, 1, p);
     const out = new ImageData(RING_PX, RING_PX);
     const { cell, alpha } = ringCells;
     for (let k = 0; k < cell.length; k++) {
@@ -275,42 +402,90 @@ export function mount(el: HTMLElement): void {
   function ringHalf(): number {
     return polarForward(-90 + POLAR_REACH, 0).y;
   }
+  let colsCache: { key: string; cos: Float32Array; sin: Float32Array; north: Float32Array; east: Float32Array } | null = null;
+  /** Per column of the whole-Moon grid: its longitude's cosine and sine, and towardTopLeft. */
+  function ambientColumns(width: number, frame: Kind): NonNullable<typeof colsCache> {
+    const key = `${width}|${frame}`;
+    if (colsCache?.key === key) return colsCache;
+    const cos = new Float32Array(width), sin = new Float32Array(width);
+    const north = new Float32Array(width), east = new Float32Array(width);
+    for (let col = 0; col < width; col++) {
+      const lon = -180 + ((col + 0.5) * 360) / width;
+      cos[col] = Math.cos(lon * RAD); sin[col] = Math.sin(lon * RAD);
+      [north[col], east[col]] = towardTopLeft(frame, lon);
+    }
+    colsCache = { key, cos, sin, north, east };
+    return colsCache;
+  }
+  /**
+   * Ambient light levels of whole-Moon row `row`, from its slopes (the Moon's frame: +X toward
+   * longitude 0, +Y toward 90 E, +Z north): how much each cell faces the view's top left.
+   */
+  function ambientRow(width: number, height: number, row: number, cols: NonNullable<typeof colsCache>, sl: Int8Array, out: Uint8Array): void {
+    const lat = (90 - ((row + 0.5) * 180) / height) * RAD;
+    const sp = Math.sin(lat), cp = Math.cos(lat);
+    for (let col = 0, k = row * width; col < width; col++, k++) {
+      const nx = sl[k * 3] / 127, ny = sl[k * 3 + 1] / 127, nz = sl[k * 3 + 2] / 127;
+      const nNorth = -sp * (nx * cols.cos[col] + ny * cols.sin[col]) + nz * cp;
+      const nEast = -nx * cols.sin[col] + ny * cols.cos[col];
+      out[k] = ambientLevel(cols.north[col] * nNorth + cols.east[col] * nEast);
+    }
+  }
   /**
    * The whole Moon from its height grid: height colour, times core's day and night, with slopes
-   * facing the Sun brighter and slopes facing away darker so craters and mountains show.
+   * facing the Sun brighter and slopes facing away darker so craters and mountains show. Where
+   * the Sun is down, the ambient light (AMBIENT_*) from the top left of the view `frame`.
    */
-  function paintHeights(data: Uint8ClampedArray, g: GlobeHeights, range: number[], span: number, sun: Vec3 | null, day: Float32Array | null, rows: [number, number]): void {
+  function paintHeights(out: Uint32Array, g: GlobeHeights, range: number[], span: number, sun: Vec3 | null, day: Float32Array | null, rows: [number, number], step: number, frame: Kind): void {
     const { width, height } = g.meta, count = width * height;
-    slopes ??= globeSlopes(g);
+    const w = Math.floor(width / step);
+    if (!slopes || !slopeRows) { slopes = new Int8Array(count * 3); slopeRows = new Uint8Array(height); }
+    if (!ambient || !ambientRows) { ambient = new Uint8Array(count); ambientRows = new Uint8Array(height); }
+    if (ambientFrame !== frame) { ambientRows.fill(0); ambientFrame = frame; }
+    const cols = ambientColumns(width, frame);
     const key = `${range[0]},${range[1]}`;
-    if (!tones || tonesKey !== key) {
-      // Each cell's place on the colour ramp, 0..255: it changes only with the ramp's range.
-      tones = new Uint8Array(count);
-      for (let row = 0, k = 0; row < height; row++) {
-        for (let col = 0; col < width; col++, k++) {
-          tones[k] = Math.round(255 * Math.min(1, Math.max(0, (g.cell(row, col) - range[0]) / span)));
-        }
-      }
+    if (!tones || !toneRows || tonesKey !== key) {
+      tones = new Uint8Array(count); toneRows = new Uint8Array(height);
       tonesKey = key;
+    }
+    for (let j = rows[0]; j < rows[1]; j++) {
+      const row = j * step;
+      if (!slopeRows[row]) { globeSlopes(g, GLOBE_RELIEF, row, row + 1, slopes); slopeRows[row] = 1; }
+      if (!ambientRows[row]) { ambientRow(width, height, row, cols, slopes, ambient); ambientRows[row] = 1; }
+      if (toneRows[row]) continue;
+      // Each cell's place on the colour ramp, 0..255: it changes only with the ramp's range.
+      for (let col = 0, k = row * width; col < width; col++, k++) {
+        tones[k] = Math.round(255 * Math.min(1, Math.max(0, (g.cell(row, col) - range[0]) / span)));
+      }
+      toneRows[row] = 1;
     }
     const { lo, hi } = theme;
     const ramp = new Float32Array(256 * 3);
     for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) ramp[i * 3 + c] = lo[c] + ((hi[c] - lo[c]) * i) / 255;
+    // Ground the Sun doesn't reach (and every cell, with no Sun table) needs only its tone and its
+    // ambient level, so its pixels come from a table.
+    const still = new Uint32Array(256 * AMBIENT_LEVELS);
+    for (let i = 0; i < 256; i++) {
+      for (let a = 0; a < AMBIENT_LEVELS; a++) {
+        const light = day ? AMBIENT_OF_LEVEL[a] : 0.6;
+        still[i * AMBIENT_LEVELS + a] = rgbaWord(ramp[i * 3] * light, ramp[i * 3 + 1] * light, ramp[i * 3 + 2] * light);
+      }
+    }
     const n = sun ? Math.hypot(sun[0], sun[1], sun[2]) || 1 : 1;
     // Slopes are stored as n * 127: fold that into the Sun's direction.
     const sx = sun ? sun[0] / n / 127 : 0, sy = sun ? sun[1] / n / 127 : 0, sz = sun ? sun[2] / n / 127 : 0;
-    for (let k = rows[0] * width, d = 0; k < rows[1] * width; k++, d++) {
-      let light = 0.6;
-      if (day) {
-        const up = day[d];
-        if (up > 0) {
-          const facing = slopes[k * 3] * sx + slopes[k * 3 + 1] * sy + slopes[k * 3 + 2] * sz;
-          // Daylight comes in over the first few degrees of Sun, so the day's edge is not a hard step.
-          light = Math.min(1, Math.max(0.3, 0.3 + Math.min(1, up / DAWN) * (0.3 + 0.4 * up + RELIEF_LIGHT * (facing - up))));
-        } else light = 0.3;
+    for (let j = rows[0], d = 0; j < rows[1]; j++) {
+      for (let c = 0, k = j * step * width; c < w; c++, d++, k += step) {
+        const up = day ? day[d] : 0;
+        const a = ambient[k];
+        if (!(up > 0)) { out[d] = still[tones[k] * AMBIENT_LEVELS + a]; continue; }
+        const facing = slopes[k * 3] * sx + slopes[k * 3 + 1] * sy + slopes[k * 3 + 2] * sz;
+        // Daylight comes in over the first few degrees of Sun, so the day's edge is not a hard step;
+        // a slope turned away from the Sun keeps the ambient light.
+        const light = Math.min(1, Math.max(AMBIENT_OF_LEVEL[a], 0.3 + Math.min(1, up / DAWN) * (0.3 + 0.4 * up + RELIEF_LIGHT * (facing - up))));
+        const r = tones[k] * 3;
+        out[d] = rgbaWord(ramp[r] * light, ramp[r + 1] * light, ramp[r + 2] * light);
       }
-      const r = tones[k] * 3, o = d * 4;
-      data[o] = ramp[r] * light; data[o + 1] = ramp[r + 1] * light; data[o + 2] = ramp[r + 2] * light; data[o + 3] = 255;
     }
   }
   const capRanges = new WeakMap<Dem, [number, number]>();
@@ -541,6 +716,8 @@ export function mount(el: HTMLElement): void {
   function draw(): void {
     const { width, height } = view;
     if (width <= 1 || el.hidden) return;
+    // Zoomed in or out far enough, the whole-Moon picture needs a finer or coarser grid.
+    if (kind === 'global' && base && baseStep !== globalStep()) baseDirty = true;
     if (baseDirty) {
       baseDirty = false;
       const s = getState(), lit = tabled(s.eph, selected().tMs);
@@ -579,6 +756,8 @@ export function mount(el: HTMLElement): void {
       }
       ctx.restore();
     }
+    // T14 map layers, over the terrain and under the grid and pins: on all three views (T43).
+    drawLayers(ctx, { kind, view, reachDeg: POLAR_REACH, unitPx: theme.pinPx });
     gridLabels = [];
     if (kind !== 'global') drawPolarGrid(); else drawGlobalGrid();
     if (kind === 'global') {
@@ -606,7 +785,14 @@ export function mount(el: HTMLElement): void {
     const changedSite = siteKey !== key;
     if (kind !== nextKind) baseKey = '';
     dem = s.dem; kind = nextKind; siteKey = key;
-    el.hidden = s.mode !== '2d';
+    if (sc.tMs !== lastT) {
+      // A change soon after the last one is part of a drag; the full layer follows once it stops.
+      const now = performance.now();
+      dragging = now - lastTimeChange < DRAG_GAP_MS;
+      lastTimeChange = now; lastT = sc.tMs;
+      clearTimeout(settle);
+      if (dragging) settle = window.setTimeout(() => { dragging = false; baseDirty = true; invalidate(); }, DRAG_GAP_MS);
+    }
     readTheme();
     // The light layer is rebuilt in the next frame, not here: a timeline drag sends many changes
     // between two frames, and only the last needs drawing.
@@ -704,6 +890,8 @@ export function mount(el: HTMLElement): void {
   const themeObserver = new MutationObserver(() => { readTheme(); update(getState()); });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
   const unsubscribe = subscribe(update);
+  // T14: redraw for layer data, opacity and every frame of a fade. Removes itself once disposed.
+  const offLayers = onLayersChange(() => { if (disposed) offLayers(); else invalidate(); });
   update(getState()); resize();
   // The whole-Moon heights arrive after the first frame (the 3D globe shares the same download).
   // Without the files the map stays as it was: plain outside the polar grid.
@@ -720,13 +908,15 @@ export function mount(el: HTMLElement): void {
 
   function dispose(): void {
     if (disposed) return;
-    disposed = true; cancelAnimationFrame(frame); unsubscribe(); observer.disconnect(); themeObserver.disconnect();
+    disposed = true; cancelAnimationFrame(frame); clearTimeout(settle); unsubscribe(); observer.disconnect(); themeObserver.disconnect();
     canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move);
     canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', cancel);
     canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', key);
     el.removeEventListener('map:centre', onCentre);
     canvas.remove(); base = null; ring = null; ringCells = null; shade = null; globe = null; north = null;
-    slopes = null; tones = null; mounts.delete(el);
+    slopes = null; tones = null; slopeRows = null; toneRows = null; ambient = null; ambientRows = null; capAmbient.clear(); pixels = null; dayBuf = undefined; mounts.delete(el); looks.delete(el);
   }
   mounts.set(el, dispose);
+  // The polar views count metres, the whole-Moon view km (core/projection.ts).
+  looks.set(el, () => view.width > 1 ? { kind, kmTall: view.height / view.scale / (kind === 'global' ? 1 : 1000) } : null);
 }

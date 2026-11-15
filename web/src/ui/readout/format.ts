@@ -1,5 +1,6 @@
 // How the readout writes the numbers core/ gives it (F3). Pure functions, tested in node.
 // Nothing here computes an angle: it only rounds and labels.
+import { distanceText } from '../distance';
 
 /** Degrees to two decimals, with a true minus sign: "-1.25°". */
 export function degText(v: number): string {
@@ -22,4 +23,24 @@ export function pctText(frac: number): string {
   if (p === 0 && f > 0) p = 1;
   if (p === 100 && f < 1) p = 99;
   return `${p} %`;
+}
+
+/** T41, T43: what the readout knows about the ground slope at the selected site. */
+export type SlopeInfo =
+  | { kind: 'loading' }                               // a height map it needs has not arrived
+  | { kind: 'missing'; files: string[] }              // the height maps that reach here did not load
+  | { kind: 'nodata' }                                // a hole in the height map
+  | { kind: 'ok'; deg: number; baselineM: number };   // from core/layers.ts (layerAt 'slope')
+
+/** The readout's slope line: "Ground slope 7° (over 480 m)", "Ground slope 2° (over 7.6 km)", or why there is none. */
+export function slopeText(info: SlopeInfo): string {
+  switch (info.kind) {
+    case 'loading': return 'Ground slope: waiting for the height map';
+    case 'missing': return `Ground slope: no height map here (${info.files.join(', ')} did not load)`;
+    case 'nodata': return 'Ground slope: the height map has no data around this point';
+    case 'ok': {
+      const d = info.deg < 0.5 ? 'under 1' : String(Math.round(info.deg));
+      return `Ground slope ${d}° (over ${distanceText(info.baselineM)})`;
+    }
+  }
 }

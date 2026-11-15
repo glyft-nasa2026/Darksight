@@ -1,11 +1,20 @@
 // Readout (T08): F3 Sun and Earth for the selected scenario, F4 the two countdowns.
 // Every number comes from state.ts accessors, which call core/; this file only formats them.
+// T41 adds the ground slope at the site; T43 takes it over the whole Moon, from core/layers.ts
+// (dem.bin near the south pole, north.bin near the north pole, globe.bin elsewhere).
 import './readout.css';
+import type { Dem } from '../../core/dem';
+import type { GlobeHeights } from '../../core/globe';
+import { layerAt } from '../../core/layers';
+import { sharedGlobe, sharedNorth } from '../../scene/globeHeights';
 import { countdownText } from '../../core/windows';
 import {
-  flipFor, getState, LIVE_ID, neverLitFor, samplesFor, selected, skylineFor, subscribe,
+  flipFor, getState, LIVE_ID, neverLitFor, neverLitPendingFor, samplesFor, selected, skylineFor,
+  subscribe, tableGap, type AppState,
 } from '../../state';
-import { azText, degText, pctText } from './format';
+import { noRowText } from '../tableGap';
+import { terrainNote } from '../terrain';
+import { azText, degText, pctText, slopeText, type SlopeInfo } from './format';
 
 function make<K extends keyof HTMLElementTagNameMap>(
   tag: K, className = '', text = '',
@@ -37,14 +46,30 @@ function bodyBlock(name: string, rows: [string, string][], countdown: string, ki
   return block;
 }
 
+/** The whole-Moon height maps: undefined while downloading, null when they did not load. */
+type Heights = { north: Dem | null | undefined; globe: GlobeHeights | null | undefined };
+
+/** The slope at a site from core/layers.ts, or the reason there is none. */
+function slopeInfo(dem: AppState['dem'], h: Heights, lat: number, lon: number): SlopeInfo {
+  // Every height map that could reach the site settles first, so the line never shows a coarser
+  // source for a moment and then changes (globe.bin and north.bin download after dem.bin).
+  if (!dem || h.north === undefined || h.globe === undefined) return { kind: 'loading' };
+  const p = layerAt('slope', lat, lon, { dem, north: h.north, globe: h.globe });
+  if (p) return { kind: 'ok', deg: p.value, baselineM: p.source.cellM ?? 0 };
+  const files = [h.globe ? '' : 'globe.bin', h.north || lat < 0 ? '' : 'north.bin'].filter(Boolean);
+  return files.length ? { kind: 'missing', files } : { kind: 'nodata' };
+}
+
 export function mount(el: HTMLElement): void {
   const title = make('h2', '', 'Readout');
   const whose = make('p', 'ro-whose');
   const where = make('p', 'ro-where muted');
+  const slope = make('p', 'ro-slope');
   const note = make('p', 'ro-note badge');
   const content = make('div', 'ro-content');
   content.setAttribute('aria-live', 'polite');
-  el.replaceChildren(title, whose, where, note, content);
+  el.replaceChildren(title, whose, where, slope, note, content);
+  const heights: Heights = { north: undefined, globe: undefined };
 
   const render = (): void => {
     const s = getState();
@@ -60,7 +85,10 @@ export function mount(el: HTMLElement): void {
     const coords = `${sc.site.lat.toFixed(4)}°, ${sc.site.lon.toFixed(4)}°`;
     where.textContent = `${site ? `${site.name} · ` : ''}${coords} · ${utcText(sc.tMs)} UTC`;
 
-    note.textContent = skylineFor(sc).terrain ? '' : 'Smooth Moon, no terrain';
+    slope.textContent = slopeText(slopeInfo(s.dem, heights, sc.site.lat, sc.site.lon));
+
+    // T37: coarse terrain north of 85 S says so; a smooth Moon says why (ui/terrain.ts).
+    note.textContent = terrainNote(skylineFor(sc), sc.site, s.globeStatus);
 
     if (!s.eph) {
       content.replaceChildren(make('p', 'muted', 'Loading'));
@@ -68,7 +96,7 @@ export function mount(el: HTMLElement): void {
     }
     const now = samplesFor(sc, '30d')[0];
     if (!now || now.tMs !== sc.tMs) {
-      content.replaceChildren(make('p', 'ro-error', 'This time is outside the Sun and Earth table'));
+      content.replaceChildren(make('p', 'ro-error', noRowText(tableGap(sc.tMs), sc.tMs)));
       return;
     }
 
@@ -78,7 +106,7 @@ export function mount(el: HTMLElement): void {
       ['Azimuth', azText(now.sun.az)],
       ['Above skyline', degText(now.sunAbove)],
       ['Disc visible', pctText(now.sunFrac)],
-    ], countdownText('sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc)), 'sun');
+    ], countdownText('sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc), neverLitPendingFor(sc)), 'sun');
 
     const earth = bodyBlock('Earth', [
       ['Altitude', degText(now.earth.alt)],
@@ -92,4 +120,6 @@ export function mount(el: HTMLElement): void {
 
   subscribe(render);
   render();
+  sharedNorth().then((n) => { heights.north = n; }, () => { heights.north = null; }).finally(render);
+  sharedGlobe().then((g) => { heights.globe = g; }, () => { heights.globe = null; }).finally(render);
 }

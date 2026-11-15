@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { loadFraction, readyToOpen, type LoadProgress } from './model';
+import {
+  loadFraction, mayReload, parseReloadMark, readyToOpen, RELOAD_WINDOW_MS, resumeAfterReload, type LoadProgress,
+} from './model';
 
 const start: LoadProgress = { eph: 'loading', sites: 'loading', dem: 'loading', demFraction: 0 };
 
@@ -39,5 +41,36 @@ describe('readyToOpen', () => {
   it('opens when a file failed, since the status line says which', () => {
     expect(readyToOpen({ ...start, eph: 'missing', sites: 'ok' })).toBe(true);
     expect(readyToOpen({ ...start, eph: 'ok', sites: 'missing' })).toBe(true);
+  });
+});
+
+describe('reload after the site did not load', () => {
+  const now = 1_800_000_000_000;
+
+  it('reads a stored mark, and nothing else', () => {
+    expect(parseReloadMark(JSON.stringify({ at: now, resumed: false }))).toEqual({ at: now, resumed: false });
+    expect(parseReloadMark(null)).toBeNull();
+    expect(parseReloadMark('')).toBeNull();
+    expect(parseReloadMark('not json')).toBeNull();
+    expect(parseReloadMark(JSON.stringify({ at: 'soon', resumed: false }))).toBeNull();
+    expect(parseReloadMark(JSON.stringify({ at: now }))).toBeNull();
+  });
+
+  it('reloads once, then asks the visitor if it fails again within the window', () => {
+    expect(mayReload(null, now)).toBe(true);
+    expect(mayReload({ at: now - 5_000, resumed: true }, now)).toBe(false);
+    expect(mayReload({ at: now - RELOAD_WINDOW_MS + 1, resumed: true }, now)).toBe(false);
+    expect(mayReload({ at: now - RELOAD_WINDOW_MS, resumed: true }, now)).toBe(true);
+  });
+
+  it('reloads again for a mark from the future (a clock that was set back)', () => {
+    expect(mayReload({ at: now + 10_000, resumed: true }, now)).toBe(true);
+  });
+
+  it('opens the reloaded page on the loading screen once', () => {
+    expect(resumeAfterReload({ at: now - 2_000, resumed: false }, now)).toBe(true);
+    expect(resumeAfterReload({ at: now - 2_000, resumed: true }, now)).toBe(false);
+    expect(resumeAfterReload({ at: now - RELOAD_WINDOW_MS, resumed: false }, now)).toBe(false);
+    expect(resumeAfterReload(null, now)).toBe(false);
   });
 });

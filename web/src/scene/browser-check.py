@@ -85,6 +85,31 @@ def enter(page):
     }""", timeout=120000)
 
 
+# A floor the readout calls hidden must look dark: under this share of the same ground's brightness
+# with no Sun at all (a time outside the table, which the map draws without light or shadow).
+# The same ground cancels its height colour, so only the light is compared. Relative, not a fixed
+# brightness: the ambient light in shadow (AMBIENT_*, issue #154) and the theme's colours change.
+DARK_SHARE = 0.9
+
+
+def floor_luma(image):
+    """Mean brightness of a small ring around the canvas centre: the selected site's ground, without
+    its pin. The pin and its outline in the page colour reach about 9 px from the centre."""
+    w, h = image.size
+    ring = [image.getpixel((w//2+x, h//2+y)) for x in range(-14, 15) for y in range(-14, 15) if 10**2 <= x*x+y*y <= 14**2]
+    return sum(sum(v)/3 for v in ring) / len(ring)
+
+
+def sunless_floor_luma(page, canvas, t_ms, path):
+    """floor_luma with the live time at `t_ms`, a time outside the Sun and Earth table."""
+    from PIL import Image
+    page.evaluate("async t => (await import('/src/state.ts')).setLiveTime(t)", t_ms)
+    page.wait_for_timeout(300)
+    assert 'outside the Sun and Earth table' in page.locator('.scene-message').inner_text()
+    canvas.screenshot(path=path)
+    return floor_luma(Image.open(path).convert('RGB'))
+
+
 def passed(name, detail):
     checks.append({'check': name, 'result': 'PASS', 'output': detail})
     print(json.dumps(checks[-1]), flush=True)
@@ -92,7 +117,9 @@ def passed(name, detail):
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
-    page = browser.new_page(viewport={'width': 1280, 'height': 900}, device_scale_factor=1)
+    # Reduced motion: a switch between 2D and 3D jumps, as before T29's cross-fade, so the checks
+    # right after a switch see the view they ask for. T29's fade has its own test (e2e/transition.spec.ts).
+    page = browser.new_page(viewport={'width': 1280, 'height': 900}, device_scale_factor=1, reduced_motion='reduce')
     errors = []
     graphics_warnings = []
     page.on('pageerror', lambda e: errors.append(str(e)))
@@ -138,6 +165,8 @@ with sync_playwright() as p:
         assert times['darkFrac'] == 0, times
         never_lit = times['litFrac'] == 0
         from PIL import Image
+        before_table = page.evaluate("async () => Date.parse((await import('/src/state.ts')).getState().eph.meta.start) - 86400000")
+        sunless_luma = sunless_floor_luma(page, actual_canvas, before_table, '/tmp/t12-public-sunless.png')
         rendered = []
         for label in ('dark', 'lit'):
             page.evaluate("async t => (await import('/src/state.ts')).setLiveTime(t)", times[label])
@@ -147,16 +176,14 @@ with sync_playwright() as p:
             path = f'/tmp/t12-public-{label}.png'
             actual_canvas.screenshot(path=path)
             rendered.append(Image.open(path).convert('RGB'))
-        w, h = rendered[0].size
-        def floor_luma(image):
-            ring = [image.getpixel((w//2+x, h//2+y)) for x in range(-10, 11) for y in range(-10, 11) if 6**2 <= x*x+y*y <= 10**2]
-            return sum(sum(v)/3 for v in ring) / len(ring)
         actual_luma = floor_luma(rendered[0])
-        assert actual_luma < 55, actual_luma
-        # Whenever the readout says hidden, the floor must look dark, at the Sun's highest too.
+        assert actual_luma < DARK_SHARE * sunless_luma, (actual_luma, sunless_luma)
+        # Whenever the readout says hidden, the floor must look dark, at the Sun's highest too:
+        # still drawn in shadow, so the same as at the Sun's lowest.
         lit_luma = floor_luma(rendered[1])
         if never_lit:
-            assert lit_luma < 55, lit_luma
+            assert lit_luma < DARK_SHARE * sunless_luma, (lit_luma, sunless_luma)
+            assert abs(lit_luma - actual_luma) < 2, (lit_luma, actual_luma)
         actual_changed = sum(a != b for a, b in zip(rendered[0].tobytes(), rendered[1].tobytes()))
         assert actual_changed > 1000, actual_changed
         page.get_by_role('button', name='3D orbit', exact=True).click()
@@ -164,7 +191,7 @@ with sync_playwright() as p:
         page.get_by_role('button', name='2D map', exact=True).click()
         assert page.evaluate("async () => (await import('/src/state.ts')).getState().live.site") == floor_site
         assert not errors and not graphics_warnings, (errors, graphics_warnings)
-        passed('public data files', {'height_map': actual['dem']['source'], 'grid_size': actual['dem']['size'], 'pixel_m': actual['dem']['pixel_m'], 'ephemeris': actual['eph']['source'], 'ephemeris_rows': actual['eph']['rows'], 'sites': actual['sites'], 'clicked_site': actual_site, 'error_cells': actual_error, 'dark_floor_at': floor_site, 'hidden_floor_mean_rgb': round(actual_luma, 2), 'floor_never_lit': never_lit, 'floor_mean_rgb_at_highest_sun': round(lit_luma, 2), 'changed_color_channels': actual_changed, 'camera_switch': 'site preserved'})
+        passed('public data files', {'height_map': actual['dem']['source'], 'grid_size': actual['dem']['size'], 'pixel_m': actual['dem']['pixel_m'], 'ephemeris': actual['eph']['source'], 'ephemeris_rows': actual['eph']['rows'], 'sites': actual['sites'], 'clicked_site': actual_site, 'error_cells': actual_error, 'dark_floor_at': floor_site, 'hidden_floor_mean_rgb': round(actual_luma, 2), 'floor_never_lit': never_lit, 'floor_mean_rgb_at_highest_sun': round(lit_luma, 2), 'floor_mean_rgb_without_sun': round(sunless_luma, 2), 'changed_color_channels': actual_changed, 'camera_switch': 'site preserved'})
         # A hash-only navigation would retain the actual data and pins instead of loading fixtures.
         page.goto('about:blank')
 
@@ -201,10 +228,14 @@ with sync_playwright() as p:
     from PIL import Image
     image = Image.open('/tmp/t12-map-hidden.png').convert('RGB')
     w, h = image.size
-    floor = [image.getpixel((w//2+x, h//2+y)) for x in range(-10, 11) for y in range(-10, 11) if 6**2 <= x*x+y*y <= 10**2]
-    floor_luma = sum(sum(v)/3 for v in floor) / len(floor)
-    assert floor_luma < 55, floor_luma
+    hidden_floor = floor_luma(image)
     first = image.tobytes()
+    # The same floor with no Sun (a day before the table starts), then back to the hidden time.
+    hidden_t = page.evaluate("async () => (await import('/src/state.ts')).getState().live.tMs")
+    sunless_floor = sunless_floor_luma(page, map_canvas, T0 - 86400000, '/tmp/t12-map-sunless.png')
+    assert hidden_floor < DARK_SHARE * sunless_floor, (hidden_floor, sunless_floor)
+    page.evaluate("async t => (await import('/src/state.ts')).setLiveTime(t)", hidden_t)
+    page.wait_for_timeout(300)
     page.evaluate("async () => (await import('/src/state.ts')).pin()")
     page.evaluate(f"async () => (await import('/src/state.ts')).setLiveTime({T0 + 12*3600000})")
     page.wait_for_timeout(300)
@@ -212,7 +243,7 @@ with sync_playwright() as p:
     second = Image.open('/tmp/t12-map-scrubbed.png').convert('RGB').tobytes()
     changed = sum(a != b for a, b in zip(first, second))
     assert changed > 1000, changed
-    passed('Sun lighting and scrub', {'hidden_floor_mean_rgb': round(floor_luma, 2), 'changed_color_channels': changed})
+    passed('Sun lighting and scrub', {'hidden_floor_mean_rgb': round(hidden_floor, 2), 'floor_mean_rgb_without_sun': round(sunless_floor, 2), 'changed_color_channels': changed})
     page.evaluate("async () => (await import('/src/state.ts')).select('a')")
     page.wait_for_timeout(250)
     map_canvas.screenshot(path='/tmp/t12-pinned-time.png')
@@ -485,10 +516,10 @@ with sync_playwright() as p:
     page.wait_for_timeout(350)
     assert 'South-pole terrain' in page.locator('.scene-caption').inner_text()
     passed('resolution independence', '634 × 634 at 960 m and 2534 × 2534 at 240 m render through the same code')
-    # Issue #65: the height map's outer cells' edges, half a cell beyond its stored corners.
-    grid = {'top': fine_meta['y_max_m'] + fine_meta['pixel_m']/2,
-            'mid_x': fine_meta['x_min_m'] + (fine_meta['size'] - 1) * fine_meta['pixel_m'] / 2,
-            'mid_y': fine_meta['y_max_m'] - (fine_meta['size'] - 1) * fine_meta['pixel_m'] / 2}
+    # Issues #65 and #112: the polar view's square, centred on the pole and reaching 20 degrees
+    # from it (the height map, then the whole-Moon picture fading out from 80 to 70 degrees S).
+    half = 2 * R * math.tan(math.radians(10))
+    grid = {'top': half, 'mid_x': 0, 'mid_y': 0, 'whole': 2 * half}
     # A drag stops at the map's edge. Dragged far down at the starting zoom, the view stops with the
     # map's top edge at the canvas's top, so a click 60 px below the top lands 60 px inside the map,
     # straight above the site; without the limit it would land beyond the map.
@@ -497,7 +528,7 @@ with sync_playwright() as p:
         b = map_canvas.bounding_box()
         before = page.evaluate("async () => (await import('/src/state.ts')).getState().live.site")
         x = b['x'] + b['width']/2 + 150
-        for _ in range(3):
+        for _ in range(8):   # far enough to reach the top edge, 613 km from the pole
             page.mouse.move(x, b['y'] + 30); page.mouse.down()
             page.mouse.move(x, b['y'] + 410, steps=10); page.mouse.up()
         page.wait_for_timeout(300)
@@ -511,10 +542,10 @@ with sync_playwright() as p:
         assert error_px < 2, (before, got, error_px)
         page.evaluate(f"async () => (await import('/src/state.ts')).setLiveSite({json.dumps(before)})")
         page.wait_for_timeout(200)
-        return {'dragged_px': 3 * 380, 'clicked': got, 'click_error_px': round(error_px, 2)}
+        return {'dragged_px': 8 * 380, 'clicked': got, 'click_error_px': round(error_px, 2)}
     passed('2D pan limit', pan_limit())
-    # Zoomed right out, the polar map stops where the whole height map just fits the canvas, and
-    # so sits in its middle. A click a quarter of the canvas right of the middle lands where that
+    # Zoomed right out, the polar map stops where its whole square just fits the canvas, and
+    # so sits in its middle. A click an eighth of the canvas right of the middle lands where that
     # scale says; any further zoom-out would put it much further away.
     def zoom_out_limit(wheel):
         page.wait_for_timeout(500)   # after a viewport change, the charts above the map settle first
@@ -528,8 +559,10 @@ with sync_playwright() as p:
             page.wait_for_timeout(300)
             assert map_canvas.bounding_box() == b, 'the wheel scrolled the page instead of zooming the map'
         before = page.evaluate("async () => (await import('/src/state.ts')).getState().live.site")
-        scale = min(b['width'], b['height']) / (fine_meta['size'] * fine_meta['pixel_m'])   # px per metre
-        offset_px = min(b['width'], b['height']) / 4
+        scale = min(b['width'], b['height']) / grid['whole']   # px per metre
+        # An eighth of the canvas: about 150 km from the pole, on the height map. A quarter lands
+        # just past 80 degrees S, in the fading ring (issue #112), and opens the whole-Moon map.
+        offset_px = min(b['width'], b['height']) / 8
         page.mouse.click(b['x']+b['width']/2+offset_px, b['y']+b['height']/2)
         got = page.evaluate("async () => (await import('/src/state.ts')).getState().live.site")
         ex, ey = grid['mid_x'] + offset_px / scale, grid['mid_y']

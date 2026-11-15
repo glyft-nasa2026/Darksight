@@ -11,33 +11,22 @@ import {
   type StepId,
 } from '../../core/mission';
 import { PADS, padById } from '../../core/pads';
-import { countdownText } from '../../core/windows';
+import { LAUNCH_DV_NOTE, PHASE_NAMES as NAMES } from '../../core/report';
 import {
-  flipFor, getState, landingScenario, missionFor, neverLitFor, samplesFor, setLander, setPad,
-  stateToAddress, subscribe, summaryFor,
+  getState, landingScenario, missionFor, setLander, setPad, stateToAddress, subscribe,
 } from '../../state';
 import { openPadPicker } from '../launch/picker';
 import {
-  coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, pctText, shortUtcText,
-  speedText, utcText,
+  coordText, dayText, dvText, elapsedText, kgText, kmText, shortUtcText, speedText, utcText,
 } from './format';
+import { stepCells, totalsCells } from './cells';
+import { conditionStats, ERRORS, landingConditions, missionWarnings, planMessage } from './conditions';
 import { BURN_SPEED, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const W = 1000;   // the picture's viewBox
 const H = 400;
 
-const NAMES: Record<StepId, string> = {
-  launch: 'Launch', parking: 'Parking orbit', tli: 'Translunar injection', coast: 'Translunar coast',
-  loi: 'Lunar orbit insertion', 'lunar-orbit': 'Lunar orbit', doi: 'Descent orbit insertion',
-  'descent-orbit': 'Descent orbit', 'powered-descent': 'Powered descent', touchdown: 'Touchdown',
-};
-
-const ERRORS = {
-  'bad-input': 'The lander needs positive numbers, and a dry mass below its mass after TLI.',
-  'coast-out-of-range': 'No transfer reaches the Moon in that coast time.',
-  'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
-} as const;
 
 // Simulated seconds per real second, the same as the simulation page's (pace.ts, issue #105):
 // "Auto" (the default) picks one per stage, every change is gradual, and the playback slows
@@ -112,13 +101,24 @@ function fit(minX: number, maxX: number, minY: number, maxY: number): (p: Pt) =>
 const pathD = (pts: Pt[]): string =>
   pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
 
-type Picture = { el: SVGSVGElement; update: (s: MissionState) => void };
+/**
+ * A picture is one layer of the card's SVG. Its anchors say where Earth, the Moon and the site
+ * are in it and how many viewBox units a kilometre is there, so a change of scale can zoom from
+ * one picture into the next about the place they share (zoomBetween).
+ */
+type Anchors = {
+  earth?: { p: Pt; s: number };            // Earth's centre; units per km
+  moon?: { p: Pt; r: number };             // the Moon's disc as drawn; its radius
+  site?: { p: Pt; s: number };             // the landing site; units per km along the ground
+};
+type Picture = { el: SVGGElement; update: (s: MissionState) => void; anchors: () => Anchors };
 
 function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
-  const root = svg('svg', 'ms-svg', { viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', preserveAspectRatio: 'xMidYMid meet' });
+  const root = svg('g', 'ms-layer');
+  let anchors: () => Anchors = () => ({});
   const ahead = svg('path', 'ms-ahead');
   const flown = svg('path', 'ms-flown');
-  const craft = svg('circle', 'ms-craft', { r: 6 });
+  const craft = svg('circle', 'ms-craft ms-marker', { r: 6 });
   const tli = stepOf(plan, 'tli').startMs;
   const loi = stepOf(plan, 'loi').startMs;
   const doi = stepOf(plan, 'doi').startMs;
@@ -156,21 +156,30 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     root.append(svg('circle', 'ms-moon ms-faint', { cx: ax, cy: ay, r: moonR }));
     moonMark = svg('circle', 'ms-moon', { r: moonR });
     root.append(moonMark);
+    const mark = moonMark;
+    anchors = () => ({
+      earth: { p: [ox, oy], s },
+      moon: { p: [Number(mark.getAttribute('cx')), Number(mark.getAttribute('cy'))], r: moonR },
+    });
     place = (st) => map(st.earthPlane.craft);
   } else if (scale === 'moon') {
     const rOrbit = R_MOON + plan.orbit.lunarOrbitAltKm;
-    map = fit(-1.25 * rOrbit, 1.25 * rOrbit, -1.25 * rOrbit, 1.25 * rOrbit);
+    // Seen from the side of the plane where the craft reaches the site from the left, as in the
+    // descent picture, so the zoom from one into the other keeps it on the same side.
+    const fitted = fit(-1.25 * rOrbit, 1.25 * rOrbit, -1.25 * rOrbit, 1.25 * rOrbit);
+    map = ([x, y]) => fitted([-x, y]);
     const period = plan.orbit.lunarOrbitPeriodS * 1000;
     pts = [...track(plan, Math.max(loi, doi - period), doi, 180, (s) => s.moonPlane),
       ...track(plan, doi, pdi, 120, (s) => s.moonPlane),
       ...track(plan, pdi, td, 120, (s) => s.moonPlane)];
     const [ox, oy] = map([0, 0]);
-    const s = map([1, 0])[0] - ox;
+    const s = Math.abs(map([1, 0])[0] - ox);
     root.append(svg('circle', 'ms-moon', { cx: ox, cy: oy, r: R_MOON * s }));
     const [sx, sy] = map([0, R_MOON]);
-    const site = svg('circle', 'ms-site', { cx: sx, cy: sy, r: 7 });
+    const site = svg('circle', 'ms-site ms-marker', { cx: sx, cy: sy, r: 7 });
     site.style.setProperty('--ms-site', `var(${siteColor})`);
     root.append(site);
+    anchors = () => ({ moon: { p: [ox, oy], r: R_MOON * s }, site: { p: [sx, sy], s } });
     place = (st) => (st.moonPlane ? map(st.moonPlane) : null);
   } else {
     // Altitude against distance to the site: separate scales, the height exaggerated.
@@ -200,9 +209,11 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     topLabel.textContent = `${kmText(top)} up`;
     root.append(topLabel);
     const [sx, sy] = map([0, 0]);
-    const site = svg('circle', 'ms-site', { cx: sx, cy: sy, r: 7 });
+    const site = svg('circle', 'ms-site ms-marker', { cx: sx, cy: sy, r: 7 });
     site.style.setProperty('--ms-site', `var(${siteColor})`);
     root.append(site);
+    const along = W / (x1 - x0);   // units per km of distance to the site
+    anchors = () => ({ site: { p: [sx, sy], s: along } });
     place = (st) => (st.rangeToGoKm === null ? null : map([-st.rangeToGoKm, st.altKm]));
   }
 
@@ -212,6 +223,7 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
 
   return {
     el: root,
+    anchors: () => anchors(),
     update: (st) => {
       const here = place(st);
       craft.style.display = here ? '' : 'none';
@@ -229,6 +241,85 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
       }
     },
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// A change of scale: zoom from one picture into the next
+// ---------------------------------------------------------------------------------------------
+
+/** 0..1 eased with zero speed and zero acceleration at both ends (smootherstep). */
+const ease = (f: number): number => f * f * f * (f * (6 * f - 15) + 10);
+const ZOOM_BASE_MS = 1000;
+const ZOOM_PER_E_FOLD_MS = 450;
+const ZOOM_MAX_MS = 3000;
+
+/**
+ * Where the two pictures meet, and the scale between them: Earth from the Earth close-up to the
+ * Earth-Moon view, the Moon from that view to the lunar orbit, the site from the lunar orbit to
+ * the descent. Other pairs (a jump chosen with the view buttons) just cross-fade.
+ */
+function meeting(from: Picture, to: Picture): { a: Pt; b: Pt; r: number } {
+  const fa = from.anchors();
+  const fb = to.anchors();
+  if (fa.site && fb.site) return { a: fa.site.p, b: fb.site.p, r: fa.site.s / fb.site.s };
+  if (fa.earth && fb.earth) return { a: fa.earth.p, b: fb.earth.p, r: fa.earth.s / fb.earth.s };
+  if (fa.moon && fb.moon) return { a: fa.moon.p, b: fb.moon.p, r: fa.moon.r / fb.moon.r };
+  return { a: [W / 2, H / 2], b: [W / 2, H / 2], r: 1 };
+}
+
+/** Sets each marker's radius to its own size divided by the layer's zoom c. */
+function keepSize(layer: SVGGElement, c: number): void {
+  for (const m of layer.querySelectorAll<SVGCircleElement>('.ms-marker')) {
+    if (!m.dataset.r) m.dataset.r = m.getAttribute('r') ?? '0';
+    m.setAttribute('r', String(Number(m.dataset.r) / c));
+  }
+}
+
+/**
+ * Zooms from the picture shown to the next about the place they share: the old one grows (or
+ * shrinks) away and fades out, the new one comes in from the matching size and fades in, so
+ * the shared place stays put on screen while the scale changes. Returns a function that ends
+ * it at once (for a new change before this one has finished).
+ */
+function zoomBetween(frame: SVGSVGElement, from: Picture, to: Picture, done: () => void): () => void {
+  const { a, b, r } = meeting(from, to);
+  const ms = Math.min(ZOOM_MAX_MS, ZOOM_BASE_MS + ZOOM_PER_E_FOLD_MS * Math.abs(Math.log(r)));
+  frame.replaceChildren(from.el, to.el);
+  frame.classList.add('ms-zooming');
+  const start = performance.now();
+  let raf = 0;
+  const set = (e: number): void => {
+    // Both layers keep the shared place at T, moving from where it was to where it will be.
+    const tx = a[0] + (b[0] - a[0]) * e;
+    const ty = a[1] + (b[1] - a[1]) * e;
+    const cNew = r ** (1 - e);    // the new picture starts at the old one's scale
+    const cOld = r ** -e;         // and the old one ends at the new one's
+    to.el.setAttribute('transform', `translate(${tx} ${ty}) scale(${cNew}) translate(${-b[0]} ${-b[1]})`);
+    from.el.setAttribute('transform', `translate(${tx} ${ty}) scale(${cOld}) translate(${-a[0]} ${-a[1]})`);
+    to.el.style.opacity = String(e);
+    from.el.style.opacity = String(1 - e);
+    // Markers (the craft, the site) keep their size on screen while their layer zooms.
+    keepSize(to.el, cNew);
+    keepSize(from.el, cOld);
+  };
+  const finish = (): void => {
+    cancelAnimationFrame(raf);
+    to.el.removeAttribute('transform');
+    to.el.style.opacity = '';
+    keepSize(to.el, 1);
+    frame.replaceChildren(to.el);
+    frame.classList.remove('ms-zooming');
+    done();
+  };
+  const step = (now: number): void => {
+    const f = Math.min(1, (now - start) / ms);
+    set(ease(f));
+    if (f < 1) raf = requestAnimationFrame(step);
+    else finish();
+  };
+  set(0);
+  raf = requestAnimationFrame(step);
+  return finish;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -320,6 +411,18 @@ export function mount(el: HTMLElement): void {
     });
   });
 
+  // --- The report (T35): the whole plan on a page of its own, to print or download -------------
+  const reportButton = make('button', 'btn ms-report', 'Generate full launch schedule');
+  reportButton.type = 'button';
+  reportButton.disabled = true;
+  const reportNote = make('p', 'ms-note muted', 'The plan as a report, to print, save as PDF, or download as JSON and CSV.');
+  reportButton.addEventListener('click', () => {
+    // A new tab, as the simulation: the planner stays open here. Same site, same address.
+    const url = `report.html#${stateToAddress()}`;
+    const tab = window.open(url, '_blank');
+    if (!tab) window.location.assign(url);   // a pop-up blocker stopped it: this tab instead
+  });
+
   // --- Side cards ----------------------------------------------------------------------------
   const launchInfo = make('div', 'ms-info');
   const landInfo = make('div', 'ms-info');
@@ -330,6 +433,9 @@ export function mount(el: HTMLElement): void {
   const view = make('div', 'ms-view');
   const viewLabel = make('span', 'ms-view-label');
   const stage = make('div', 'ms-stage');
+  // One SVG for the animation; each scale's picture is a layer in it, so they can zoom into each other.
+  const frameSvg = svg('svg', 'ms-svg', { viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', preserveAspectRatio: 'xMidYMid meet' });
+  stage.append(frameSvg);
   const live = make('div', 'ms-live');
   view.append(viewLabel, stage, live);
 
@@ -366,12 +472,13 @@ export function mount(el: HTMLElement): void {
   conds.setAttribute('aria-live', 'polite');
   const warnings = make('div', 'ms-warnings');
   const condsBox = make('div', 'ms-conds-box');
-  condsBox.append(condsTitle, conds, warnings);
+  // The report (T35) sits under the landing site's numbers: the last thing the card says.
+  condsBox.append(condsTitle, conds, warnings, reportButton, reportNote);
   const bottom = make('div', 'ms-bottom');
   bottom.append(tableWrap, condsBox);
   const model = make('p', 'ms-note muted',
-    '* Ideal, without gravity and drag losses: the launch vehicle is not modelled. Model: patched conics from Earth to the Moon, ' +
-    'instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent, ' +
+    `${LAUNCH_DV_NOTE} Model: patched conics from Earth to the Moon, ` +
+    'instant burns but the descent, a 100 km circular polar lunar orbit, a guided powered descent from 15 km in Apollo’s phases, ' +
     'phase times from Apollo 11 (NASA SP-4029). The launch time is touchdown less the phases: no launch window is solved.');
   const message = make('p', 'muted');
 
@@ -386,6 +493,8 @@ export function mount(el: HTMLElement): void {
   let chosenView: View = 'auto';
   let shownScale: Scale | null = null;
   let pic: Picture | null = null;
+  let leaving: Picture | null = null;         // the picture zooming away, still drawn
+  let endZoom: (() => void) | null = null;
   let siteColor = '--accent';
   let frame = 0;
   let lastFrameMs = 0;
@@ -436,12 +545,23 @@ export function mount(el: HTMLElement): void {
     const scale: Scale = chosenView === 'auto' ? autoScale(step.id) : chosenView === 'earth'
       ? (autoScale(step.id) === 'near' ? 'near' : 'earth') : chosenView;
     if (scale !== shownScale || !pic) {
+      endZoom?.();
+      const next = picture(plan, scale, siteColor);
+      next.update(st);
+      if (pic && shownScale && !prefersReducedMotion()) {
+        // Zoom from the old picture into the new one; under reduced motion, a cut.
+        leaving = pic;
+        pic.update(st);
+        endZoom = zoomBetween(frameSvg, pic, next, () => { leaving = null; endZoom = null; });
+      } else {
+        frameSvg.replaceChildren(next.el);
+      }
       shownScale = scale;
-      pic = picture(plan, scale, siteColor);
-      stage.replaceChildren(pic.el);
+      pic = next;
       viewLabel.textContent = LABELS[scale];
     }
     pic.update(st);
+    leaving?.update(st);
 
     // The live line.
     const parts: [string, string][] = [
@@ -554,30 +674,20 @@ export function mount(el: HTMLElement): void {
     for (const s of p.steps) {
       if (s.id === 'touchdown') continue;
       const tr = make('tr');
-      let name = NAMES[s.id];
-      if (s.id === 'launch') name = `Launch, to ${Math.round(p.orbit.parkingAltKm)} km`;
-      if (s.id === 'lunar-orbit') name = `Lunar orbit, ${Math.round(p.orbit.lunarOrbitAltKm)} km`;
-      if (s.id === 'descent-orbit') name = `Descent orbit, to ${kmText(p.orbit.descentStartAltKm)}`;
-      const th = make('th', '', name);
+      const c = stepCells(s, p.orbit);
+      const th = make('th', '', c.name);
       th.scope = 'row';
-      const takes = s.endMs > s.startMs ? durationText((s.endMs - s.startMs) / 1000) : '—';
-      const dv = s.dvKmS === null ? '—' : `${dvText(s.dvKmS)}${s.id === 'launch' ? '*' : ''}`;
-      const burn = s.by === 'launch vehicle' ? 'launch vehicle' : s.burnS === null ? '—' : durationText(s.burnS);
-      tr.append(th, make('td', '', shortUtcText(s.startMs)), make('td', '', takes), make('td', '', dv), make('td', '', burn),
-        make('td', '', s.propellantKg === null ? '—' : kgText(s.propellantKg)),
-        make('td', '', s.massAfterKg === null ? '—' : kgText(s.massAfterKg)));
+      tr.append(th, make('td', '', shortUtcText(s.startMs)), make('td', '', c.takes), make('td', '', c.dv), make('td', '', c.burn),
+        make('td', '', c.propellant), make('td', '', c.massAfter));
       tbody.append(tr);
     }
     const foot = make('tfoot');
     const fr = make('tr');
     const fth = make('th', '', 'Lander');
     fth.scope = 'row';
-    const t = p.totals;
-    const left = t.propellantLeftKg >= 0
-      ? `${kgText(t.propellantLeftKg)} left · ${pctText(t.margin)}`
-      : `short by ${kgText(-t.propellantLeftKg)}`;
-    fr.append(fth, make('td'), make('td'), make('td', '', dvText(t.landerDvKmS)), make('td'),
-      make('td', '', kgText(t.propellantUsedKg)), make('td', t.propellantLeftKg >= 0 ? '' : 'ms-bad', left));
+    const t = totalsCells(p.totals);
+    fr.append(fth, make('td'), make('td'), make('td', '', t.dv), make('td'),
+      make('td', '', t.used), make('td', t.short ? 'ms-bad' : '', t.left));
     foot.append(fr);
     table.append(head, tbody, foot);
     tableWrap.replaceChildren(table);
@@ -596,7 +706,8 @@ export function mount(el: HTMLElement): void {
     b.append(name);
     box.replaceChildren(make('span', 'ms-k', k), b, ...(sub ? [make('span', 'ms-coord', sub)] : []),
       make('span', 'ms-coord muted', coordText(lat, lon)),
-      make('span', 'ms-coord', `${utcText(tMs)} UTC`));
+      // No time yet (the plan is still loading): the caller writes what replaces it.
+      make('span', 'ms-coord', Number.isFinite(tMs) ? `${utcText(tMs)} UTC` : ''));
   };
 
   // --- Landing-site conditions (the readout's accessors, for the landing point) ------------------
@@ -610,26 +721,10 @@ export function mount(el: HTMLElement): void {
       return d;
     };
     const flag = (text: string, bad = false): HTMLElement => make('p', bad ? 'ms-flag ms-flag-bad' : 'ms-flag', text);
-    if (sc && getState().eph) {
-      const now = samplesFor(sc, '30d')[0];
-      if (!now || now.tMs !== sc.tMs) {
-        out.push(make('p', 'muted', 'Loading'));
-      } else {
-        const sunUp = now.sunFrac > 0;
-        out.push(stat('Sun', sunUp ? `Up ${now.sun.alt.toFixed(1)}° · ${pctText(now.sunFrac)} of disc` : 'Below the skyline'));
-        out.push(stat('Earth', now.earthUp ? `Up ${now.earth.alt.toFixed(1)}°` : 'Hidden'));
-        out.push(stat('Working period', countdownText('sun', sunUp, flipFor(sc, 'sun'), sc.tMs, neverLitFor(sc))));
-        out.push(stat('Earth link', countdownText('earth', now.earthUp, flipFor(sc, 'earth'), sc.tMs)));
-        const sum = summaryFor(sc);
-        out.push(stat('Lit, next 30 days', `${sum.litPct.toFixed(0)} %`));
-        out.push(stat('Earth contact, 30 days', `${sum.earthPct.toFixed(1)} %`));
-        if (!sunUp) warn.push(flag('Touchdown in darkness: the Sun is below the skyline there.'));
-        if (!now.earthUp) warn.push(flag('Earth is hidden at touchdown: no direct radio link.'));
-      }
-    }
-    if (p && p.runsOutMs !== null) {
-      warn.push(flag(`Not enough propellant: short by ${kgText(-p.totals.propellantLeftKg)}. The lander runs dry at ${utcText(p.runsOutMs)} UTC.`, true));
-    }
+    const c = sc && getState().eph ? landingConditions(sc) : null;
+    if (c === 'loading') out.push(make('p', 'muted', 'Loading'));
+    else if (c) for (const [k, v] of conditionStats(c)) out.push(stat(k, v));
+    for (const w of missionWarnings(p, c)) warn.push(flag(w.text, w.level === 'bad'));
     conds.replaceChildren(...out);
     warnings.replaceChildren(...warn);
   };
@@ -653,10 +748,11 @@ export function mount(el: HTMLElement): void {
     note.textContent = `Planning model · not a flight-dynamics solution${mock ? ' · mock data' : ''}`;
 
     if (m.status === 'none' || !sc) {
+      reportButton.disabled = true;
       stop();
       plan = null;
       shownKey = null;
-      message.textContent = 'Press “Land here” on a scenario card to plan a mission that lands there, at its time.';
+      message.textContent = planMessage({ status: 'none' }) ?? '';
       body.replaceChildren(message);
       return;
     }
@@ -665,6 +761,10 @@ export function mount(el: HTMLElement): void {
       ?? `Scenario ${sc.label}`;
     const pad = padById(s.padId);
     const p = m.status === 'ready' && m.plan.ok ? m.plan : null;
+    reportButton.disabled = !p;
+    reportNote.textContent = p
+      ? 'The plan as a report, to print, save as PDF, or download as JSON and CSV.'
+      : 'The report is ready once the mission is planned.';
     info(launchInfo, '01 / Launch', pad.name, `${pad.pad} · ${pad.country}`, null, pad.lat, pad.lon, p ? p.launchMs : Number.NaN);
     if (!p) launchInfo.lastChild!.textContent = 'Launch time: once the plan is ready';
     info(landInfo, 'Final landing site', siteName, sc.label === 'Landing site' ? '' : sc.label === 'Live' ? 'Live scenario' : `Scenario ${sc.label}`, sc.color, sc.site.lat, sc.site.lon, sc.tMs);
@@ -674,9 +774,7 @@ export function mount(el: HTMLElement): void {
       stop();
       plan = null;
       shownKey = null;
-      if (m.status === 'loading') message.textContent = 'Loading';
-      else if (m.status === 'outside') message.textContent = 'This landing time is too near the edge of the Sun and Earth table (1900 to 2100) for the mission.';
-      else if (m.status === 'ready' && !m.plan.ok) message.textContent = ERRORS[m.plan.error];
+      message.textContent = planMessage(m) ?? '';
       message.className = m.status === 'loading' ? 'muted' : 'ms-error-text';
       body.replaceChildren(top);
       main.replaceChildren(message);
@@ -691,6 +789,7 @@ export function mount(el: HTMLElement): void {
       cursor = p.launchMs;
       limits = regions(p, speed);
       settlePace();
+      endZoom?.();
       shownScale = null;
       pic = null;
       main.replaceChildren(view, controls, slowNote);

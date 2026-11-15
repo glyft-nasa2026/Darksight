@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Mission report · Darksight</title>
+  </head>
+  <body>
+    <!-- The mission report page (T35). "Generate full launch schedule" on the mission card opens
+         it with the same page address, so it reports the same mission. web/src/reportPage/main.ts
+         fills it; ui/report/index.ts draws the report. Only #report prints. -->
+    <div class="rpp">
+      <header class="rpp-bar">
+        <a class="btn rpp-back" href="mission.html">‹ Back to mission</a>
+        <button type="button" class="btn btn-primary" id="rpp-print" disabled>Print or save as PDF</button>
+        <button type="button" class="btn" id="rpp-json" disabled>Download JSON</button>
+        <button type="button" class="btn" id="rpp-csv" disabled>Download CSV</button>
+        <span id="rpp-status" class="rpp-status" role="status"></span>
+      </header>
+      <article id="report" class="card" aria-label="Mission report"></article>
+    </div>
+    <script type="module" src="/src/reportPage/main.ts"></script>
+  </body>
+</html>

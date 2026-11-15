@@ -19,6 +19,11 @@ const realEph = existsSync(fixtureFile) ? readRealTable() : null;
 const real = realEph !== null;
 
 const TOLERANCE_DEG = 0.1;
+// What the About panel says of the page's own code (ui/about/index.ts, setCheck). The largest
+// difference on these cases is 0.000675 degrees, all of it the Sun's: the table holds the Sun's
+// direction from the Moon's centre, so its parallax across the Moon's radius (1737.4 km over
+// 1 AU, 0.00067 degrees at most) is left out.
+const PAGE_VS_HORIZONS_DEG = 0.001;
 const RAD = Math.PI / 180;
 
 function separationDeg(a: AltAz, b: AltAz): number {
@@ -46,4 +51,15 @@ describe.skipIf(!real)('browser maths vs JPL Horizons', () => {
         + `Horizons ${c.alt}/${c.az}`).toBeLessThan(TOLERANCE_DEG);
     },
   );
+
+  it('is within the 0.001 degrees the About panel states, on every case', () => {
+    const worst = Math.max(...cases.map((c) => {
+      const site = { lat: c.lat, lon: c.lon, eye_m: 0 };
+      const tMs = Date.parse(c.t);
+      const ours = c.body === 'sun' ? sunAltAz(eph!, site, 0, tMs) : earthAltAz(eph!, site, 0, tMs);
+      return separationDeg(ours, { alt: c.alt, az: c.az });
+    }));
+    console.log(`browser maths vs JPL Horizons: largest difference ${worst.toFixed(6)} degrees over ${cases.length} cases`);
+    expect(worst).toBeLessThan(PAGE_VS_HORIZONS_DEG);
+  });
 });

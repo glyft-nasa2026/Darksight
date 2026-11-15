@@ -1,6 +1,6 @@
 # T33: A decade that failed to download is tried again
 
-Status: not started
+Status: done (pull request #147; a window cut short at the failed decade is worked out again once the decade arrives, #189)
 
 | | |
 |---|---|
@@ -64,6 +64,10 @@ its own. This task only checks that this still holds.
 How long a decade takes to arrive is measured in T27 (`docs/load-time.md`): 0.70 MB per file,
 1.42 s of "Loading" on Fast 4G for a jump to 1969. Neither row 3 (T32) nor this task changes
 when decades are fetched, only what happens after a failure.
+
+## After the merge
+
+- 15 Nov 2026, audit before submission (pull request #189). After a failed decade arrived on a retry, a window that reached into it kept its cut-short hours, 30-day figures and countdowns until the site or the time changed: 480 of 720 hours on the test table, lit 26 % where the whole window gives about 50 %. The remembered windows are now dropped when a decade that had failed arrives (`web/src/state.ts`, `fetchChunk`); `state.test.ts` has the case and fails without the fix.
 
 ## Prompt to paste into Claude Code
 

@@ -1,0 +1,80 @@
+// The landing site's numbers at touchdown, and the mission's warnings: one place for the mission
+// card (T34) and the mission report (T35), so the two can't disagree. Read from the same state.ts
+// accessors as the readout; formatting only, nothing computed here.
+import type { OkPlan } from '../../core/mission';
+import type { LandingConditions, ReportWarning } from '../../core/report';
+import { countdownText } from '../../core/windows';
+import {
+  type MissionResult, flipFor, getState, neverLitFor, neverLitPendingFor, samplesFor, skylineFor, summaryFor,
+  type Scenario,
+} from '../../state';
+import { noRowText } from '../tableGap';
+import { terrainShort } from '../terrain';
+import { kgText, pctText, utcText } from './format';
+
+export const ERRORS = {
+  'bad-input': 'The lander needs positive numbers, and a dry mass below its mass after TLI.',
+  'coast-out-of-range': 'No transfer reaches the Moon in that coast time.',
+  'thrust-too-low': 'This lander’s engine can’t lift it in the Moon’s gravity, so it can’t slow to a landing. Give it more thrust or less mass.',
+} as const;
+
+/** Why there is no plan, in the card's words; null when there is one. */
+export function planMessage(m: MissionResult): string | null {
+  switch (m.status) {
+    case 'none': return 'No landing site chosen. Go back to the landing sites and press “Land here” on a scenario card, then “Open mission”.';
+    case 'loading': return 'Loading';
+    case 'outside': return 'This landing time is too near the edge of the Sun and Earth table (1900 to 2100) for the mission.';
+    case 'failed': return noRowText('failed', m.decadeMs);
+    case 'ready': return m.plan.ok ? null : ERRORS[m.plan.error];
+  }
+}
+
+/** The landing site at touchdown, or 'loading' while its hours are still on their way. */
+export function landingConditions(sc: Scenario): LandingConditions | 'loading' {
+  const now = samplesFor(sc, '30d')[0];
+  if (!now || now.tMs !== sc.tMs) return 'loading';
+  const sunUp = now.sunFrac > 0;
+  const sunFlip = flipFor(sc, 'sun');
+  const earthFlip = flipFor(sc, 'earth');
+  const sky = skylineFor(sc);
+  return {
+    sun: { up: sunUp, altDeg: now.sun.alt, azDeg: now.sun.az, aboveSkylineDeg: now.sunAbove, discFrac: now.sunFrac },
+    earth: { up: now.earthUp, altDeg: now.earth.alt, azDeg: now.earth.az, aboveSkylineDeg: now.earthAbove },
+    sunFlip,
+    earthFlip,
+    sunText: countdownText('sun', sunUp, sunFlip, sc.tMs, neverLitFor(sc), neverLitPendingFor(sc)),
+    earthText: countdownText('earth', now.earthUp, earthFlip, sc.tMs),
+    summary: summaryFor(sc),
+    terrain: sky.terrain,
+    terrainCellM: sky.cellM,
+    terrainText: terrainShort(sky, sc.site, getState().globeStatus),
+  };
+}
+
+/** The card's "At the landing site" lines: [label, value]. */
+export function conditionStats(c: LandingConditions): [string, string][] {
+  return [
+    ['Sun', c.sun.up ? `Up ${c.sun.altDeg.toFixed(1)}° · ${pctText(c.sun.discFrac)} of disc` : 'Below the skyline'],
+    ['Earth', c.earth.up ? `Up ${c.earth.altDeg.toFixed(1)}°` : 'Hidden'],
+    ['Working period', c.sunText],
+    ['Earth link', c.earthText],
+    ['Lit, next 30 days', `${c.summary.litPct.toFixed(0)} %`],
+    ['Earth contact, 30 days', `${c.summary.earthPct.toFixed(1)} %`],
+  ];
+}
+
+/** The card's warnings, in its words: darkness, Earth hidden, not enough propellant. */
+export function missionWarnings(plan: OkPlan | null, c: LandingConditions | 'loading' | null): ReportWarning[] {
+  const out: ReportWarning[] = [];
+  if (c && c !== 'loading') {
+    if (!c.sun.up) out.push({ code: 'dark-touchdown', level: 'warn', text: 'Touchdown in darkness: the Sun is below the skyline there.' });
+    if (!c.earth.up) out.push({ code: 'earth-hidden', level: 'warn', text: 'Earth is hidden at touchdown: no direct radio link.' });
+  }
+  if (plan && plan.runsOutMs !== null) {
+    out.push({
+      code: 'propellant', level: 'bad',
+      text: `Not enough propellant: short by ${kgText(-plan.totals.propellantLeftKg)}. The lander runs dry at ${utcText(plan.runsOutMs)} UTC.`,
+    });
+  }
+  return out;
+}
