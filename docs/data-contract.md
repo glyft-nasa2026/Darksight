@@ -127,14 +127,14 @@ hard-codes them. File budget: 15 MB.
 
 ### `globe.bin` + `globe.json`, `north.bin` + `north.json` (made by `data-prep/make_globe.py`, issue #66)
 
-Heights of the Moon north of the south-pole height map, for pictures: the 3D globe, and
+Heights of the Moon north of the south-pole height map. They draw pictures: the 3D globe, and
 the flat map (whole-Moon view, the fading ring around a polar view, and the north polar view).
-One exception, agreed 15 Nov 2026 (`docs/decisions.md`): map layers cover the whole Moon (SPEC
-section 6), so the height and slope layers, and the readout's slope line, take heights from these
-files where `dem.bin` does not reach, through a reader in `core/` that T43 adds to this section.
-Until T43 merges, no number shown to the user comes from them, and nothing in `core/` loads them:
-`web/src/scene/globe.ts` fetches them by itself, beside the other files, and the globe is a
-plain sphere until they arrive or when they are missing (the mock data set has none). Both come
+Since T43 (decision of 15 Nov 2026, SPEC section 6) they are also a source of numbers, the one
+exception to "pictures only": the height and slope map layers, and the readout's slope line, take
+heights from them where `dem.bin` does not reach, through `core/globe.ts` (section 3). No other
+number comes from them. They download once, after `dem.bin` (issue #96), for every view that
+uses them (`sharedGlobe()` and `sharedNorth()` in `web/src/scene/globeHeights.ts`); the globe is
+a plain sphere until they arrive or when they are missing (the mock data set has none). Both come
 from the same LOLA gridded data record as `dem.bin`.
 
 `globe.json`:
@@ -148,9 +148,9 @@ from the same LOLA gridded data record as `dem.bin`.
 }
 ```
 
-Read by the 3D globe and by the 2D map (one download, `sharedGlobe()` in
-`web/src/scene/globeHeights.ts`); both only illustrate. The 2D map reads `north.bin` through
-`sharedNorth()` in `web/src/scene/globe.ts` for its north polar view (issue #112).
+Read by `core/globe.ts` (`parseGlobe`, `parseNorth`). The 3D globe, the 2D map (its whole-Moon
+picture and its north polar view, issue #112), the map layers and the readout share one download
+of each file.
 
 `globe.bin`: little-endian int16, `width * height` values, row by row. Height in metres =
 `value * height_scale`, above the `R` sphere. A latitude-longitude grid laid out like
@@ -269,38 +269,47 @@ checks in T24 and the demo use them by id.
 browser's own maths is checked against the same Horizons numbers by the `horizons.json` fixture
 below. In the mock file, `checked_at` is `null` and `cases` is empty.
 
-### `layers/layers.json` + `layers/sun.bin`, `layers/earth.bin`, `layers/psr.bin` (made by T14, `data-prep/make_layers.py`)
+### `layers/layers.json` + `layers/{sun,earth,psr}.bin`, `layers/north_{sun,earth,psr}.bin` (made by T14 and T43, `data-prep/make_layers.py`)
 
-Map layers for the south-polar 2D map (spec F14), from the LOLA team's polar illumination maps
-(`AVGVISIB_65S_240M_201608`, `..._EARTH`, `LPSR_65S_240M_201608`, release 2016; Mazarico et al.
-2011, Icarus 211, 1066-1081). They illustrate; no number in the readout or the tables comes from
-them, and they can differ from our own calculation (see "What the values mean").
+Map layers near the two poles (spec F14), from the LOLA team's polar illumination maps, release
+2016 (Mazarico et al. 2011, Icarus 211, 1066-1081): south `AVGVISIB_65S_240M_201608`,
+`..._EARTH` and `LPSR_65S_240M_201608`; north `AVGVISIB_65N_240M_201608`, `..._EARTH` and
+`LPSR_65N_240M_201608` (T43: the LOLA team publishes both poles). They illustrate; no number in
+the Sun and Earth rows of the readout or the tables comes from them, and they can differ from our
+own calculation (see "What the values mean").
 
 ```json
 {
-  "size": 1267,
-  "pixel_m": 480,
-  "x_min_m": -303960,
-  "y_max_m": 303960,
   "value_scale": 0.004,
   "max_byte": 250,
-  "layers": {
-    "sun":   { "file": "layers/sun.bin",   "product": "AVGVISIB_65S_240M_201608",       "meaning": "..." },
-    "earth": { "file": "layers/earth.bin", "product": "AVGVISIB_65S_240M_201608_EARTH", "meaning": "..." },
-    "psr":   { "file": "layers/psr.bin",   "product": "LPSR_65S_240M_201608",           "meaning": "..." }
+  "polar": {
+    "south": {
+      "size": 1267, "pixel_m": 480, "x_min_m": -303960, "y_max_m": 303960, "min_lat": -80,
+      "files":    { "sun": "layers/sun.bin", "earth": "layers/earth.bin", "psr": "layers/psr.bin" },
+      "products": { "sun": "AVGVISIB_65S_240M_201608", "earth": "AVGVISIB_65S_240M_201608_EARTH", "psr": "LPSR_65S_240M_201608" }
+    },
+    "north": {
+      "size": 1267, "pixel_m": 480, "x_min_m": -303960, "y_max_m": 303960, "min_lat": 80,
+      "files":    { "sun": "layers/north_sun.bin", "earth": "layers/north_earth.bin", "psr": "layers/north_psr.bin" },
+      "products": { "sun": "AVGVISIB_65N_240M_201608", "earth": "AVGVISIB_65N_240M_201608_EARTH", "psr": "LPSR_65N_240M_201608" }
+    }
   },
+  "meanings": { "sun": "...", "earth": "...", "psr": "..." },
   "source": "...", "product_page": "https://pgda.gsfc.nasa.gov/products/69", "citation": "..."
 }
 ```
 
-Grid: the projection of `dem.bin`, at twice its cell size. Cell (row 0, col 0) is centred at
+Grids. South: the projection of `dem.bin`, at twice its cell size. North: the same numbers in
+`north.bin`'s projection, the mirror image of the south's about the equator (`c = 90 - lat`,
+`x = r sin lon`, `y = r cos lon`, longitude 0 up). In both, cell (row 0, col 0) is centred at
 (`x_min_m`, `y_max_m`); col = (x - x_min_m) / pixel_m, row = (y_max_m - y) / pixel_m. A 480 m cell
-is the mean of two by two `dem.bin` cells, so its centre sits half a `dem.bin` cell in from the
-height map's: the grid covers the height map minus a 120 m border. Code reads the grid from the
-file, never hard-codes it.
+is the mean of two by two 240 m cells of `dem.bin`'s layout, so its centre sits half a 240 m cell
+in from the height map's: the grid covers 80 degrees to the pole, minus a 120 m border. A grid
+applies poleward of its `min_lat` (section "Which source applies where", below). Code reads the
+grids from the file, never hard-codes them.
 
 Each `.bin`: one unsigned byte a cell, `size * size` bytes, row by row from the top row. Value =
-byte * `value_scale`, 0..1 (byte 0..250). No missing data: the source covers 65 S to the pole.
+byte * `value_scale`, 0..1 (byte 0..250). No missing data: the sources cover 65 degrees to the pole.
 
 What the values mean:
 - `sun`: share of hourly steps over 18.6 years in which any part of the Sun's disc is visible.
@@ -310,10 +319,53 @@ What the values mean:
 All three are for a point on the surface (our readout uses a 2 m eye height). About 1.6 MB each,
 fetched only when a layer is switched on.
 
-`web/src/core/layers.ts` reads them: `readLayersMeta(json): LayersMeta` (throws on a bad file) ·
-`parseLayer(meta, name, buffer): Layer` with `layer.valueAt(lat, lon): number | null` (bilinear;
-null outside the grid), `layer.covers(lat, lon)`, `layer.cell(row, col)` · `gridPoint(meta, lat,
-lon)` and `gridLatLon(meta, row, col)`. No network: `web/src/ui/layers/` fetches the files.
+### `layers/smooth.json` + `layers/smooth_sun.bin`, `layers/smooth_earth.bin` (made by T43, `data-prep/make_layers_global.py`)
+
+The Sun and Earth layers away from the poles: the same two shares as the LOLA maps, on a smooth
+Moon (a sphere of radius `R`, no terrain), from JPL DE440 through Skyfield in the frame
+`MOON_ME_DE440_ME421`, as T01. Hourly over 18.6 years, the length of the LOLA maps' span, so the
+two agree in kind at the seam. The LOLA team does not give the dates of its span; 18.6 years is one
+turn of the Moon's orbital nodes, so a smooth-Moon share barely depends on where the span starts.
+
+```json
+{
+  "width": 720, "height": 360, "value_scale": 0.004, "max_byte": 250,
+  "start": "2020-01-01T00:00:00Z", "end": "2038-08-08T00:00:00Z", "step_s": 3600,
+  "files": { "sun": "layers/smooth_sun.bin", "earth": "layers/smooth_earth.bin" },
+  "meanings": { "sun": "...", "earth": "..." },
+  "source": "JPL DE440 via Skyfield, on a smooth sphere of radius 1737.4 km (no terrain)"
+}
+```
+
+A latitude-longitude grid laid out like `globe.bin`: cell (row `j`, column `i`) is centred on
+latitude `90 - (j + 0.5) * 180 / height` and longitude `-180 + (i + 0.5) * 360 / width`, 0.5
+degrees a cell. Each `.bin`: one unsigned byte a cell, `width * height` bytes, row by row from
+row 0; value = byte * `value_scale`, 0..1. 0.26 MB each, fetched only when its layer is on.
+
+What the values mean: `sun`, the share of the hours in which any part of the Sun's disc is above
+the horizontal (its centre higher than minus its angular radius at that hour); `earth`, the same
+for Earth's disc, seen from the point itself (Earth is close enough for that to matter). At the
+surface, no eye height. A smooth Moon has no permanent shadow, so there is no `psr` file: the
+never-lit layer is 0 outside the polar grids.
+
+### Which source applies where (T43, SPEC section 6)
+
+`core/layers.ts` decides it for every point, and every number and picture of a layer comes from
+there (`layerAt`, section 3). A polar grid applies poleward of its `min_lat` (80 S or 80 N) and
+inside its cell centres; elsewhere the whole-Moon source fills in. Where they meet the values jump
+(terrain shadow against none): that is correct, and the map draws the seam as a dashed line.
+
+| Layer | Poleward of 80 degrees | Elsewhere | `source.id` |
+|---|---|---|---|
+| `sun`, `earth` | LOLA polar maps, 480 m, with terrain | Smooth Moon, 0.5 degrees, no terrain shadows | `lola-south`, `lola-north`; `smooth` |
+| `psr` | LOLA permanent-shadow maps, 480 m | 0: a smooth Moon has no permanent shadow | `lola-south`, `lola-north`; `smooth` |
+| `height` | `dem.bin` (240 m) south, `north.bin` (1200 m) north | `globe.bin` (0.125 degrees, 3.8 km north to south) | `dem-south`, `dem-north`; `globe` |
+| `slope` | The same polar grids, `slopeAt` | `globe.bin`, `globeSlopeAt` | the same as `height` |
+
+For height and slope, a polar point that its grid cannot answer (the outermost cells, a `nodata`
+cell) takes the whole-Moon value, and says so. The legend names the source at the selected site
+in the words of `sourceText()` (`web/src/ui/layers/model.ts`): "LOLA, 480 m cells, with terrain",
+"Smooth Moon, no terrain shadows", "LOLA whole-Moon height map, 3.8 km cells".
 
 ### Fixtures: `web/src/core/__fixtures__/horizons.json` (made by T03)
 
@@ -374,7 +426,9 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
 | `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height, out?: Float32Array): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each; written into `out` and returned when `out` is long enough) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
 | `sky.ts` | issue #80 | `Mat3` (three rows; `apply(m, v)` takes a vector from the first frame to the second) · `moonFromIcrf(tMs)` (ICRF to the Moon-fixed frame: the IAU WGCCRE lunar model, Archinal et al. 2011; within 0.02 degrees of DE440's mean-Earth frame) · `earthFromIcrf(tMs)` (ICRF to Earth-fixed: IAU 1976 precession and 1982 sidereal time, UTC for UT1, no nutation) · `moonFromEarthIcrf(earthKm, tMs)` · `moonOrbitIcrf(eph, tMs): { toMoon, pole }` · `alignFrames(fromX, fromZ, toX, toZ)` · `apply`, `applyInverse`, `multiply`, `angleBetween`. Turns the star map only; Sun and Earth angles still come from `geometry.ts` |
-| `slope.ts` | T41 | `slopeAt(dem, lat, lon): number \| null` (ground slope in degrees from level; null off the height map, north of its `min_lat`, or where a cell it needs is `nodata`) · `cellSlope(dem, row, col)` and `cellGradient(dem, row, col)` (one stored cell; null on the grid's edge or next to `nodata`) · `slopeBaselineM(dem)` (what it is measured over: `pixel_m`, 240 m on the real map) · `SLOPE_RAMP_MAX_DEG` (30: the Slope layer's ramp ends there). Central differences on the grid, `dz/dx = (z[c+1] - z[c-1]) / (2 pixel_m / k)` and the same along rows, with the projection's scale `k = 1 + (r / 2R)^2` (conformal, so one `k` for both directions); slope = `atan(hypot(dz/dx, dz/dy))`. At a point, the gradient is interpolated bilinearly from the four cells around it. A baseline slope: a boulder or a 10 m crater does not show |
+| `slope.ts` | T41, T43 | `slopeAt(dem, lat, lon): number \| null` (ground slope in degrees from level; null off the height map, north of its `min_lat`, or where a cell it needs is `nodata`) · `cellSlope(dem, row, col)` and `cellGradient(dem, row, col)` (one stored cell; null on the grid's edge or next to `nodata`) · `slopeBaselineM(dem)` (what it is measured over: `pixel_m`, 240 m on the real map) · `SLOPE_RAMP_MAX_DEG` (30: the Slope layer's ramp ends there). Central differences on the grid, `dz/dx = (z[c+1] - z[c-1]) / (2 pixel_m / k)` and the same along rows, with the projection's scale `k = 1 + (r / 2R)^2` (conformal, so one `k` for both directions); slope = `atan(hypot(dz/dx, dz/dy))`. At a point, the gradient is interpolated bilinearly from the four cells around it. A baseline slope: a boulder or a 10 m crater does not show. T43, the whole Moon on `globe.bin`: `globeSlopeAt(globe, lat, lon): number \| null` · `globeCellGradient(globe, row, col)` · `globeSlopeBaselineM(globe)` (the row spacing, `pi R / height`: 3.8 km). Central differences on the latitude-longitude grid, `dz/dy = (z[j-1] - z[j+1]) / (2 R dphi)` and `dz/dx = (z[i+s] - z[i-s]) / (2 s R cos(phi) dlambda)`, stepping `s = max(1, floor(1 / cos phi))` columns so the east-west step is never longer than the north-south one: the baseline named is the longer of the two. Null on the first and last row; bilinear between cells at a point, as `slopeAt` |
+| `globe.ts` | T43 | The reader for `globe.bin` and `north.bin` (section 2), moved here from `web/src/scene/` (issue #66, #112), which re-exports it: `parseGlobe(meta, buffer): GlobeHeights` (`meta`, `range` (lowest and highest cell, metres), `cell(row, col)` (columns wrap, rows stop at the poles), `heightAt(lat, lon)` (the cell holding the point: the pictures use it), `heightBilinear(lat, lon)` (between the four cell centres round the point: numbers use it), `rowSpacingM` (`pi R / height`)) · `parseNorth(meta, buffer): Dem` (`north.bin` as a height map of mirrored latitudes: ask it for `(-lat, lon)`). No network: `sharedGlobe()` and `sharedNorth()` in `web/src/scene/globeHeights.ts` fetch the files. T37 uses the same reader |
+| `layers.ts` | T14, T43 | `LAYER_KEYS` (`sun`, `earth`, `psr`, `height`, `slope`) and `LayerKey` · `readLayersMeta(json): LayersMeta` and `readSmoothMeta(json): SmoothMeta` (throw on a bad file) · `parseLayer(grid: PolarGrid, name, buffer): Layer` (`valueAt(lat, lon)`: bilinear, null outside the grid or equatorward of its `min_lat`; `covers`, `cell`) · `parseSmooth(meta, name, buffer): SmoothLayer` (`valueAt`: bilinear, longitude wraps) · `gridPoint(grid, lat, lon)`, `gridLatLon(grid, row, col)` (the grid's `pole`, south by default) · **`layerAt(key, lat, lon, inputs): LayerPoint \| null`**, the one function for a layer's value and source anywhere on the Moon (section 2, "Which source applies where"): `{ value, source: { id, cellM } }`, value 0..1 for `sun`, `earth`, `psr`, metres for `height`, degrees for `slope`; `cellM` is the size of the cells the value comes from, for slope the distance it is measured over (null for the smooth never-lit layer). Null only where the file the point needs is not in `inputs` (`{ layers, polar, smooth, dem, north, globe }`, each as far as loaded) · `layerValueAt(key, lat, lon, inputs): number` (the same value, NaN for null, nothing allocated: the layer pictures call it for every pixel) · `seamLats(key, inputs)` (the latitudes where that layer's sources meet) · `heightRange(inputs)` (lowest and highest height of the loaded height sources, for one colour ramp everywhere). No network: `web/src/ui/layers/` fetches the files |
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
 | `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `approachSeconds(plan)`, `hyperbolaAt`, `hyperbolaTimeToRadius`, `MOON_SOI_KM` (the arrival hyperbola round the Moon, from its sphere of influence to LOI; `missionAt` gives `approach: true` and a `moonPlane` point there, with altitude and speed above the Moon) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent`, `planDescent`, `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`. A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent; times run back from touchdown with Apollo 11's phase lengths |
@@ -614,16 +668,22 @@ clockwise. The scene's toolbar sits above the viewport and claims no corner.
 
 The map-layer controls (T14, `web/src/ui/layers/`) are not in `index.html` either. The scene
 creates `<section class="scene-layers">` under its map caption, outside the viewport, so nothing
-floats over the map, and calls `mount(el)` on it. The controls show in 2D mode only and say when
-the map shows the whole Moon or the north pole rather than the south pole. The layers are drawn
-by the 2D map (`web/src/map/`): in its draw step, after the terrain and before the grid and pins,
-on the south-polar map only for now (`kind === 'south'`; T43 extends every layer to the north
-polar and whole-Moon maps, SPEC section 6), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
-stereographic metres (section 2) into canvas pixels, and it redraws whenever `onLayersChange()`
-fires (data arriving, a switch, an opacity change, each frame of a fade). Both come from
-`web/src/ui/layers/index.ts`, which also holds the one store of layer settings (`layerStore`).
-The height and slope layers (T41) are built in the browser from the height map in state, on the
-LOLA layers' 480 m grid: slope from `core/slope.ts`, coloured `--dark` (level) to `--bad`
+floats over the map, and calls `mount(el)` on it. The controls show in 2D mode only. Under them
+a legend names, for each layer that is on, its value and its source at the selected site (T43).
+The layers are drawn by the 2D map (`web/src/map/`) on all three of its views, the south polar,
+north polar and whole-Moon maps (T43, SPEC section 6): in its draw step, after the terrain and
+before the grid and pins, it calls `drawLayers(ctx, { kind, view, reachDeg, unitPx })` (`kind`
+`'south' | 'north' | 'global'`, `view` its `MapView` from `core/projection.ts`, `reachDeg` how far
+from the pole a polar view reaches, `unitPx` the width of `--space-1` in canvas pixels, for the
+seam's line), and it redraws whenever `onLayersChange()` fires (data arriving, a switch, an
+opacity change, each frame of a fade). Both come from `web/src/ui/layers/index.ts`, which also
+holds the one store of layer settings (`layerStore`). Each view's picture of a layer is built in
+the browser, the first time that view shows the layer, by asking `layerValueAt` (section 3) at
+every pixel: on a polar view the polar grid's 480 m cells within 80 degrees of the pole and a
+ring out to `reachDeg` (fading out as the map's own ring does); on the whole-Moon view a
+latitude-longitude grid (0.25 degrees for Sun, Earth and never lit, `globe.bin`'s 0.125 degrees
+for height and slope). A dashed line marks the seam where a layer's sources meet. Height uses one
+colour ramp everywhere (`heightRange`); slope is coloured `--dark` (level) to `--bad`
 (`SLOPE_RAMP_MAX_DEG` and steeper).
 
 ## 6. Look: `web/src/ui/theme.css` (T00 creates, T19 designs)
