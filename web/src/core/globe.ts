@@ -1,11 +1,12 @@
 // The whole-Moon height grid (globe.bin) and the north cap (north.bin), contract section 2.
-// Pure functions: no DOM, no network. web/src/scene/globeHeights.ts fetches the files, once for
-// every view that uses them, and re-exports this reader (it lived there until T43).
+// Pure functions: no DOM, no network. web/src/scene/globeHeights.ts fetches the files (their
+// packed copies, globe.pack and north.pack, where the build wrote them), once for every view that
+// uses them, and re-exports this reader (it lived there until T43).
 //
 // The pictures (3D globe, 2D map) read the cell holding a point (heightAt). T43's numbers, the
 // height and slope map layers and the readout's slope line, read heightBilinear and slope.ts.
 
-import { parseDem, type Dem, type DemMeta } from './dem';
+import { demFromHeights, parseDem, type Dem, type DemMeta } from './dem';
 import { MOON_RADIUS_KM } from './types';
 
 export type GlobeMeta = {
@@ -29,22 +30,40 @@ export type GlobeHeights = {
   heightBilinear(lat: number, lon: number): number;
 };
 
-/** Builds the grid from its two files. No network: tests call this with made-up grids. */
-export function parseGlobe(meta: GlobeMeta, buffer: ArrayBuffer): GlobeHeights {
-  const { width, height, height_scale: scale } = meta;
+function checkGlobeMeta(meta: GlobeMeta): void {
+  const { width, height } = meta;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2) {
     throw new Error('globe.json: "width" and "height" must be whole numbers, 2 or more');
   }
-  const count = width * height;
+}
+
+/** Builds the grid from its two files. No network: tests call this with made-up grids. */
+export function parseGlobe(meta: GlobeMeta, buffer: ArrayBuffer): GlobeHeights {
+  checkGlobeMeta(meta);
+  const count = meta.width * meta.height;
   if (buffer.byteLength < count * 2) {
     throw new Error(`globe.bin: ${buffer.byteLength} bytes, expected ${count * 2}`);
   }
   // Little-endian int16 in the file, read through a DataView so any machine gets it right.
   const view = new DataView(buffer);
   const data = new Int16Array(count);
+  for (let i = 0; i < count; i++) data[i] = view.getInt16(i * 2, true);
+  return globeFromHeights(meta, data);
+}
+
+/**
+ * Builds the grid from the stored values already in memory, row 0 first: globe.pack, unpacked.
+ * parseGlobe reads globe.bin into the same form.
+ */
+export function globeFromHeights(meta: GlobeMeta, data: Int16Array): GlobeHeights {
+  checkGlobeMeta(meta);
+  const { width, height, height_scale: scale } = meta;
+  if (data.length !== width * height) {
+    throw new Error(`globe: ${data.length} heights, expected ${width * height}`);
+  }
   let min = Infinity, max = -Infinity;
-  for (let i = 0; i < count; i++) {
-    const v = data[i] = view.getInt16(i * 2, true);
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i];
     if (v < min) min = v;
     if (v > max) max = v;
   }
@@ -70,12 +89,22 @@ export function parseGlobe(meta: GlobeMeta, buffer: ArrayBuffer): GlobeHeights {
   };
 }
 
+function checkNorthMeta(meta: DemMeta): void {
+  if (!(meta.min_lat > 0)) throw new Error('north.json: "min_lat" must be a northern latitude');
+}
+
 /**
  * The north cap's height grid (north.bin + north.json) as a height map of mirrored latitudes:
  * its grid is the mirror image of dem.bin's, so the south-pole code reads it unchanged when every
  * latitude is negated. Ask it for (-lat, lon).
  */
 export function parseNorth(meta: DemMeta, buffer: ArrayBuffer): Dem {
-  if (!(meta.min_lat > 0)) throw new Error('north.json: "min_lat" must be a northern latitude');
+  checkNorthMeta(meta);
   return parseDem({ ...meta, min_lat: -meta.min_lat }, buffer);
+}
+
+/** parseNorth from the stored values already in memory, row 0 first: north.pack, unpacked. */
+export function northFromHeights(meta: DemMeta, data: Int16Array): Dem {
+  checkNorthMeta(meta);
+  return demFromHeights({ ...meta, min_lat: -meta.min_lat }, data);
 }
