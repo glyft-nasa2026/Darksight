@@ -13,7 +13,6 @@ import {
 import { themeColor } from '../ui/plotTheme';
 import { moonFromIcrf, multiply, type Mat3 } from '../core/sky';
 import { makeStarField } from './stars';
-import { sunSpriteScale, sunTexture } from './sun';
 import { mount as mountMap, unmount as unmountMap } from '../map';
 import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import {
@@ -25,6 +24,7 @@ import {
   groundAngle, loadTileIndex, loadWindow, PATCH_MOVE_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch,
   viewGround, type TileIndex,
 } from './patch';
+import { sunSpriteScale, sunTexture } from './sun';
 import './scene.css';
 
 const mounts = new WeakMap<HTMLElement, () => void>();
