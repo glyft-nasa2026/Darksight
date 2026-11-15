@@ -568,21 +568,24 @@ export function neverLitFor(sc: Scenario): boolean {
 }
 
 /**
- * True while neverLitFor can't answer yet but will once the decades to 2100 are in: the Sun is
- * down there, it doesn't rise within 60 days, and a decade from sc.tMs to the end of the table
- * is still downloading (issue #32, row 3). The countdown then says it is still checking, rather
- * than "No sunrise in the next 60 days" turning into "Permanently shadowed" seconds later.
- * False once the decades are in (neverLitFor answers), false when one of them failed to
- * download (neverLitFor can't answer before a reload), and false wherever neverLitFor answers
- * false at once: the Sun up, a sunrise within 60 days, or within 60 days of the end of the table.
- * Asks for nothing itself; neverLitFor, called beside it, asks for the decades.
+ * True while neverLitFor can't answer yet but will: the Sun is down there, it doesn't rise
+ * within 60 days, and either a decade from sc.tMs to the end of the table is still downloading
+ * (issue #32, row 3) or they are all in and the scan back from 2100 is still running in slices
+ * (issue #32, row 1). The countdown then says it is still checking, rather than "No sunrise in
+ * the next 60 days" turning into "Permanently shadowed" a moment later. False once neverLitFor
+ * answers, false when one of the decades failed to download (neverLitFor can't answer before a
+ * reload), and false wherever neverLitFor answers false at once: the Sun up, a sunrise within
+ * 60 days, or within 60 days of the end of the table. Downloads nothing itself; with every
+ * decade in, it starts the scan if neverLitFor hasn't yet, so the order the two are called in
+ * doesn't matter.
  */
 export function neverLitPendingFor(sc: Scenario): boolean {
   const eph = state.eph;
   if (!eph || !table || sc.tMs < eph.startMs || eph.endMs - sc.tMs < FLIP_DAYS * DAY_MS) return false;
   if (sunlitTest(eph, sc)(sc.tMs) || flipFor(sc, 'sun') !== null) return false;
   const need = table.missing(sc.tMs, eph.endMs);
-  return need.length > 0 && !need.some((i) => failed.has(i));
+  if (need.length > 0) return !need.some((i) => failed.has(i));
+  return lastLitMs(eph, sc, sc.tMs) === null;   // null while the scan is still running
 }
 
 /**

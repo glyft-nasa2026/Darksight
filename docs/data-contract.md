@@ -472,7 +472,7 @@ timelineFor(sc: Scenario, range: Range): Sample[]    // hourly from the window s
 summaryFor(sc: Scenario): Summary                     // over 30 days from sc.tMs
 flipFor(sc: Scenario, body: Body): Flip               // next rise or set after sc.tMs
 neverLitFor(sc: Scenario): boolean                    // no sunlight there from sc.tMs to the end of 2100
-neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still waits for decades to 2100
+neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still waits for decades to 2100, or its scan
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
 missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan: MissionPlan }
 ```
@@ -513,7 +513,7 @@ hours. It reads false while the scan runs, as while decades download, and `state
 the modules when it is done.
 
 **Still checking (T32, issue #32 row 3).** While `neverLitFor` still waits for those decades,
-`neverLitPendingFor` reads true, so the countdown says `No sunrise in the next 60 days · checking
+or for its scan to finish once they are in (issue #32 row 1), `neverLitPendingFor` reads true, so the countdown says `No sunrise in the next 60 days · checking
 to 2100…` and then, once they are in, `Permanently shadowed (until 2100)` (or plain "No sunrise"
 if the Sun does come back before 2100). A never-lit site never shows plain "No sunrise" in
 between. `neverLitPendingFor` is false once the decades are in, false when one of them failed to
