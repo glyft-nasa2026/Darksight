@@ -21,7 +21,7 @@ made both. The video is the demo link; the slides are linked from the detailed d
 |---|---|---|---|---|
 | Project Name | yes | none stated | "Darksight" (`submission.md`) | ready |
 | High-Level Project Summary | yes | none stated; what, how it addresses the challenge, why it matters | `submission.md` (about 180 words) | ready |
-| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 29.7 s, English captions | **needs a person:** upload to YouTube (public or unlisted) and paste the link |
+| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 29.7 s, English captions | ready: uploaded to Google Drive by MarsRon, https://drive.google.com/file/d/1BNsboqQI9dvgL6qAwDgmxr1zFZH-55Px/view (opens without signing in, checked with curl on 15 Nov 2026) |
 | Link to Final Project | yes | public, no login | https://darksight.space (repo linked in the description) | ready |
 | Detailed Project Description | yes | none stated; what, how, benefits, goals, tools | `submission.md` | ready |
 | Use of Super Intelligence (SI) | yes | say where and how; AI images and videos need a visible watermark; code and data need a note in text and metadata; judges don't see this answer | `submission.md`; labels on every slide (the video is a screen recording, not AI-generated, so it carries none) | ready (see open item 3) |
@@ -34,7 +34,7 @@ made both. The video is the demo link; the slides are linked from the detailed d
 ## Before pressing "Submit for Judging"
 
 - [ ] All five team members are confirmed participants at the same Local Event (Kuala Lumpur); waitlisted means not eligible.
-- [ ] Every link opens in a private window without signing in: the YouTube video, darksight.space, the GitHub repo, `pitch/darksight-slides.pdf` and `pitch/references.md` on GitHub (once this branch has merged).
+- [ ] Every link opens in a private window without signing in: the video on Google Drive, darksight.space, the GitHub repo, `pitch/darksight-slides.pdf` and `pitch/references.md` on GitHub (once this branch has merged).
 - [ ] No image, video or audio of anyone under 18 (none used).
 - [ ] No NASA logo, flag or mission identifier in AI-made content (none used).
 - [ ] Optional: request a FortiGuard Web Filter Classification for darksight.space (Category: Education or Web-based application; Company Name: N/A), so judges' networks don't block it.
@@ -112,8 +112,8 @@ branch has merged and deployed, which is one more reason to run the check at the
 
 ## Open items for the team
 
-1. **Upload the video** to YouTube (or another public host) and paste the link into the demo
-   field. The form can't take the file itself.
+1. ~~**Upload the video**~~ Done: Google Drive link in `submission.md`. Paste it into the demo
+   field of the form.
 2. **"About an hour across three tools"** (slide 2, summary; no longer in the video) comes from the T17
    ticket's story, not from a measurement. Confirm it's fair, or soften the wording (the script and
    slides each have it once).

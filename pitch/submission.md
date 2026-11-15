@@ -32,7 +32,9 @@ across three tools.
 
 ## Link to Project Demo
 
-_(paste the public YouTube link to `pitch/demo/darksight-demo.webm` here, 29.7 s)_
+https://drive.google.com/file/d/1BNsboqQI9dvgL6qAwDgmxr1zFZH-55Px/view
+
+(Google Drive, anyone with the link can view; the same video as `pitch/demo/darksight-demo.webm`, 29.7 s.)
 
 Fallback after this branch merges:
 https://github.com/glyft-nasa2026/Darksight/blob/main/pitch/demo/darksight-demo.webm
