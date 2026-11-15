@@ -337,6 +337,15 @@ describe.skipIf(skip !== null)('real layers (web/public/data)', () => {
     expect(layerAt('sun', 0, 0, inputs)!.value).toBeLessThan(0.52);
   });
 
+  it('every curated site has a slope, and the distance it is measured over (T43 "Done when" line 4)', () => {
+    const sites = readJson('sites.json') as CuratedSite[];
+    for (const s of sites) {
+      const p = layerAt('slope', s.lat, s.lon, inputs);
+      expect(p, s.id).not.toBeNull();
+      expect(p!.source.cellM, s.id).toBeGreaterThan(0);
+    }
+  });
+
   it('the steepest slope within 20 km of Apollo 15 (Hadley Delta) beats Apollo 11\'s (Mare Tranquillitatis)', () => {
     const sites = readJson('sites.json') as CuratedSite[];
     const steepest = (id: string): number => {

@@ -62,9 +62,18 @@ const changeListeners = new Set<() => void>();
 /** One layer's picture for one map view. Polar views: the polar grid's cells, and a ring beyond them. */
 type Picture = { cap?: HTMLCanvasElement; capGrid?: PolarGrid; ring?: HTMLCanvasElement; ringHalf?: number; global?: HTMLCanvasElement };
 const pictures = new Map<string, Picture>();
+/**
+ * Pictures being built. A picture asks core for a value at up to 4 million pixels, which took
+ * about a second at once; it is built a slice of rows at a time between frames instead, so the
+ * page never freezes, and the map redraws when it is done.
+ */
+const building = new Map<string, Generator<void, Picture>>();
 const pictureKey = (key: LayerKey, kind: MapKind, reach = 0): string => `${key}|${kind}|${reach}`;
 function dropPictures(keys: readonly LayerKey[]): void {
-  for (const k of [...pictures.keys()]) if (keys.some((key) => k.startsWith(`${key}|`))) pictures.delete(k);
+  const mine = (k: string): boolean => keys.some((key) => k.startsWith(`${key}|`));
+  for (const k of [...pictures.keys()]) if (mine(k)) pictures.delete(k);
+  // A picture half built from the old data is started again.
+  for (const k of [...building.keys()]) if (mine(k)) building.delete(k);
 }
 
 function emitChange(): void {
@@ -181,8 +190,8 @@ function paint(key: LayerKey, values: Float32Array, w: number, h: number, fade?:
   return canvas;
 }
 
-/** The whole Moon, a pixel a cell of a latitude-longitude grid: globe.bin's for height and slope. */
-function buildGlobal(key: LayerKey): Picture {
+/** The whole Moon, a pixel a cell of a latitude-longitude grid: globe.bin's for height and slope. Yields after each row. */
+function* buildGlobal(key: LayerKey): Generator<void, Picture> {
   const g = fromHeights(key) ? inputs.globe : null;
   const w = g ? g.meta.width : GLOBAL_W, h = g ? g.meta.height : GLOBAL_H;
   const values = new Float32Array(w * h);
@@ -192,6 +201,7 @@ function buildGlobal(key: LayerKey): Picture {
     for (let i = 0; i < w; i++) {
       values[j * w + i] = toRamp(layerValueAt(key, lat, -180 + ((i + 0.5) * 360) / w, inputs));
     }
+    yield;
   }
   return { global: paint(key, values, w, h) };
 }
@@ -201,19 +211,21 @@ function buildGlobal(key: LayerKey): Picture {
  * north is the map upside down), and a ring of RING_PX pixels a side out to reachDeg, fading out
  * as the map's own ring does from the grid's edge.
  */
-function buildPolar(key: LayerKey, pole: Pole, reachDeg: number): Picture {
+function* buildPolar(key: LayerKey, pole: Pole, reachDeg: number): Generator<void, Picture> {
   const grid = inputs.layers!.polar[pole];
   const toRamp = ramp(key);
   const n = grid.size;
+  const capDeg = 90 - Math.abs(grid.min_lat);
   const cap = new Float32Array(n * n);
   for (let row = 0; row < n; row++) {
     for (let col = 0; col < n; col++) {
       const { lat, lon } = gridLatLon(grid, row, col);
-      cap[row * n + col] = toRamp(layerValueAt(key, lat, lon, inputs));
+      // The square's corners lie beyond the polar grid's circle: the fading ring draws them.
+      cap[row * n + col] = 90 - Math.abs(lat) > capDeg ? Number.NaN : toRamp(layerValueAt(key, lat, lon, inputs));
     }
+    yield;
   }
   const ringHalf = polarForward(-90 + reachDeg, 0).y;
-  const capDeg = 90 - Math.abs(grid.min_lat);
   const ring = new Float32Array(RING_PX * RING_PX).fill(Number.NaN);
   const fade = new Uint8Array(RING_PX * RING_PX);
   for (let row = 0; row < RING_PX; row++) {
@@ -228,19 +240,40 @@ function buildPolar(key: LayerKey, pole: Pole, reachDeg: number): Picture {
       ring[k] = toRamp(layerValueAt(key, lat, lon, inputs));
       fade[k] = Math.round(255 * Math.min(1, (reachDeg - fromPole) / Math.max(1e-9, reachDeg - capDeg)));
     }
+    yield;
   }
   return { cap: paint(key, cap, n, n), capGrid: grid, ring: paint(key, ring, RING_PX, RING_PX, fade), ringHalf };
+}
+
+const SLICE_MS = 12;
+let slicing = 0;
+function buildSlices(): void {
+  slicing = 0;
+  const until = performance.now() + SLICE_MS;
+  for (const [id, job] of building) {
+    for (;;) {
+      const step = job.next();
+      if (step.done) {
+        building.delete(id);
+        pictures.set(id, step.value);
+        emitChange();
+        break;
+      }
+      if (performance.now() > until) { slicing = window.setTimeout(buildSlices, 0); return; }
+    }
+  }
 }
 
 function pictureFor(key: LayerKey, kind: MapKind, reachDeg: number): Picture | null {
   if (!ready.has(key) || !inputs.layers) return null;
   const id = pictureKey(key, kind, kind === 'global' ? 0 : reachDeg);
-  let pic = pictures.get(id);
-  if (!pic) {
-    pic = kind === 'global' ? buildGlobal(key) : buildPolar(key, kind, reachDeg);
-    pictures.set(id, pic);
+  const pic = pictures.get(id);
+  if (pic) return pic;
+  if (!building.has(id)) {
+    building.set(id, kind === 'global' ? buildGlobal(key) : buildPolar(key, kind, reachDeg));
+    if (!slicing) slicing = window.setTimeout(buildSlices, 0);
   }
-  return pic;
+  return null;
 }
 
 /** A dashed line where a layer's polar sources give way to its whole-Moon one. */
