@@ -75,18 +75,40 @@ export function propagate(r0: V3, v0: V3, tS: number, mu: number): V3 {
   const vr = dot(r0, v0) / rn;
   const alpha = 2 / rn - dot(v0, v0) / mu;   // 1 / semi-major axis
   const sqMu = Math.sqrt(mu);
-  // Newton's method on the universal anomaly x.
-  let x = sqMu * Math.abs(alpha) * tS;
-  if (!(Math.abs(alpha) > 1e-12)) x = sqMu * tS / rn;
-  for (let i = 0; i < 100; i++) {
+  // The universal Kepler equation F(x) = 0 in the universal anomaly x. F rises with x (its
+  // slope is the distance r), so the root can be bracketed and Newton's steps kept inside the
+  // bracket, halving it when a step would leave. Plain Newton from Curtis's first guess can
+  // run away on a long, thin orbit such as a lunar transfer (issue #192: a point billions of km
+  // out drew a straight line across the 3D view).
+  const F = (x: number): [number, number] => {
     const z = alpha * x * x;
     const C = stumpffC(z);
     const S = stumpffS(z);
-    const F = (rn * vr / sqMu) * x * x * C + (1 - alpha * rn) * x * x * x * S + rn * x - sqMu * tS;
-    const dF = (rn * vr / sqMu) * x * (1 - z * S) + (1 - alpha * rn) * x * x * C + rn;
-    const step = F / dF;
-    x -= step;
-    if (Math.abs(step) < 1e-10 * Math.max(1, Math.abs(x))) break;
+    return [
+      (rn * vr / sqMu) * x * x * C + (1 - alpha * rn) * x * x * x * S + rn * x - sqMu * tS,
+      (rn * vr / sqMu) * x * (1 - z * S) + (1 - alpha * rn) * x * x * C + rn,
+    ];
+  };
+  const guess = Math.abs(alpha) > 1e-12 ? sqMu * Math.abs(alpha) * Math.abs(tS) : (sqMu * Math.abs(tS)) / rn;
+  let lo = 0;
+  let hi = 0;
+  let reach = Math.max(guess, 1e-6);
+  // Widen until F changes sign; F is negative at 0 for a later time, positive for an earlier one.
+  for (let i = 0; i < 200; i++) {
+    const v = F(tS > 0 ? reach : -reach)[0];
+    if (tS > 0 ? !(v < 0) : !(v > 0)) break;
+    reach *= 2;
+  }
+  if (tS > 0) hi = reach; else lo = -reach;
+  let x = Math.min(hi, Math.max(lo, tS > 0 ? guess : -guess));
+  for (let i = 0; i < 300; i++) {
+    const [f, df] = F(x);
+    if (f < 0) lo = x; else hi = x;
+    let next = x - f / df;
+    if (!(next > lo && next < hi)) next = (lo + hi) / 2;
+    const done = Math.abs(next - x) < 1e-12 * Math.max(1, Math.abs(x)) || hi - lo < 1e-12 * Math.max(1, Math.abs(x));
+    x = next;
+    if (done) break;
   }
   const z = alpha * x * x;
   const f = 1 - (x * x / rn) * stumpffC(z);
