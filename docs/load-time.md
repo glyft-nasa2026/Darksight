@@ -109,6 +109,7 @@ measurement gave 1.45 s and 0.62 s.
 |---|---|---|---|
 | Sun and Earth numbers on screen | 3 s | 6.46 s (median of 3) | **Fail** |
 | Height map in | 20 s | 29.20 s (median of 3) | **Fail** |
+| Height map in, again after issue #96's fix 1 (pull request #109, commit `d70ffbd`, measured 15 Nov 2026) | 20 s | 16.44 s (median of 3: 16.63, 16.42, 16.44) | **Pass** |
 | Longest freeze after loading | 0.5 s | 0.486 s (Shackleton floor, laptop) | **Pass**, by 14 ms, on the laptop only. Not yet measured on a phone, which will be slower. The 1.06 s freeze when `globe.bin` arrives after loading is outside the four actions; see section 6, item 3 |
 
 ## 6. Fails and who can fix them
@@ -128,7 +129,13 @@ run again and a second row is added to section 5.
 - Files: `web/src/main.ts` (`loadSite`), `web/src/site.ts`, `web/src/ui/intro/index.ts`,
   `web/vite.config.ts`.
 
-**2. Height map in: 29.20 s against 20 s.** Follow-up: issue #96, not claimed yet.
+**2. Height map in: 29.20 s against 20 s.** Follow-up: issue #96. Fixed by its first option
+(pull request #109): `globe.bin` and `north.bin` now start once `dem.bin` is in. Measured again
+on 15 Nov 2026 on darksight.space, commit `d70ffbd` (`assets/main-Br7Jt4jk.js`), same laptop,
+Brave and method: **16.44 s** on Fast 4G (16.63, 16.42, 16.44), `dem.bin` in at 15.61 to
+15.82 s, then one 0.52 to 0.53 s long task before the "Loading" line goes. No throttle: 2.31 s
+(2.28, 2.31, 2.35). The other options below were not needed for the budget; compression is
+still listed in issue #118.
 
 - `dem.bin` (12.85 MB) is sent without compression and shares the connection with `globe.bin`
   (8.30 MB) and `north.bin` (0.52 MB), which are for the picture only and also uncompressed.
@@ -152,7 +159,9 @@ run again and a second row is added to section 5.
 With no throttle it comes 0.6 s after the "Loading" line is gone, so the page looks ready and
 then stops for a second. On Fast 4G it falls inside the loading time, at about 1.1 s. Files:
 `web/src/scene/globeHeights.ts`, `web/src/scene/globe.ts` and `web/src/map/index.ts`
-(issue #66).
+(issue #66). Follow-up: issue #118. After pull request #109 it is still there (1068, 1125,
+1604 ms on Fast 4G; 1046, 1074, 1059 ms with no throttle), and on Fast 4G it now comes at about
+30 s, after the "Loading" line has gone at 16.4 s.
 
 **4. Close to the budget: the Shackleton floor freeze, 486 ms on the laptop.** It is a pass, but
 a phone will be slower. If the phone measurement fails, the file is `web/src/state.ts`
