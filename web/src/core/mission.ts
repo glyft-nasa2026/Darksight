@@ -806,7 +806,10 @@ export function missionAt(plan: OkPlan, tMs: number): MissionState {
       if (t < poi) {
         const f = (t - plan.launchMs) / (poi - plan.launchMs);
         r = R_EARTH + (g.rPark - R_EARTH) * f;
-        state.speedKmS = EARTH_SPIN * R_EARTH + (circularSpeed(MU_EARTH, g.rPark) - EARTH_SPIN * R_EARTH) * f;
+        // From the pad's own speed with the turning Earth (the same term the launch Δv takes off),
+        // not the equator's: 0.408 km/s at Kennedy, 0.465 km/s only on the equator.
+        const padSpeed = EARTH_SPIN * R_EARTH * Math.cos(rad(plan.orbit.parkingIncDeg));
+        state.speedKmS = padSpeed + (circularSpeed(MU_EARTH, g.rPark) - padSpeed) * f;
       } else {
         r = g.rPark;
         state.speedKmS = circularSpeed(MU_EARTH, g.rPark);
