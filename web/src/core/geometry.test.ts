@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseEphemeris, type Ephemeris, type EphemerisMeta } from './ephemeris';
-import { destination, earthAltAz, sunAltAz } from './geometry';
+import { destination, earthAltAz, sunAltAz, sunAltAzAtSite } from './geometry';
 import { readRealTable } from './realTable.testutil';
 import type { AltAz, Site } from './types';
 
@@ -58,6 +58,29 @@ describe('sunAltAz', () => {
       const { az } = sunAltAz(eph, { lat: -60, lon }, 0, START);
       expect(az).toBeGreaterThanOrEqual(0);
       expect(az).toBeLessThan(360);
+    }
+  });
+});
+
+describe('sunAltAzAtSite', () => {
+  // A Sun that moves between the two rows, so times between rows are interpolated.
+  const buffer = new ArrayBuffer(48);
+  const view = new DataView(buffer);
+  [0.6, 0.64, -0.48, 384400, 0, 0, -0.3, 0.9, 0.316, 384400, 0, 0].forEach((v, i) => view.setFloat32(i * 4, v, true));
+  const eph = parseEphemeris({
+    start: '2027-01-01T00:00:00Z', step_s: 3 * 3600, rows: 2, frame: 'MOON_ME_DE421',
+    columns: [], source: 'made up for a test',
+  }, buffer);
+
+  it('gives exactly what sunAltAz gives, at the poles and anywhere between, at any time', () => {
+    const sites: Site[] = [{ lat: -90, lon: 0 }, { lat: 90, lon: 45 }, { lat: -89.67, lon: 129.78 }, { lat: 0, lon: -180 }];
+    for (let i = 0; i < 200; i++) sites.push({ lat: Math.random() * 180 - 90, lon: Math.random() * 360 - 180 });
+    for (const site of sites) {
+      const at = sunAltAzAtSite(eph, site);
+      for (let k = 0; k <= 12; k++) {
+        const t = START + k * 900_000;   // every 15 minutes across the 3 hours
+        expect(at(t)).toEqual(sunAltAz(eph, site, 0, t));
+      }
     }
   });
 });

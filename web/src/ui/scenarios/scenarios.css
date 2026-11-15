@@ -127,6 +127,8 @@
   height: var(--space-3);
   border-radius: 50%;
   background: var(--scn-color);
+  /* Scenario B's blue is 2.97 to 1 on the card; the ring keeps every dot 3 to 1 or better. */
+  border: thin solid var(--muted);
 }
 
 .scn-name {

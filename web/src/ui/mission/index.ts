@@ -21,6 +21,7 @@ import {
   coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, pctText, shortUtcText,
   speedText, utcText,
 } from './format';
+import { BURN_SPEED, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const W = 1000;   // the picture's viewBox
@@ -38,11 +39,10 @@ const ERRORS = {
   'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
 } as const;
 
-// Simulated seconds per real second. Burns that last minutes (the ascent and the powered
-// descent) play at most at SLOW_SPEED, so they don't flash past.
+// Simulated seconds per real second, the same as the simulation page's (pace.ts, issue #105):
+// "Auto" (the default) picks one per stage, every change is gradual, and the playback slows
+// in time for each burn, so the ascent and the powered descent don't flash past.
 const SPEEDS: [label: string, s: number][] = [['1 min/s', 60], ['1 h/s', 3600], ['6 h/s', 6 * 3600]];
-const SLOW_SPEED = 30;
-const SLOW_STEPS: StepId[] = ['launch', 'powered-descent'];
 
 type View = 'auto' | 'earth' | 'moon' | 'descent';
 type Scale = 'near' | 'earth' | 'moon' | 'descent';
@@ -112,13 +112,24 @@ function fit(minX: number, maxX: number, minY: number, maxY: number): (p: Pt) =>
 const pathD = (pts: Pt[]): string =>
   pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
 
-type Picture = { el: SVGSVGElement; update: (s: MissionState) => void };
+/**
+ * A picture is one layer of the card's SVG. Its anchors say where Earth, the Moon and the site
+ * are in it and how many viewBox units a kilometre is there, so a change of scale can zoom from
+ * one picture into the next about the place they share (zoomBetween).
+ */
+type Anchors = {
+  earth?: { p: Pt; s: number };            // Earth's centre; units per km
+  moon?: { p: Pt; r: number };             // the Moon's disc as drawn; its radius
+  site?: { p: Pt; s: number };             // the landing site; units per km along the ground
+};
+type Picture = { el: SVGGElement; update: (s: MissionState) => void; anchors: () => Anchors };
 
 function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
-  const root = svg('svg', 'ms-svg', { viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', preserveAspectRatio: 'xMidYMid meet' });
+  const root = svg('g', 'ms-layer');
+  let anchors: () => Anchors = () => ({});
   const ahead = svg('path', 'ms-ahead');
   const flown = svg('path', 'ms-flown');
-  const craft = svg('circle', 'ms-craft', { r: 6 });
+  const craft = svg('circle', 'ms-craft ms-marker', { r: 6 });
   const tli = stepOf(plan, 'tli').startMs;
   const loi = stepOf(plan, 'loi').startMs;
   const doi = stepOf(plan, 'doi').startMs;
@@ -156,21 +167,30 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     root.append(svg('circle', 'ms-moon ms-faint', { cx: ax, cy: ay, r: moonR }));
     moonMark = svg('circle', 'ms-moon', { r: moonR });
     root.append(moonMark);
+    const mark = moonMark;
+    anchors = () => ({
+      earth: { p: [ox, oy], s },
+      moon: { p: [Number(mark.getAttribute('cx')), Number(mark.getAttribute('cy'))], r: moonR },
+    });
     place = (st) => map(st.earthPlane.craft);
   } else if (scale === 'moon') {
     const rOrbit = R_MOON + plan.orbit.lunarOrbitAltKm;
-    map = fit(-1.25 * rOrbit, 1.25 * rOrbit, -1.25 * rOrbit, 1.25 * rOrbit);
+    // Seen from the side of the plane where the craft reaches the site from the left, as in the
+    // descent picture, so the zoom from one into the other keeps it on the same side.
+    const fitted = fit(-1.25 * rOrbit, 1.25 * rOrbit, -1.25 * rOrbit, 1.25 * rOrbit);
+    map = ([x, y]) => fitted([-x, y]);
     const period = plan.orbit.lunarOrbitPeriodS * 1000;
     pts = [...track(plan, Math.max(loi, doi - period), doi, 180, (s) => s.moonPlane),
       ...track(plan, doi, pdi, 120, (s) => s.moonPlane),
       ...track(plan, pdi, td, 120, (s) => s.moonPlane)];
     const [ox, oy] = map([0, 0]);
-    const s = map([1, 0])[0] - ox;
+    const s = Math.abs(map([1, 0])[0] - ox);
     root.append(svg('circle', 'ms-moon', { cx: ox, cy: oy, r: R_MOON * s }));
     const [sx, sy] = map([0, R_MOON]);
-    const site = svg('circle', 'ms-site', { cx: sx, cy: sy, r: 7 });
+    const site = svg('circle', 'ms-site ms-marker', { cx: sx, cy: sy, r: 7 });
     site.style.setProperty('--ms-site', `var(${siteColor})`);
     root.append(site);
+    anchors = () => ({ moon: { p: [ox, oy], r: R_MOON * s }, site: { p: [sx, sy], s } });
     place = (st) => (st.moonPlane ? map(st.moonPlane) : null);
   } else {
     // Altitude against distance to the site: separate scales, the height exaggerated.
@@ -200,9 +220,11 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
     topLabel.textContent = `${kmText(top)} up`;
     root.append(topLabel);
     const [sx, sy] = map([0, 0]);
-    const site = svg('circle', 'ms-site', { cx: sx, cy: sy, r: 7 });
+    const site = svg('circle', 'ms-site ms-marker', { cx: sx, cy: sy, r: 7 });
     site.style.setProperty('--ms-site', `var(${siteColor})`);
     root.append(site);
+    const along = W / (x1 - x0);   // units per km of distance to the site
+    anchors = () => ({ site: { p: [sx, sy], s: along } });
     place = (st) => (st.rangeToGoKm === null ? null : map([-st.rangeToGoKm, st.altKm]));
   }
 
@@ -212,6 +234,7 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
 
   return {
     el: root,
+    anchors: () => anchors(),
     update: (st) => {
       const here = place(st);
       craft.style.display = here ? '' : 'none';
@@ -229,6 +252,85 @@ function picture(plan: OkPlan, scale: Scale, siteColor: string): Picture {
       }
     },
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// A change of scale: zoom from one picture into the next
+// ---------------------------------------------------------------------------------------------
+
+/** 0..1 eased with zero speed and zero acceleration at both ends (smootherstep). */
+const ease = (f: number): number => f * f * f * (f * (6 * f - 15) + 10);
+const ZOOM_BASE_MS = 1000;
+const ZOOM_PER_E_FOLD_MS = 450;
+const ZOOM_MAX_MS = 3000;
+
+/**
+ * Where the two pictures meet, and the scale between them: Earth from the Earth close-up to the
+ * Earth-Moon view, the Moon from that view to the lunar orbit, the site from the lunar orbit to
+ * the descent. Other pairs (a jump chosen with the view buttons) just cross-fade.
+ */
+function meeting(from: Picture, to: Picture): { a: Pt; b: Pt; r: number } {
+  const fa = from.anchors();
+  const fb = to.anchors();
+  if (fa.site && fb.site) return { a: fa.site.p, b: fb.site.p, r: fa.site.s / fb.site.s };
+  if (fa.earth && fb.earth) return { a: fa.earth.p, b: fb.earth.p, r: fa.earth.s / fb.earth.s };
+  if (fa.moon && fb.moon) return { a: fa.moon.p, b: fb.moon.p, r: fa.moon.r / fb.moon.r };
+  return { a: [W / 2, H / 2], b: [W / 2, H / 2], r: 1 };
+}
+
+/** Sets each marker's radius to its own size divided by the layer's zoom c. */
+function keepSize(layer: SVGGElement, c: number): void {
+  for (const m of layer.querySelectorAll<SVGCircleElement>('.ms-marker')) {
+    if (!m.dataset.r) m.dataset.r = m.getAttribute('r') ?? '0';
+    m.setAttribute('r', String(Number(m.dataset.r) / c));
+  }
+}
+
+/**
+ * Zooms from the picture shown to the next about the place they share: the old one grows (or
+ * shrinks) away and fades out, the new one comes in from the matching size and fades in, so
+ * the shared place stays put on screen while the scale changes. Returns a function that ends
+ * it at once (for a new change before this one has finished).
+ */
+function zoomBetween(frame: SVGSVGElement, from: Picture, to: Picture, done: () => void): () => void {
+  const { a, b, r } = meeting(from, to);
+  const ms = Math.min(ZOOM_MAX_MS, ZOOM_BASE_MS + ZOOM_PER_E_FOLD_MS * Math.abs(Math.log(r)));
+  frame.replaceChildren(from.el, to.el);
+  frame.classList.add('ms-zooming');
+  const start = performance.now();
+  let raf = 0;
+  const set = (e: number): void => {
+    // Both layers keep the shared place at T, moving from where it was to where it will be.
+    const tx = a[0] + (b[0] - a[0]) * e;
+    const ty = a[1] + (b[1] - a[1]) * e;
+    const cNew = r ** (1 - e);    // the new picture starts at the old one's scale
+    const cOld = r ** -e;         // and the old one ends at the new one's
+    to.el.setAttribute('transform', `translate(${tx} ${ty}) scale(${cNew}) translate(${-b[0]} ${-b[1]})`);
+    from.el.setAttribute('transform', `translate(${tx} ${ty}) scale(${cOld}) translate(${-a[0]} ${-a[1]})`);
+    to.el.style.opacity = String(e);
+    from.el.style.opacity = String(1 - e);
+    // Markers (the craft, the site) keep their size on screen while their layer zooms.
+    keepSize(to.el, cNew);
+    keepSize(from.el, cOld);
+  };
+  const finish = (): void => {
+    cancelAnimationFrame(raf);
+    to.el.removeAttribute('transform');
+    to.el.style.opacity = '';
+    keepSize(to.el, 1);
+    frame.replaceChildren(to.el);
+    frame.classList.remove('ms-zooming');
+    done();
+  };
+  const step = (now: number): void => {
+    const f = Math.min(1, (now - start) / ms);
+    set(ease(f));
+    if (f < 1) raf = requestAnimationFrame(step);
+    else finish();
+  };
+  set(0);
+  raf = requestAnimationFrame(step);
+  return finish;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -330,6 +432,9 @@ export function mount(el: HTMLElement): void {
   const view = make('div', 'ms-view');
   const viewLabel = make('span', 'ms-view-label');
   const stage = make('div', 'ms-stage');
+  // One SVG for the animation; each scale's picture is a layer in it, so they can zoom into each other.
+  const frameSvg = svg('svg', 'ms-svg', { viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', preserveAspectRatio: 'xMidYMid meet' });
+  stage.append(frameSvg);
   const live = make('div', 'ms-live');
   view.append(viewLabel, stage, live);
 
@@ -349,7 +454,8 @@ export function mount(el: HTMLElement): void {
   viewSeg.setAttribute('aria-label', 'Picture');
   const controls = make('div', 'ms-controls');
   controls.append(playButton, speedSeg, scrub, viewSeg);
-  const slowNote = make('p', 'ms-note muted', `The ascent and the powered descent play at most at ${SLOW_SPEED} s/s.`);
+  const slowNote = make('p', 'ms-note muted',
+    `Auto picks a speed for each stage. Speeds change gradually, and the ascent and the powered descent play at most at ${BURN_SPEED} s/s.`);
 
   const main = make('div', 'ms-main');
   main.append(view, controls, slowNote);
@@ -378,10 +484,15 @@ export function mount(el: HTMLElement): void {
   let plan: OkPlan | null = null;
   let cursor = 0;
   let playing = false;
-  let speed = SPEEDS[1][1];
+  let speed: Mode = 'auto';
+  let pace = 3600;                                   // the speed playing now, easing toward the limit
+  let limits: ReturnType<typeof regions> = [];
+  const settlePace = (): void => { if (plan) pace = paceLimit(limits, cursor); };
   let chosenView: View = 'auto';
   let shownScale: Scale | null = null;
   let pic: Picture | null = null;
+  let leaving: Picture | null = null;         // the picture zooming away, still drawn
+  let endZoom: (() => void) | null = null;
   let siteColor = '--accent';
   let frame = 0;
   let lastFrameMs = 0;
@@ -389,13 +500,25 @@ export function mount(el: HTMLElement): void {
 
   const endMs = (): number => (plan ? plan.runsOutMs ?? plan.touchdownMs : 0);
 
+  const setSpeed = (m: Mode): void => {
+    speed = m;
+    if (plan) limits = regions(plan, m);
+    drawControls();
+  };
+  const autoButton = make('button', 'btn ms-small', 'Auto');
+  autoButton.type = 'button';
+  autoButton.dataset.speed = 'auto';
+  autoButton.addEventListener('click', () => setSpeed('auto'));
+  speedSeg.append(autoButton);
   for (const [label, s] of SPEEDS) {
     const b = make('button', 'btn ms-small', label);
     b.type = 'button';
-    b.addEventListener('click', () => { speed = s; drawControls(); });
+    b.addEventListener('click', () => setSpeed(s));   // a manual speed turns Auto off; the change glides
     b.dataset.speed = String(s);
     speedSeg.append(b);
   }
+  const rateNow = make('span', 'ms-rate');
+  controls.insertBefore(rateNow, scrub);
   for (const [v, label] of VIEWS) {
     const b = make('button', 'btn ms-small', label);
     b.type = 'button';
@@ -406,7 +529,10 @@ export function mount(el: HTMLElement): void {
 
   const drawControls = (): void => {
     playButton.textContent = playing ? '❚❚ Pause' : '▶ Play';
-    for (const b of speedSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === speed));
+    for (const b of speedSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.speed === String(speed)));
+    autoButton.textContent = speed === 'auto' && plan ? `Auto · ${rateText(pace)}` : 'Auto';
+    // A manual speed: say what is playing while it glides, or while a burn holds it slower.
+    rateNow.textContent = speed !== 'auto' && plan && Math.abs(Math.log(pace / speed)) > 0.01 ? `now ${rateText(pace)}` : '';
     for (const b of viewSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === chosenView));
   };
 
@@ -417,12 +543,23 @@ export function mount(el: HTMLElement): void {
     const scale: Scale = chosenView === 'auto' ? autoScale(step.id) : chosenView === 'earth'
       ? (autoScale(step.id) === 'near' ? 'near' : 'earth') : chosenView;
     if (scale !== shownScale || !pic) {
+      endZoom?.();
+      const next = picture(plan, scale, siteColor);
+      next.update(st);
+      if (pic && shownScale && !prefersReducedMotion()) {
+        // Zoom from the old picture into the new one; under reduced motion, a cut.
+        leaving = pic;
+        pic.update(st);
+        endZoom = zoomBetween(frameSvg, pic, next, () => { leaving = null; endZoom = null; });
+      } else {
+        frameSvg.replaceChildren(next.el);
+      }
       shownScale = scale;
-      pic = picture(plan, scale, siteColor);
-      stage.replaceChildren(pic.el);
+      pic = next;
       viewLabel.textContent = LABELS[scale];
     }
     pic.update(st);
+    leaving?.update(st);
 
     // The live line.
     const parts: [string, string][] = [
@@ -459,8 +596,7 @@ export function mount(el: HTMLElement): void {
     if (!playing || !plan) return;
     const dt = Math.min(0.25, (now - lastFrameMs) / 1000);
     lastFrameMs = now;
-    const step = plan.steps[missionAt(plan, cursor).stepIndex];
-    const pace = SLOW_STEPS.includes(step.id) ? Math.min(speed, SLOW_SPEED) : speed;
+    pace = nextPace(pace, paceLimit(limits, cursor), dt);
     cursor = Math.min(endMs(), cursor + dt * pace * 1000);
     if (cursor >= endMs()) playing = false;
     drawFrame();
@@ -479,7 +615,7 @@ export function mount(el: HTMLElement): void {
     if (playing) {
       stop();
     } else {
-      if (cursor >= endMs()) cursor = plan.launchMs;
+      if (cursor >= endMs()) { cursor = plan.launchMs; settlePace(); }
       playing = true;
       lastFrameMs = performance.now();
       frame = requestAnimationFrame(tick);
@@ -489,7 +625,9 @@ export function mount(el: HTMLElement): void {
   scrub.addEventListener('input', () => {
     if (!plan) return;
     cursor = Math.min(endMs(), plan.launchMs + (Number(scrub.value) / 1000) * (plan.touchdownMs - plan.launchMs));
+    settlePace();   // a jump in time starts at that moment's speed
     drawFrame();
+    drawControls();
   });
 
   // --- Drawing a new plan ------------------------------------------------------------------------
@@ -511,7 +649,9 @@ export function mount(el: HTMLElement): void {
         make('span', 'ms-when', dayText(s.startMs)), make('span', 'ms-when', detail));
       b.addEventListener('click', () => {
         cursor = Math.min(endMs(), s.startMs);
+        settlePace();
         drawFrame();
+        drawControls();
       });
       stepButtons.set(id, b);
       return b;
@@ -667,6 +807,9 @@ export function mount(el: HTMLElement): void {
       stop();
       plan = p;
       cursor = p.launchMs;
+      limits = regions(p, speed);
+      settlePace();
+      endZoom?.();
       shownScale = null;
       pic = null;
       main.replaceChildren(view, controls, slowNote);

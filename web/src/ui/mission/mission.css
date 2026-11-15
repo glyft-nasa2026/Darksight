@@ -64,3 +64,7 @@
   .ms-view-label { position: static; display: block; padding: var(--space-2) var(--space-3) 0; }
 }
 .ms-proceed { margin-top: var(--space-2); }
+.ms-rate { font-family: var(--font-num); font-size: var(--fs-sm); color: var(--muted); }
+.ms-rate:empty { display: none; }
+/* While one picture zooms into the next, lines keep their width instead of growing with the zoom. */
+.ms-svg.ms-zooming * { vector-effect: non-scaling-stroke; }

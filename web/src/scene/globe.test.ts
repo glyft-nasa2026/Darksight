@@ -3,7 +3,7 @@ import { Color, Vector3 } from 'three';
 import type { DemMeta } from '../core/dem';
 import { moonCentre, sitePosition, sphereSite } from './coordinates';
 import { globeColors, globeNormals, globeSlopes, mapGlobeUv, parseGlobe, parseNorth, uvSite, type GlobeMeta } from './globe';
-import { globeGeometry, northGeometry, restretchTerrain } from './terrain';
+import { capWeight, globeGeometry, northGeometry, restretchTerrain } from './terrain';
 
 const meta: GlobeMeta = { width: 72, height: 36, height_scale: 0.5, source: 'test' };
 
@@ -182,7 +182,8 @@ describe('north cap', () => {
       const site = sphereSite(point);
       expect(site.lat).toBeGreaterThan(79.9);
       const radiusM = point.sub(moonCentre()).length() * 1000 - R_M;
-      expect(Math.abs(radiusM - heights.getX(i))).toBeLessThan(1);
+      // Eased to the sphere toward the edge (issue #114).
+      expect(Math.abs(radiusM - heights.getX(i) * capWeight(north.meta, -site.lat))).toBeLessThan(1);
       if (Math.abs(site.lon) < 3 || Math.abs(site.lon) > 177 || site.lat > 89.5) continue;
       if (site.lon > 0) { expect(heights.getX(i)).toBe(2000); east++; }
       else { expect(heights.getX(i)).toBe(-1000); west++; }
@@ -232,8 +233,10 @@ describe('north cap', () => {
     let checked = 0;
     for (let i = 0; i < position.count; i++) {
       if (!valid[i]) continue;
-      const radiusM = point.fromBufferAttribute(position, i).sub(moonCentre()).length() * 1000 - R_M;
-      expect(Math.abs(radiusM - 3 * heights.getX(i))).toBeLessThan(1);
+      point.fromBufferAttribute(position, i);
+      const w = capWeight(north.meta, -sphereSite(point).lat);
+      const radiusM = point.sub(moonCentre()).length() * 1000 - R_M;
+      expect(Math.abs(radiusM - 3 * heights.getX(i) * w)).toBeLessThan(1);
       checked++;
     }
     expect(checked).toBeGreaterThan(1000);

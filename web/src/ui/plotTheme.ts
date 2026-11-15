@@ -50,6 +50,22 @@ function themePx(name: string): number {
 }
 
 /**
+ * Line widths for Plotly, from the theme's smallest gap (--space-1): thin is a quarter of it,
+ * thick a half. Plotly takes pixels; this keeps the numbers out of the modules.
+ */
+export function chartLine(weight: 'thin' | 'thick'): number {
+  return themePx('--space-1') / (weight === 'thin' ? 4 : 2);
+}
+
+/**
+ * An axis title in the theme's title style. Use it instead of `title: { text }`, which replaces
+ * the whole title object from plotLayout() and with it the small muted font.
+ */
+export function axisTitle(text: string): { text: string; font: { size: number; color: string } } {
+  return { text, font: { size: themePx('--fs-sm'), color: themeColor('--muted') } };
+}
+
+/**
  * Every Plotly chart spreads this into its layout: { ...plotLayout(), title: ... }.
  * The look follows the design's diagrams: the chart sits on its card, slate grid lines,
  * small fixed-width tick labels in the secondary text colour.

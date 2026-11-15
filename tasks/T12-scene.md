@@ -1,6 +1,6 @@
 # T12: 3D scene and map
 
-Status: done (pull requests #7 and #18; drag-to-pan and outside-table fixes in #52). Issue #77 (3D orbit, centre and stretch north of 80 S): fixed in pull request #84 (`t12-scene-d`). Issue #85 (level of detail follows the camera): pull request #113 (`issue-85-lod-camera`). Issue #80 (star map behind the 3D views): pull request #115 (`issue-80-stars`). Above 30 FPS on the laptop, confirmed by P1 on 14 Nov 2026
+Status: done (pull requests #7 and #18; drag-to-pan and outside-table fixes in #52). Issue #77 (3D orbit, centre and stretch north of 80 S): fixed in pull request #84 (`t12-scene-d`). Issue #85 (level of detail follows the camera): pull request #113 (`issue-85-lod-camera`). Issue #80 (star map behind the 3D views): pull request #115 (`issue-80-stars`). Issue #114 (gap at the polar caps' edge): pull request #124 (`issue-114-cap-gap`). Issue #107 (pole markers in the 3D view): pull request #129 (`issue-107-pole-markers`). Above 30 FPS on the laptop, confirmed by P1 on 14 Nov 2026
 
 | | |
 |---|---|
@@ -57,6 +57,7 @@ The folder's CSS file goes to T23 once this merges.
 - 15 Nov 2026, issue #85 (`issue-85-lod-camera`): the 950 m patch round the selected site now follows the camera. It starts at the site when it is picked, then moves to the ground in the middle of the view once the camera settles more than 3 degrees away; "Centre selected site" brings it back. A patch that arrives no longer pulls a panned view back to the site. `browser-check.py` has 20 checks: "level of detail follows the view" is new.
 
 - 15 Nov 2026, issue #80 (pull request #115, `issue-80-stars`): the 3D orbit view has the real sky behind the Moon: the 9,096 stars of the Yale Bright Star Catalogue (`stars.bin`, 91 KB, contract section 2), turned with the Moon at the selected time by `core/sky.ts` (IAU lunar rotation model, within 0.02 degrees of DE440's mean-Earth frame). They sit at infinity and draw before everything else, so the Moon, the terrain and Earth cover them. The launch-site picker and the simulation page (T34) use the same star field. A picture only; without the file the background is plain as before.
+- 15 Nov 2026, issue #114 (`issue-114-cap-gap`): no step or crack where the south-pole terrain and the north cap meet the globe. Their shape eases to the sphere over the last degree before the globe's opening (`capWeight` in `scene/terrain.ts`), like the patch's faded edge; colours and lighting still follow the full heights. Pins and the camera target sit on the eased ground.
 
 ## Prompt to paste into Claude Code
 

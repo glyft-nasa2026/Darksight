@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
-  EARTH_SPIN, missionAt, moonFixedInPlane, R_EARTH, R_MOON, type MissionState, type OkPlan, type StepId,
+  approachSeconds, EARTH_SPIN, missionAt, moonFixedInPlane, R_EARTH, R_MOON, type MissionState, type OkPlan, type StepId,
 } from '../core/mission';
 import type { Pad } from '../core/pads';
 import { disposeScene, earthDirection, makeEarth, prefersReducedMotion, themeLength } from '../ui/launch/earth';
@@ -19,10 +19,10 @@ import { makeStarField } from '../scene/stars';
 
 export type Scale = 'near' | 'earth' | 'moon' | 'descent';
 
-/** The scale that suits a step. */
-export function scaleFor(id: StepId): Scale {
+/** The scale that suits a step; the arrival at the Moon (inside its sphere of influence) is shown at the Moon. */
+export function scaleFor(id: StepId, st?: MissionState): Scale {
   if (id === 'launch' || id === 'parking' || id === 'tli') return 'near';
-  if (id === 'coast') return 'earth';
+  if (id === 'coast') return st?.approach ? 'moon' : 'earth';
   if (id === 'powered-descent' || id === 'touchdown') return 'descent';
   return 'moon';
 }
@@ -33,7 +33,15 @@ const P = ([x, y]: [number, number]): THREE.Vector3 => new THREE.Vector3(x * KM,
 /** The same with the plane's normal (z) as the scene's up. */
 const P3 = ([x, y, z]: [number, number, number]): THREE.Vector3 => new THREE.Vector3(x * KM, z * KM, -y * KM);
 
-const GLIDE_MS = 1400;
+// A change of scale glides: a short one in about 1.5 s, Earth orbit out to the Earth-Moon
+// view (20 times wider) in about 3.2 s. The pan keeps pace with the zoom (see draw), so the
+// place being left and the place being reached both stay in view.
+const GLIDE_BASE_MS = 1200;
+const GLIDE_PER_E_FOLD_MS = 650;
+const GLIDE_MAX_MS = 3600;
+/** 0..1 eased with zero speed and zero acceleration at both ends (smootherstep). */
+const ease = (f: number): number => f * f * f * (f * (6 * f - 15) + 10);
+const isMoonScale = (s: Scale): boolean => s === 'moon' || s === 'descent';
 const VIEW_DIRECTION: Record<Scale, THREE.Vector3> = {
   near: new THREE.Vector3(0.25, 0.75, 1).normalize(),
   earth: new THREE.Vector3(0, 1, 0.55).normalize(),
@@ -61,7 +69,8 @@ function sample(plan: OkPlan, from: number, to: number, n: number, pick: (s: Mis
 }
 
 export type MissionScene = {
-  update: (st: MissionState, scale: Scale) => void;
+  /** burning: the engine is firing (the ascent, the powered descent, or an instant burn's moment). */
+  update: (st: MissionState, scale: Scale, burning: boolean) => void;
   dispose: () => void;
 };
 
@@ -183,39 +192,76 @@ export function createScene(
   const craft = dot('--ok', '--space-3', true);
   scene.add(craft);
 
-  // The paths: dim ahead, bright where flown.
-  const ahead = themeColor('--muted');
-  const flownColor = themeColor('--accent');
+  // The paths: faint ahead, full where flown. At the Moon each orbit the craft is put on has its
+  // own colour, so the changes show: the arrival hyperbola, the 100 km orbit after LOI, the
+  // descent orbit after DOI, and the powered descent.
   const tracks: Track[] = [];
-  const addTrack = (parent: THREE.Object3D, s: { times: number[]; points: THREE.Vector3[] }): void => {
-    if (s.points.length < 2) return;
-    parent.add(line(s.points, ahead, 0.45));
-    const flown = line(s.points, flownColor, 1);
+  const addTrack = (parent: THREE.Object3D, s: { times: number[]; points: THREE.Vector3[] }, color: string): THREE.Line[] => {
+    if (s.points.length < 2) return [];
+    const c = themeColor(color);
+    const before = line(s.points, c, 0.5);
+    const flown = line(s.points, c, 1);
     flown.geometry.setDrawRange(0, 0);
     flown.renderOrder = 1;
-    parent.add(flown);
+    parent.add(before, flown);
     tracks.push({ times: s.times, flown });
+    return [before, flown];
   };
+  const doi = step('doi').startMs;
   const toTli = sample(plan, launch, tli, 500, (s) => s.earthPlane.craft);
   const coast = sample(plan, tli, loi, 700, (s) => s.earthPlane.craft);
-  addTrack(scene, { times: [...toTli.times, ...coast.times], points: [...toTli.points, ...coast.points] });
-  const orbit = sample(plan, loi, pdi, 700, (s) => s.moonPlane);
-  const descent = sample(plan, pdi, td, 400, (s) => s.moonPlane);
-  addTrack(moon, { times: [...orbit.times, ...descent.times], points: [...orbit.points, ...descent.points] });
+  const earthTrack = addTrack(scene, { times: [...toTli.times, ...coast.times], points: [...toTli.points, ...coast.points] }, '--accent');
+  // The arrival hyperbola, sampled densely near the periapsis, where it bends.
+  const arrive = loi - approachSeconds(plan) * 1000;
+  const approach = { times: [] as number[], points: [] as THREE.Vector3[] };
+  for (let i = 0; i <= 400; i++) {
+    const t = Math.min(loi - 1, loi - (loi - arrive) * (1 - i / 400) ** 3);
+    const m = missionAt(plan, t).moonPlane;
+    if (m) { approach.times.push(t); approach.points.push(P(m)); }
+  }
+  addTrack(moon, approach, '--muted');
+  addTrack(moon, sample(plan, loi, doi, 500, (s) => s.moonPlane), '--accent');
+  addTrack(moon, sample(plan, doi, pdi, 400, (s) => s.moonPlane), '--warn');
+  addTrack(moon, sample(plan, pdi, td, 400, (s) => s.moonPlane), '--ok');
   // The Moon's own circle, faint.
   const moonCircle: THREE.Vector3[] = [];
   for (let i = 0; i <= 256; i++) {
     const a = (i / 256) * 2 * Math.PI;
     moonCircle.push(P([plan.orbit.earthMoonKm * Math.cos(a), plan.orbit.earthMoonKm * Math.sin(a)]));
   }
-  scene.add(line(moonCircle, themeColor('--border'), 1));
+  const moonPath = line(moonCircle, themeColor('--border'), 1);
+  scene.add(moonPath);
+
+  // --- The burns that change the orbit at the Moon, marked where they happen -----------------------
+  const burns: { el: HTMLSpanElement; local: THREE.Vector3; scales: Scale[]; arriving: boolean }[] = [];
+  const burnMark = (t: number, text: string, scales: Scale[], arriving = false): void => {
+    const local = P(missionAt(plan, t).moonPlane!);
+    const mark = dot('--warn', '--space-2', true);
+    mark.position.copy(local);
+    moon.add(mark);
+    const el = document.createElement('span');
+    el.className = 'sim-label sim-label-burn';
+    el.textContent = text;
+    el.setAttribute('aria-hidden', 'true');
+    container.append(el);
+    burns.push({ el, local, scales, arriving });
+  };
+  burnMark(loi, 'LOI burn', ['moon'], true);   // the one shown while arriving: where the craft aims
+  burnMark(doi, 'DOI burn', ['moon']);
+  burnMark(pdi, 'Powered descent starts', ['moon', 'descent']);
 
   // --- Camera: follows the body of the scale; glides (or cuts) when the scale changes -----------
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enablePan = false;
   controls.rotateSpeed = 0.6;
   let shown: Scale | null = null;
-  let glide: { from: THREE.Vector3; to: THREE.Vector3; fromTarget: THREE.Vector3; startMs: number } | null = null;
+  let glide: {
+    from: THREE.Vector3; to: THREE.Vector3; fromTarget: THREE.Vector3; startMs: number; ms: number;
+    fromMoon: number;   // the Moon frame's weight for the craft when the glide began
+  } | null = null;
+  // The craft's weight on its Moon-centred path (1) against the Earth-frame transfer (0): it
+  // changes over the glide, so the craft dot slides instead of jumping between the two.
+  let moonWeight = 0;
   const lastTarget = new THREE.Vector3();
 
   const distanceFor = (scale: Scale): number => {
@@ -223,13 +269,21 @@ export function createScene(
     const narrow = Math.max(1, 1.5 / camera.aspect);
     if (scale === 'near') return R_EARTH * KM * 4.5 * narrow;
     if (scale === 'earth') return plan.orbit.earthMoonKm * KM * 1.45 * narrow;
-    if (scale === 'moon') return R_MOON * KM * 4.2 * narrow;
+    if (scale === 'moon') {
+      // Arriving: far enough back to see the hyperbola come in, closing in as it nears.
+      const r = last?.st.approach && last.st.moonPlane ? Math.hypot(...last.st.moonPlane) : 0;
+      return Math.max(R_MOON * KM * 4.2, r * KM * 2) * narrow;
+    }
     return Math.max(plan.orbit.descentRangeKm, 60) * KM * 1.6 * narrow;
   };
   const targetFor = (scale: Scale, st: MissionState): THREE.Vector3 => {
     if (scale === 'near') return new THREE.Vector3();
     if (scale === 'earth') return P(st.earthPlane.moon).multiplyScalar(0.5);
-    if (scale === 'moon') return moon.position.clone();
+    if (scale === 'moon') {
+      // Arriving: aim halfway between the Moon and the craft, so both stay in view.
+      if (st.approach && st.moonPlane) return moon.position.clone().add(P(st.moonPlane).applyQuaternion(moon.quaternion).multiplyScalar(0.5));
+      return moon.position.clone();
+    }
     return moon.position.clone().add(siteMark.position.clone().applyQuaternion(moon.quaternion));
   };
 
@@ -277,9 +331,30 @@ export function createScene(
     put(labels.site, moon.position.clone().add(siteMark.position.clone().applyQuaternion(moon.quaternion)),
       scale === 'moon' || scale === 'descent');
     put(labels.craft, craft.position);
+    for (const b of burns) {
+      const show = b.scales.includes(scale) && (b.arriving || !last?.st.approach);
+      put(b.el, moon.position.clone().add(b.local.clone().applyQuaternion(moon.quaternion)), show);
+    }
   };
 
-  let last: { st: MissionState; scale: Scale } | null = null;
+  let last: { st: MissionState; scale: Scale; burning: boolean } | null = null;
+  // At Earth's scales the craft follows the transfer; at the Moon's, its Moon-centred path; in a
+  // glide between them, a blend. The Earth-frame lines, which run into the Moon's centre, fade
+  // out toward the Moon's scales by the same weight.
+  for (const l of [...earthTrack, moonPath]) l.userData.opacity = (l.material as THREE.LineBasicMaterial).opacity;
+  const placeCraft = (st: MissionState | undefined = last?.st): void => {
+    if (!st) return;
+    const w = st.moonPlane ? moonWeight : 0;
+    const fromEarth = P(st.earthPlane.craft);
+    craft.position.copy(w > 0 ? fromEarth.lerp(moon.position.clone().add(P(st.moonPlane!).applyQuaternion(moon.quaternion)), w) : fromEarth);
+    for (const l of [...earthTrack, moonPath]) {
+      const m = l.material as THREE.LineBasicMaterial;
+      m.transparent = true;
+      m.opacity = l.userData.opacity * (1 - moonWeight);
+      l.visible = m.opacity > 0.01;
+    }
+  };
+  let settling = false;
   let frame = 0;
   const draw = (now: number): void => {
     frame = requestAnimationFrame(draw);
@@ -292,19 +367,40 @@ export function createScene(
       if (shown === null || prefersReducedMotion()) {
         offset = to;
         glide = null;
+        moonWeight = isMoonScale(scale) ? 1 : 0;
       } else {
-        glide = { from: offset.clone(), to, fromTarget: lastTarget.clone(), startMs: now };
+        const fold = Math.abs(Math.log(to.length() / offset.length()));
+        const ms = Math.min(GLIDE_MAX_MS, GLIDE_BASE_MS + GLIDE_PER_E_FOLD_MS * fold);
+        glide = { from: offset.clone(), to, fromTarget: lastTarget.clone(), startMs: now, ms, fromMoon: moonWeight };
       }
       shown = scale;
     }
     let aim = target;
     if (glide) {
-      const f = Math.min(1, (now - glide.startMs) / GLIDE_MS);
-      const e = f * f * (3 - 2 * f);
-      const len = Math.exp(Math.log(glide.from.length()) + (Math.log(glide.to.length()) - Math.log(glide.from.length())) * e);
+      const f = Math.min(1, (now - glide.startMs) / glide.ms);
+      const e = ease(f);
+      const d0 = glide.from.length();
+      const d1 = glide.to.length();
+      const len = Math.exp(Math.log(d0) + (Math.log(d1) - Math.log(d0)) * e);
       offset = glide.from.clone().normalize().lerp(glide.to.clone().normalize(), e).normalize().multiplyScalar(len);
-      aim = glide.fromTarget.clone().lerp(target, e);
+      // Pan in step with the zoom: the aim has moved the same share of the way as the view's
+      // width has changed. Zooming out, the start stays in view while the view widens; zooming
+      // in, the aim reaches the new place early, while the view is still wide enough to show it.
+      const u = Math.abs(d1 - d0) < 1e-9 ? e : (len - d0) / (d1 - d0);
+      aim = glide.fromTarget.clone().lerp(target, u);
+      moonWeight = glide.fromMoon + ((isMoonScale(scale) ? 1 : 0) - glide.fromMoon) * e;
       if (f >= 1) glide = null;
+    } else {
+      moonWeight = isMoonScale(scale) ? 1 : 0;
+    }
+    placeCraft();
+    if (!glide && scale === 'moon' && (st.approach || settling)) {
+      // Ease the distance toward the one that fits the arrival, then leave the zoom to the user.
+      const want = distanceFor('moon');
+      const len = offset.length();
+      const next = Math.exp(Math.log(len) + (Math.log(want) - Math.log(len)) * 0.08);
+      offset.setLength(next);
+      settling = st.approach || Math.abs(Math.log(next / want)) > 0.01;
     }
     controls.target.copy(aim);
     camera.position.copy(aim).add(offset);
@@ -318,21 +414,25 @@ export function createScene(
   frame = requestAnimationFrame(draw);
 
   return {
-    update: (st, scale) => {
+    update: (st, scale, burning) => {
       moon.position.copy(P(st.earthPlane.moon));
       spin.setFromAxisAngle(yAxis, EARTH_SPIN * st.elapsedS);
       earth.quaternion.copy(tilt).multiply(spin);
       turnBody(st.tMs);
       placeSite(st.tMs);
-      craft.position.copy(st.moonPlane
-        ? moon.position.clone().add(P(st.moonPlane).applyQuaternion(moon.quaternion))
-        : P(st.earthPlane.craft));
+      if (!glide) placeCraft(st);
+      // Firing: the craft shows as a larger --warn dot, and its label says so.
+      const cm = craft.material as THREE.PointsMaterial;
+      cm.color.set(themeColor(burning ? '--warn' : '--ok'));
+      cm.size = themeLength(burning ? '--space-4' : '--space-3');
+      labels.craft.textContent = burning ? 'Spacecraft · engine firing' : 'Spacecraft';
+      labels.craft.classList.toggle('sim-label-firing', burning);
       for (const tr of tracks) {
         let n = 0;
         while (n < tr.times.length && tr.times[n] <= st.tMs) n++;
         tr.flown.geometry.setDrawRange(0, n);
       }
-      last = { st, scale };
+      last = { st, scale, burning };
     },
     dispose: () => {
       cancelAnimationFrame(frame);
@@ -343,6 +443,7 @@ export function createScene(
       renderer.dispose();
       renderer.domElement.remove();
       for (const el of Object.values(labels)) el.remove();
+      for (const b of burns) b.el.remove();
     },
   };
 }
