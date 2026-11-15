@@ -22,6 +22,8 @@ export type Dem = {
   heightAt(lat: number, lon: number): number;
   /** Height of one stored cell, metres (row 0 at the top, as in the file). A cell with no data is 0. */
   cell(row: number, col: number): number;
+  /** False where the stored cell is `nodata` (or outside the grid), which cell() reads as 0. */
+  hasData(row: number, col: number): boolean;
 };
 
 const R_M = MOON_RADIUS_KM * 1000;
@@ -98,7 +100,12 @@ export function parseDem(meta: DemMeta, buffer: ArrayBuffer): Dem {
     return top * (1 - v) + bottom * v;
   }
 
-  return { meta, covers, heightAt, cell };
+  function hasData(row: number, col: number): boolean {
+    if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || col < 0 || row > last || col > last) return false;
+    return data[row * size + col] !== nodata;
+  }
+
+  return { meta, covers, heightAt, cell, hasData };
 }
 
 /**

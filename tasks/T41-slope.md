@@ -1,6 +1,6 @@
 # T41: Ground slope, as a map layer and a readout line
 
-Status: not started
+Status: in progress (MarsRon, branch t41-slope, draft pull request): core/slope.ts and tests done; next the Slope layer and the readout line.
 
 | | |
 |---|---|
