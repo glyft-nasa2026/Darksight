@@ -302,8 +302,11 @@ export function mount(el: HTMLElement): void {
   proceedButton.setAttribute('aria-haspopup', 'dialog');
   const proceedNote = make('p', 'ms-note muted', 'Choose the launch site on the globe, then watch the whole flight on its own page.');
   proceedButton.addEventListener('click', () => {
+    // The stars behind the globe are turned to the planned launch time (issue #80).
+    const m = missionFor();
     openPadPicker({
       padId: getState().padId,
+      tMs: m.status === 'ready' && m.plan.ok ? m.plan.launchMs : landingScenario()?.tMs,
       confirmLabel: 'Confirm launch pad · begin simulation',
       onConfirm: (id) => {
         setPad(id);
