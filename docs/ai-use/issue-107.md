@@ -1,0 +1,5 @@
+# AI use: issue #107, north and south pole markers in the 3D view
+
+| When | Who | Tool | What the AI did | What a person checked |
+|---|---|---|---|---|
+| 2026-11-15 | MarsRon | Claude Code (Opus 5.5) | Wrote `web/src/scene/poles.ts`: a stub of the spin axis from each pole out to 1.25 Moon radii (`poleStub`, `poleLines`, coloured `--muted`), and two helpers for the labels, `hiddenByMoon` (is the sphere between the camera and a point) and `viewportFraction` (where a point is drawn, as fractions of the view). In `scene/index.ts` the stubs join the scene and an "N" / "S" label (`.scene-pole` in `scene.css`, theme variables only, positioned in percent) sits at each stub's tip after every frame, hidden in 2D, off screen or behind the Moon. Tests in `poles.test.ts`. Took screenshots in headless Chromium on the real data at 10 N 20 E (near and zoomed out), 88 S 45 E (near and zoomed out) and 84 N 30 E. Checks: `npm test` 527 of 527, `npm run build` passes. | MarsRon checked it in the browser on 15 Nov 2026 ("working") |

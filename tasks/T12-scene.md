@@ -1,6 +1,6 @@
 # T12: 3D scene and map
 
-Status: done (pull requests #7 and #18; drag-to-pan and outside-table fixes in #52). Issue #77 (3D orbit, centre and stretch north of 80 S): fixed in pull request #84 (`t12-scene-d`). Issue #85 (level of detail follows the camera): pull request #113 (`issue-85-lod-camera`). Issue #80 (star map behind the 3D views): pull request #115 (`issue-80-stars`). Issue #114 (gap at the polar caps' edge): pull request #124 (`issue-114-cap-gap`). Above 30 FPS on the laptop, confirmed by P1 on 14 Nov 2026
+Status: done (pull requests #7 and #18; drag-to-pan and outside-table fixes in #52). Issue #77 (3D orbit, centre and stretch north of 80 S): fixed in pull request #84 (`t12-scene-d`). Issue #85 (level of detail follows the camera): pull request #113 (`issue-85-lod-camera`). Issue #80 (star map behind the 3D views): pull request #115 (`issue-80-stars`). Issue #114 (gap at the polar caps' edge): pull request #124 (`issue-114-cap-gap`). Issue #107 (pole markers in the 3D view): pull request #129 (`issue-107-pole-markers`). Above 30 FPS on the laptop, confirmed by P1 on 14 Nov 2026
 
 | | |
 |---|---|
