@@ -18,6 +18,7 @@ import { MOON_RADIUS_KM, type Site } from '../core/types';
 import { sharedNorth } from '../scene/globe';
 import { globeSlopes, sharedGlobe, type GlobeHeights } from '../scene/globeHeights';
 import { getState, select, selected, setLiveSite, subscribe, type AppState } from '../state';
+import { drawLayers, onLayersChange } from '../ui/layers';
 import { themeColor } from '../ui/plotTheme';
 import './map.css';
 
@@ -579,6 +580,8 @@ export function mount(el: HTMLElement): void {
       }
       ctx.restore();
     }
+    // T14 map layers, over the terrain and under the grid and pins; south-polar map only.
+    if (kind === 'south' && dem) drawLayers(ctx, (x, y) => viewToScreen(view, x, y));
     gridLabels = [];
     if (kind !== 'global') drawPolarGrid(); else drawGlobalGrid();
     if (kind === 'global') {
@@ -704,6 +707,8 @@ export function mount(el: HTMLElement): void {
   const themeObserver = new MutationObserver(() => { readTheme(); update(getState()); });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
   const unsubscribe = subscribe(update);
+  // T14: redraw for layer data, opacity and every frame of a fade. Removes itself once disposed.
+  const offLayers = onLayersChange(() => { if (disposed) offLayers(); else invalidate(); });
   update(getState()); resize();
   // The whole-Moon heights arrive after the first frame (the 3D globe shares the same download).
   // Without the files the map stays as it was: plain outside the polar grid.
