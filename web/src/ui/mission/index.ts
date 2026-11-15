@@ -714,7 +714,8 @@ export function mount(el: HTMLElement): void {
     b.append(name);
     box.replaceChildren(make('span', 'ms-k', k), b, ...(sub ? [make('span', 'ms-coord', sub)] : []),
       make('span', 'ms-coord muted', coordText(lat, lon)),
-      make('span', 'ms-coord', `${utcText(tMs)} UTC`));
+      // No time yet (the plan is still loading): the caller writes what replaces it.
+      make('span', 'ms-coord', Number.isFinite(tMs) ? `${utcText(tMs)} UTC` : ''));
   };
 
   // --- Landing-site conditions (the readout's accessors, for the landing point) ------------------
@@ -775,7 +776,7 @@ export function mount(el: HTMLElement): void {
       stop();
       plan = null;
       shownKey = null;
-      message.textContent = 'Press “Land here” on a scenario card to plan a mission that lands there, at its time.';
+      message.textContent = 'No landing site chosen. Go back to the landing sites and press “Land here” on a scenario card, then “Open mission”.';
       body.replaceChildren(message);
       return;
     }

@@ -94,7 +94,7 @@ hud.append(live, controls, chapters, note);
 root.append(bar, stage, hud);
 
 // --- Back to the planner -----------------------------------------------------------------------
-const plannerUrl = (): string => `index.html#${stateToAddress()}`;
+const plannerUrl = (): string => `mission.html#${stateToAddress()}`;
 back.href = plannerUrl();
 back.addEventListener('click', (e) => {
   // Opened in a new tab by the planner (issue #105): the planner is still open in its own tab,

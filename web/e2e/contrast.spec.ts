@@ -163,7 +163,8 @@ async function check(page: Page, hash: string, before?: (page: Page) => Promise<
   await page.goto(`./${hash}`);
   await page.getByRole('button', { name: /Start exploring/ }).click();
   await expect(page.locator('#status')).not.toContainText('Loading', { timeout: 60_000 });
-  await expect(page.locator('#mission')).not.toBeEmpty({ timeout: 30_000 });
+  // The last slot site.ts mounts (#mission has its own page since T34-f).
+  await expect(page.locator('#sky')).not.toBeEmpty({ timeout: 30_000 });
   await before?.(page);
   await page.waitForTimeout(1500); // let the map and charts finish drawing
   // Measure end states only: a button caught halfway through its colour transition reads as

@@ -1,0 +1,13 @@
+/* The mission planner page (T34). Only ui/theme.css variables. */
+.mp {
+  display: grid; gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5);
+  min-height: 100vh; box-sizing: border-box; align-content: start;
+}
+.mp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.mp-back { text-decoration: none; }
+.mp-status { font-family: var(--font-num); font-size: var(--fs-sm); color: var(--warn); }
+#mission { min-width: 0; }
+
+@media (max-width: 800px) {
+  .mp { padding: var(--space-3); gap: var(--space-3); }
+}
