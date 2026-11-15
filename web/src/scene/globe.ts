@@ -35,6 +35,12 @@ export async function loadNorth(): Promise<Dem> {
   return parseNorth(meta, await binRes.arrayBuffer());
 }
 
+let sharedCap: Promise<Dem> | null = null;
+/** loadNorth, fetched once, for the flat map's north polar view (issue #112). */
+export function sharedNorth(): Promise<Dem> {
+  return sharedCap ??= loadNorth();
+}
+
 /** The latitude and longitude a texture coordinate of the globe's textures stands for. */
 export function uvSite(u: number, v: number): { lat: number; lon: number } {
   return { lat: 90 - v * 180, lon: (u - Math.floor(u)) * 360 - 180 };

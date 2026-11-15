@@ -53,6 +53,37 @@ describe('polar stereographic', () => {
   });
 });
 
+describe('north polar stereographic', () => {
+  // north.bin's grid (contract section 2): c = 90 - lat, r = 2 R tan(c / 2), x = r sin lon,
+  // y = r cos lon. The map is that grid turned upside down, so it is not a mirror image.
+  it('is the north cap grid of the contract, upside down', () => {
+    for (const [lat, lon] of [[88, 45], [80, -120], [85, 180], [89.5, -30]]) {
+      const c = (90 - lat) * RAD, r = 2 * MOON_RADIUS_KM * 1000 * Math.tan(c / 2);
+      const p = polarForward(lat, lon, 'north');
+      expect(p.x).toBeCloseTo(r * Math.sin(lon * RAD), 6);
+      expect(p.y).toBeCloseTo(-r * Math.cos(lon * RAD), 6);
+    }
+  });
+
+  it('is seen from above the north pole: longitude 0 down, 90 E right, east anticlockwise', () => {
+    const down = polarForward(89, 0, 'north'), right = polarForward(89, 90, 'north');
+    expect(down.x).toBeCloseTo(0, 6); expect(down.y).toBeLessThan(0);
+    expect(right.y).toBeCloseTo(0, 6); expect(right.x).toBeGreaterThan(0);
+    // Going east turns anticlockwise on the screen (map y up), as seen from above the north pole.
+    const a = polarForward(85, 10, 'north'), b = polarForward(85, 20, 'north');
+    expect(a.x * b.y - a.y * b.x).toBeGreaterThan(0);
+  });
+
+  it('inverts exactly, and puts the north pole at the origin', () => {
+    expect(polarInverse(0, 0, 'north')).toEqual({ lat: 90, lon: 0 });
+    for (const [lat, lon] of [[88, 45], [80.5, -179.5], [89.999, 10], [70, 90]]) {
+      const p = polarForward(lat, lon, 'north'), back = polarInverse(p.x, p.y, 'north');
+      expect(back.lat).toBeCloseTo(lat, 9);
+      expect(back.lon).toBeCloseTo(lon, 9);
+    }
+  });
+});
+
 describe('equidistant cylindrical', () => {
   it('is x = R lon, y = R lat in km, so grid lines are straight and evenly spaced', () => {
     const p = cylForward(30, 60);
