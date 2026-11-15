@@ -4,6 +4,16 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: T16's status line after #93
+
+### tasks/T16-about.md: `Status:`
+
+- Was: "in review (first delivery, branch t16-about; draft pull request). Second delivery at M3
+  on t16-about-b."
+- Now: the first delivery is done (#93 merged). The second delivery, the M3 collection on
+  `t16-about-b`, stays: sources and AI-use notes are still added up to the freeze, and M3 has
+  not happened (T26 is not started).
+
 ## 15 Nov 2026: landing trajectories move from Out to If time (#100)
 
 The team agreed the change on 15 Nov 2026, after P5 built T34 in pull request #100.

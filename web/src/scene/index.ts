@@ -20,7 +20,8 @@ import {
 } from './terrain';
 import { colorTexture, GLOBE_RELIEF, globeNormalNear, loadNorth, normalTexture, sharedGlobe, type GlobeHeights } from './globe';
 import {
-  loadTileIndex, loadWindow, patchGeometry, patchLiftAt, patchWindow, stretchPatch, type TileIndex,
+  groundAngle, loadTileIndex, loadWindow, PATCH_MOVE_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch,
+  viewGround, type TileIndex,
 } from './patch';
 import './scene.css';
 
@@ -135,8 +136,10 @@ export function mount(el: HTMLElement): void {
   let globeHeights: GlobeHeights | null = null;
   /** The north cap: its heights (latitudes negated, see parseNorth), its mesh and the stretch it was built at. */
   let north: Dem | null = null, northMesh: Mesh | null = null, northKey = '', northStretch = 0;
-  /** Level of detail: finer heights in tiles, and the patch of globe drawn from those round the selected site. */
+  /** Level of detail: finer heights in tiles, and the patch of globe drawn from those round the middle of the view. */
   let tileIndex: TileIndex | null = null, patchMesh: Mesh | null = null, patchKey = '', patchStretch = 0;
+  /** Where the patch is centred: the selected site when it is picked, then the ground the camera looks at (issue #85). */
+  let patchCentre: Site | null = null, patchTimer = 0;
   let pinSites: AppState['sites'] | null = null, pinDem: Dem | null = null, pinPatch: Mesh | null = null;
   /**
    * Highest drawn ground above the sphere, in km, of the south-pole terrain, the north cap and the
@@ -182,6 +185,7 @@ export function mount(el: HTMLElement): void {
     orbitCamera.up.copy(up);
     const controls = new OrbitControls(orbitCamera, canvas);
     controls.addEventListener('change', invalidate);
+    controls.addEventListener('change', followView);
     controls.minDistance = 0.2;
     controls.maxDistance = MOON_RADIUS_KM * 6;
     controls.maxPolarAngle = Math.PI * 0.49;
@@ -248,6 +252,8 @@ export function mount(el: HTMLElement): void {
   }
   /** Resets the orbit camera, and the flat map, to their starting view of the selected site. */
   function centre(): void {
+    // The patch goes back to the site with the view, not 200 ms later through followView.
+    clearTimeout(patchTimer); patchCentre = selected().site; updatePatch();
     const up = siteUp(selected().site);
     orbitControls.dispose();
     orbitControls = makeOrbitControls(up);
@@ -329,24 +335,24 @@ export function mount(el: HTMLElement): void {
   }
   function clearPatch(): void {
     if (patchMesh) { world.remove(patchMesh); patchMesh.geometry.dispose(); patchMesh = null; }
-    patchRelief = 0;
+    patchRelief = 0; delete canvas.dataset.patch;
   }
   /**
-   * Level of detail (issue #66): in the 3D globe view, the ground round the selected site is
-   * drawn from finer heights, raised with the vertical stretch. Only the tiles under it are
-   * fetched, when the site is picked; the last patch stays until the new one is ready. The polar
-   * meshes cover their own ground.
+   * Level of detail (issues #66, #85): in the 3D globe view, the ground round the middle of the
+   * view is drawn from finer heights, raised with the vertical stretch. It starts at the selected
+   * site and follows the camera (followView). Only the tiles under it are fetched; the last patch
+   * stays until the new one is ready. The polar meshes cover their own ground.
    */
   function updatePatch(): void {
-    const heights = globeHeights, index = tileIndex, site = selected().site;
+    const heights = globeHeights, index = tileIndex, centre = patchCentre ?? selected().site;
     const south = dem ? dem.meta.min_lat : -90, top = northMesh && north ? -north.meta.min_lat : 90;
-    const win = heights && index && mode === '3d' && !polar ? patchWindow(site, index, south, top) : null;
-    if (!heights || !index || !win || site.lat >= top) {
+    const win = heights && index && mode === '3d' && !polar ? patchWindow(centre, index, south, top) : null;
+    if (!heights || !index || !win || centre.lat >= top) {
       if (polar || !heights) { clearPatch(); patchKey = ''; }
       return;
     }
     const range = globeRange(heights);
-    const key = `${siteKey}|${themeKey}|${range.join(',')}|${south}|${top}`;
+    const key = `${win.row0},${win.col0},${win.row1},${win.col1}|${themeKey}|${range.join(',')}|${south}|${top}`;
     if (key === patchKey) return;
     patchKey = key;
     loadWindow(index, win).then((heightAt) => {
@@ -356,9 +362,25 @@ export function mount(el: HTMLElement): void {
         (lat, lon, out) => globeNormalNear(heights, lat, lon, GLOBE_RELIEF, out));
       clearPatch();
       patchMesh = new Mesh(geometry, terrainMaterial); patchMesh.position.copy(globe.position);
+      // Where the patch is, for the browser check (browser-check.py).
+      canvas.dataset.patch = `${centre.lat},${centre.lon}`;
       // update() raises it to the stretch, and puts the site, its pins and the camera on it.
       patchStretch = 0; world.add(patchMesh); update(getState());
     }).catch(() => { if (patchKey === key) patchKey = ''; });
+  }
+  /**
+   * Moves the patch to the ground in the middle of the view once the camera settles (issue #85),
+   * when that is more than PATCH_MOVE_DEG from the patch's centre, so a small orbit costs nothing.
+   */
+  function followView(): void {
+    if (mode !== '3d' || polar || !globeHeights || !tileIndex) return;
+    clearTimeout(patchTimer);
+    patchTimer = window.setTimeout(() => {
+      if (disposed) return;
+      const centre = viewGround(orbitCamera.position, orbitCamera.getWorldDirection(new Vector3()));
+      if (patchCentre && groundAngle(centre, patchCentre) < PATCH_MOVE_DEG) return;
+      patchCentre = centre; updatePatch();
+    }, 200);
   }
   /** Raises the patch to the current stretch, if it isn't there already. */
   function stretchPatchMesh(): void {
@@ -452,6 +474,7 @@ export function mount(el: HTMLElement): void {
     const changedDem = dem !== s.dem, changedView = polar !== nextPolar, changedSite = siteKey !== key;
     const changedMode = mode !== s.mode, changedStretch = drawnStretch !== stretch;
     dem = s.dem; polar = nextPolar; mode = s.mode; siteKey = key; drawnStretch = stretch;
+    if (changedSite) patchCentre = sc.site;
     updateTerrain(changedDem);
     buildNorth();
     paintGlobe();
@@ -471,7 +494,10 @@ export function mount(el: HTMLElement): void {
     }
     orbitControls.enabled = mode === '3d';
     if (!framed || changedDem || changedView) { framed = true; centre(); }
-    else if (changedSite || changedMode || changedStretch || changedTarget) follow();
+    else if (changedSite || changedMode || changedStretch) follow();
+    // The ground under the site was redrawn (a patch came or went): the view moves with the site,
+    // unless it was panned away from it, which the patch following the camera must not undo.
+    else if (changedTarget && orbitControls.target.distanceTo(lastTarget) < 1e-6) follow();
     updatePins(s);
     sun.target.position.copy(target);
     // vectorsAt answers a time it has no row for (outside 1900-2100, or in a decade that failed
@@ -568,7 +594,7 @@ export function mount(el: HTMLElement): void {
   updateTheme(); resize();
   function dispose(): void {
     if (disposed) return;
-    disposed = true; cancelAnimationFrame(frame); unsubscribe(); observer.disconnect(); themeObserver.disconnect();
+    disposed = true; cancelAnimationFrame(frame); clearTimeout(patchTimer); unsubscribe(); observer.disconnect(); themeObserver.disconnect();
     canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move);
     canvas.removeEventListener('pointerup', pick); canvas.removeEventListener('pointercancel', cancel);
     canvas.removeEventListener('webglcontextlost', onLost); canvas.removeEventListener('webglcontextrestored', onRestored);

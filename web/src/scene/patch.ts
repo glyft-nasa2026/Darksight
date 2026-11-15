@@ -1,9 +1,10 @@
 // Level of detail for the 3D globe (issue #66): finer whole-Moon heights cut into tiles
-// (contract section 2: tiles.json + tiles/), of which only those around the selected site are
-// fetched, and the patch of globe drawn from them. Illustration only.
+// (contract section 2: tiles.json + tiles/), of which only those around the ground in the middle
+// of the view are fetched (issue #85), and the patch of globe drawn from them. Illustration only.
 
-import { BufferAttribute, BufferGeometry, Color, Float32BufferAttribute } from 'three';
+import { BufferAttribute, BufferGeometry, Color, Float32BufferAttribute, Vector3 } from 'three';
 import { MOON_RADIUS_KM, type Site } from '../core/types';
+import { moonCentre, sphereSite } from './coordinates';
 
 export type TileIndex = {
   cells_per_deg: number;   // cells per degree, both ways
@@ -45,7 +46,7 @@ function edgeWeight(r: number, c: number, rows: number, cols: number): number {
 }
 
 /**
- * The window round a site, kept between the `south` and `north` latitudes (where the polar
+ * The window round a place (the middle of the view), kept between the `south` and `north` latitudes (where the polar
  * meshes take over). Null when nothing is left.
  */
 export function patchWindow(site: Site, index: TileIndex, south = -90, north = 90): PatchWindow | null {
@@ -61,6 +62,32 @@ export function patchWindow(site: Site, index: TileIndex, south = -90, north = 9
   const colC = Math.floor((site.lon + 180) * cpd);
   return { row0, row1, col0: colC - halfCols, col1: colC + halfCols, stride };
 }
+
+/**
+ * The ground in the middle of the view (issue #85): where the camera's line of sight meets the
+ * sphere, or, if it misses the Moon, the point on the sphere nearest that line. `from` and `ahead`
+ * are the camera's position and the direction it looks, in the render frame.
+ */
+export function viewGround(from: Vector3, ahead: Vector3): Site {
+  const centre = moonCentre(), dir = ahead.clone().normalize();
+  const rel = from.clone().sub(centre);
+  const along = -rel.dot(dir), miss = rel.lengthSq() - along * along;
+  const r2 = MOON_RADIUS_KM * MOON_RADIUS_KM;
+  // Nearest the centre along the line, but never behind the camera.
+  let t = Math.max(0, along);
+  if (along > 0 && miss <= r2 && rel.lengthSq() > r2) t = along - Math.sqrt(r2 - miss);
+  return sphereSite(rel.addScaledVector(dir, t).add(centre));
+}
+
+/** Angle between two places on the Moon, in degrees (haversine). */
+export function groundAngle(a: Site, b: Site): number {
+  const dLat = (b.lat - a.lat) * RAD, dLon = (b.lon - a.lon) * RAD;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * Math.sin(dLon / 2) ** 2;
+  return 2 * Math.asin(Math.min(1, Math.sqrt(h))) / RAD;
+}
+
+/** How far the middle of the view moves from a patch's centre before the patch is redrawn there. */
+export const PATCH_MOVE_DEG = PATCH_HALF_DEG / 2;
 
 /** The tiles a window touches, as tile row (0 at 90 N) and column (0 at 180 W), longitude wrapped. */
 export function windowTiles(win: PatchWindow, index: TileIndex): { row: number; col: number }[] {

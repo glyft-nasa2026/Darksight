@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   APOLLO_11_TIMES, EXAMPLE_LANDER, LUNAR_ORBIT_ALT_KM, MU_MOON, PARKING_ALT_KM, R_EARTH, R_MOON,
-  burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, planDescent,
+  burnSeconds, captureDv, descentOrbitDv, dvFor, earthMoonKmAt, halfPeriod, hohmannCoastS, missionAt, moonFixedInPlane, planDescent,
   planMission, propellantFor, SEQUENCE, simulateDescent, transferFor, type MissionInput, type OkPlan,
 } from './mission';
 import { padById } from './pads';
@@ -231,5 +231,54 @@ describe('Inputs the model refuses, and a lander that runs dry', () => {
     const p = okPlan({ lander: { ...EXAMPLE_LANDER, dryKg: 1700 } });
     expect(p.totals.margin).toBeLessThan(0);
     expect(p.runsOutMs).toBe(p.steps.find((s) => s.id === 'loi')!.startMs);
+  });
+});
+
+describe('The landing site in the animation’s lunar-orbit frame (issue #105)', () => {
+  const plan = okPlan();
+  const step = (id: string) => plan.steps.find((s) => s.id === id)!;
+
+  it('puts the site where the descent ends, at touchdown', () => {
+    const [x, y, z] = moonFixedInPlane(plan, plan.touchdownMs, SHACKLETON.lat, SHACKLETON.lon);
+    const end = missionAt(plan, plan.touchdownMs).moonPlane!;
+    near(x, end[0], 1e-6);
+    near(y, end[1], 1e-6);
+    near(z, 0, 1e-6);
+  });
+
+  it('is the inverse of missionAt’s ground point, in lunar orbit and in the descent', () => {
+    const times = [step('lunar-orbit').startMs + 1234e3, step('descent-orbit').startMs + 600e3,
+      step('powered-descent').startMs + 60e3, plan.touchdownMs - 5e3];
+    for (const t of times) {
+      const st = missionAt(plan, t);
+      const [x, y, z] = moonFixedInPlane(plan, t, st.ground!.lat, st.ground!.lon, st.altKm);
+      near(x, st.moonPlane![0], 1e-6);
+      near(y, st.moonPlane![1], 1e-6);
+      near(z, 0, 1e-6);
+    }
+  });
+
+  it('turns with the Moon: a day before touchdown the site has moved about 13 degrees', () => {
+    const [x, y] = moonFixedInPlane(plan, plan.touchdownMs - DAY_S * 1000, SHACKLETON.lat, SHACKLETON.lon);
+    const r = Math.hypot(x, y, moonFixedInPlane(plan, plan.touchdownMs - DAY_S * 1000, SHACKLETON.lat, SHACKLETON.lon)[2]);
+    near(r, R_MOON, 1e-6);
+    // Near the pole the site barely moves; check an equatorial site instead.
+    const eq = okPlan({ site: { lat: 0, lon: 30 } });
+    const [ex, ey, ez] = moonFixedInPlane(eq, eq.touchdownMs - DAY_S * 1000, 0, 30);
+    const angle = (Math.acos(Math.max(-1, Math.min(1, ey / R_MOON))) * 180) / Math.PI;
+    near(angle, (360 / 655.72) * 24, 0.01);
+    near(Math.hypot(ex, ey, ez), R_MOON, 1e-6);
+  });
+
+  it('gives two sites different places on the Moon: the north pole is elsewhere relative to each', () => {
+    const eq = okPlan({ site: { lat: 0, lon: 30 } });
+    const poleSouth = moonFixedInPlane(plan, plan.touchdownMs, 90, 0);
+    const poleEq = moonFixedInPlane(eq, eq.touchdownMs, 90, 0);
+    // The orbit is polar, so the pole is in its plane. From Shackleton (0.3° from the south
+    // pole) the north pole is opposite the site; from the equator it is a quarter turn away.
+    near(poleSouth[2], 0, 1e-6);
+    near(poleEq[2], 0, 1e-6);
+    near(poleSouth[1], -R_MOON, 0.1);
+    near(poleEq[1], 0, 1e-6);
   });
 });
