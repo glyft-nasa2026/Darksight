@@ -1,6 +1,6 @@
 # T38: Say that libration and the Moon's orbit are included
 
-Status: not started
+Status: in progress (Yi Hung, branch `t38-libration`, draft pull request): About paragraph on libration and the Moon's changing distance, and a sky panorama caption where Earth's loop is drawn
 
 | | |
 |---|---|
