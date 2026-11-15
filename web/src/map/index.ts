@@ -6,6 +6,8 @@
 // comes from core/ (projection.ts, shade.ts); this file only draws them and turns pointer
 // positions into calls to core/. The whole-Moon picture is coloured by height and its relief
 // lit from the whole-Moon height grid (globe.bin, issue #66): illustration, as on the 3D globe.
+// The scene (web/src/scene/) shows and hides the map, fading between it and the 3D view (T29);
+// viewOf tells it what the map shows, so the 3D camera can start from the same view.
 
 import type { Dem } from '../core/dem';
 import type { Ephemeris, Vec3 } from '../core/ephemeris';
@@ -25,8 +27,11 @@ import './map.css';
 type Kind = Pole | 'global';
 type Rgb = [number, number, number];
 type Pin = { site: Site; color: string; scenarioId?: string; big: boolean };
+/** What the map shows: its projection, and how many km of ground from the top of the picture to the bottom. */
+export type MapLook = { kind: Kind; kmTall: number };
 
 const mounts = new WeakMap<HTMLElement, () => void>();
+const looks = new WeakMap<HTMLElement, () => MapLook | null>();
 const demIds = new WeakMap<Dem, number>();
 let nextDemId = 1;
 /** A number per height map object, so a new grid (even with the same metadata) rebuilds the layers. */
@@ -107,6 +112,9 @@ function tabled(eph: Ephemeris | null, tMs: number): eph is Ephemeris {
 }
 
 export function unmount(el: HTMLElement): void { mounts.get(el)?.(); }
+
+/** What the map mounted on `el` shows (T29: where the 3D camera starts a fade). Null before it has a size. */
+export function viewOf(el: HTMLElement): MapLook | null { return looks.get(el)?.() ?? null; }
 
 export function mount(el: HTMLElement): void {
   unmount(el);
@@ -677,7 +685,6 @@ export function mount(el: HTMLElement): void {
       clearTimeout(settle);
       if (dragging) settle = window.setTimeout(() => { dragging = false; baseDirty = true; invalidate(); }, DRAG_GAP_MS);
     }
-    el.hidden = s.mode !== '2d';
     readTheme();
     // The light layer is rebuilt in the next frame, not here: a timeline drag sends many changes
     // between two frames, and only the last needs drawing.
@@ -799,7 +806,9 @@ export function mount(el: HTMLElement): void {
     canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', key);
     el.removeEventListener('map:centre', onCentre);
     canvas.remove(); base = null; ring = null; ringCells = null; shade = null; globe = null; north = null;
-    slopes = null; tones = null; slopeRows = null; toneRows = null; pixels = null; dayBuf = undefined; mounts.delete(el);
+    slopes = null; tones = null; slopeRows = null; toneRows = null; pixels = null; dayBuf = undefined; mounts.delete(el); looks.delete(el);
   }
   mounts.set(el, dispose);
+  // The polar views count metres, the whole-Moon view km (core/projection.ts).
+  looks.set(el, () => view.width > 1 ? { kind, kmTall: view.height / view.scale / (kind === 'global' ? 1 : 1000) } : null);
 }
