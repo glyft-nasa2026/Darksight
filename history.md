@@ -4,6 +4,28 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: a decade that failed to download is tried again (T33, issue #32 row 4)
+
+Issue #32, row 4: after a failed download the readout said the time was outside the table,
+although it was inside 1900 to 2100, and only a reload asked for the decade again.
+
+### docs/data-contract.md: 4. State, "Decades"
+
+- Was: "`state.ts` fetches each decade once; one that fails to download reads as outside the
+  table."
+- Now a failed decade is asked for again after a wait (10 s, doubling to 60 s) or when the
+  browser is back online, and `tableGap` tells a failed decade from a time outside the table, so
+  the modules can say which.
+- Why: a dropped connection is usually brief; saying "outside the table" for a time inside it
+  was wrong, and only a reload brought the numbers back.
+
+### docs/data-contract.md: 4. State, "Still checking"
+
+- Was: `neverLitPendingFor` "false when one of them failed to download (… no verdict can come
+  before a reload)".
+- Now false only while the failed decade waits for its next try, true again while it downloads.
+- Why: the verdict no longer needs a reload once the retry gets the decade.
+
 ## 15 Nov 2026: a nudge moves at once (issue #126)
 
 MarsRon raised it; P5 asked for it, with the pole steps, transparency and corner button.
