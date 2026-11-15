@@ -375,7 +375,8 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
 | `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `approachSeconds(plan)`, `hyperbolaAt`, `hyperbolaTimeToRadius`, `MOON_SOI_KM` (the arrival hyperbola round the Moon, from its sphere of influence to LOI; `missionAt` gives `approach: true` and a `moonPlane` point there, with altitude and speed above the Moon) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent`, `planDescent`, `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`. A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent; times run back from touchdown with Apollo 11's phase lengths |
-| `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false, checking = false): string` |
+| `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false, checking = false): string` · `durationText(ms): string` (`3 d 4 h`, or `5 h 20 min` under one day; T42) |
+| `datesearch.ts` | T42 | `firstWindow(eph, site, groundM, skyline, startMs, endMs, need: Need, minHours): DateSearch` (`Need` is `'both' \| 'sun' \| 'earth'`; the first window at or after `startMs`, starting before `endMs`, in which the Sun (any of its disc showing), Earth, or both at once stay up for at least `minHours`. `{ status: 'found', startMs, endMs }`, `endMs` null when it lasts more than `END_LOOK_DAYS` (60) days; `{ status: 'none', checkedToMs }` (the search's end, or the end of the table first); `{ status: 'no-rows', atMs }` where a decade is not in memory or before 1900, never read as dark. Hourly samples from `series()`, each edge halved to under a minute as `nextFlip()` does; a start after `startMs` is rounded up to the whole minute) · `monthsLater(tMs, months)` (calendar months in UTC; a day the month lacks becomes its last day) · `END_LOOK_DAYS` |
 
 **First pass** means T00 writes the function straight from the formulas below, with a few sanity
 tests, so the site shows live numbers from the first hour. The follow-up task adds the real
@@ -479,6 +480,8 @@ failedDecades(): number[]                             // T33: start of each fail
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
 missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'failed'; decadeMs: number }
   | { status: 'ready'; plan: MissionPlan }            // 'failed' (T33): a decade it needs did not download
+dateSearchFor(sc, need, minHours, months): DateSearch | { status: 'loading' } | { status: 'failed'; decadeMs }
+                                                      // T42: core's firstWindow from sc's site and time
 ```
 
 **Selected and live.** `selectedId` is the live scenario's id or a pinned one's. The readout,
@@ -545,6 +548,13 @@ including within 60 days of the end of the table.
 at `windowStartMs` for live. `setLiveTime` leaves the window alone while the new time is inside
 it, and restarts it at the new time otherwise. `shiftWindow` moves it by half the range. This
 is what lets a drag move the marker without the chart sliding under the cursor.
+
+**Date search (T42).** `dateSearchFor` runs `firstWindow` from the scenario's site and time to
+`monthsLater(sc.tMs, months)`. It asks for every decade from the scenario's time to that end plus
+the look for the window's end (the longer of `minHours` and 60 days), without holding the page on
+"Loading": `eph` stays as it is, and the answer is `'loading'` until they are in. `'failed'` when
+the decade holding the scenario's time did not download; a failed decade further on stops the
+search there (`'no-rows'`). The last answer is kept, so the scenario panel asks on every redraw.
 
 **While data is loading** (`eph` is null), the accessors return empty arrays, `null` flips, a
 flat skyline and zeros. Modules show "Loading" and must not crash.
