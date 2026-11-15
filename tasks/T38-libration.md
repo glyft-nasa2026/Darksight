@@ -1,6 +1,6 @@
 # T38: Say that libration and the Moon's orbit are included
 
-Status: in progress (Yi Hung, branch `t38-libration`, draft pull request): About paragraph on libration and the Moon's changing distance, and a sky panorama caption where Earth's loop is drawn
+Status: done (Yi Hung, pull request #158): the About section "Libration and the Moon's orbit" says both are in every number, from DE440 and the Moon's orientation file, and the sky panorama's caption names Earth's loop as libration wherever Earth's 30-day path is on the chart (Apollo 11 and the Shackleton rim; not on the far side)
 
 | | |
 |---|---|
@@ -40,12 +40,12 @@ in `docs/`, so a judge can't tell. Say it, and point to where it shows.
 
 ## Done when
 
-- [ ] The About panel names libration and the Moon's changing distance, and says where they come
+- [x] The About panel names libration and the Moon's changing distance, and says where they come
       from.
-- [ ] The sky panorama has the caption, or the pull request says why not.
-- [ ] Every size or number in the new text has a source in `docs/sources/T38.md`.
-- [ ] At 390 px wide, the new text doesn't overlap anything or scroll sideways.
-- [ ] `npm test` and `npm run build` pass.
+- [x] The sky panorama has the caption, or the pull request says why not.
+- [x] Every size or number in the new text has a source in `docs/sources/T38.md`.
+- [x] At 390 px wide, the new text doesn't overlap anything or scroll sideways.
+- [x] `npm test` and `npm run build` pass.
 
 ## Notes
 
