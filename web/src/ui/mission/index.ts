@@ -21,6 +21,7 @@ import {
   coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, pctText, shortUtcText,
   speedText, utcText,
 } from './format';
+import { BURN_SPEED, nextPace, paceLimit, rateText, regions, type Mode } from './pace';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const W = 1000;   // the picture's viewBox
@@ -38,11 +39,10 @@ const ERRORS = {
   'thrust-too-low': 'This lander’s engine is too weak to stop before the ground, even starting the descent from just under 100 km. Give it more thrust.',
 } as const;
 
-// Simulated seconds per real second. Burns that last minutes (the ascent and the powered
-// descent) play at most at SLOW_SPEED, so they don't flash past.
+// Simulated seconds per real second, the same as the simulation page's (pace.ts, issue #105):
+// "Auto" (the default) picks one per stage, every change is gradual, and the playback slows
+// in time for each burn, so the ascent and the powered descent don't flash past.
 const SPEEDS: [label: string, s: number][] = [['1 min/s', 60], ['1 h/s', 3600], ['6 h/s', 6 * 3600]];
-const SLOW_SPEED = 30;
-const SLOW_STEPS: StepId[] = ['launch', 'powered-descent'];
 
 type View = 'auto' | 'earth' | 'moon' | 'descent';
 type Scale = 'near' | 'earth' | 'moon' | 'descent';
@@ -349,7 +349,8 @@ export function mount(el: HTMLElement): void {
   viewSeg.setAttribute('aria-label', 'Picture');
   const controls = make('div', 'ms-controls');
   controls.append(playButton, speedSeg, scrub, viewSeg);
-  const slowNote = make('p', 'ms-note muted', `The ascent and the powered descent play at most at ${SLOW_SPEED} s/s.`);
+  const slowNote = make('p', 'ms-note muted',
+    `Auto picks a speed for each stage. Speeds change gradually, and the ascent and the powered descent play at most at ${BURN_SPEED} s/s.`);
 
   const main = make('div', 'ms-main');
   main.append(view, controls, slowNote);
@@ -378,7 +379,10 @@ export function mount(el: HTMLElement): void {
   let plan: OkPlan | null = null;
   let cursor = 0;
   let playing = false;
-  let speed = SPEEDS[1][1];
+  let speed: Mode = 'auto';
+  let pace = 3600;                                   // the speed playing now, easing toward the limit
+  let limits: ReturnType<typeof regions> = [];
+  const settlePace = (): void => { if (plan) pace = paceLimit(limits, cursor); };
   let chosenView: View = 'auto';
   let shownScale: Scale | null = null;
   let pic: Picture | null = null;
@@ -389,13 +393,25 @@ export function mount(el: HTMLElement): void {
 
   const endMs = (): number => (plan ? plan.runsOutMs ?? plan.touchdownMs : 0);
 
+  const setSpeed = (m: Mode): void => {
+    speed = m;
+    if (plan) limits = regions(plan, m);
+    drawControls();
+  };
+  const autoButton = make('button', 'btn ms-small', 'Auto');
+  autoButton.type = 'button';
+  autoButton.dataset.speed = 'auto';
+  autoButton.addEventListener('click', () => setSpeed('auto'));
+  speedSeg.append(autoButton);
   for (const [label, s] of SPEEDS) {
     const b = make('button', 'btn ms-small', label);
     b.type = 'button';
-    b.addEventListener('click', () => { speed = s; drawControls(); });
+    b.addEventListener('click', () => setSpeed(s));   // a manual speed turns Auto off; the change glides
     b.dataset.speed = String(s);
     speedSeg.append(b);
   }
+  const rateNow = make('span', 'ms-rate');
+  controls.insertBefore(rateNow, scrub);
   for (const [v, label] of VIEWS) {
     const b = make('button', 'btn ms-small', label);
     b.type = 'button';
@@ -406,7 +422,10 @@ export function mount(el: HTMLElement): void {
 
   const drawControls = (): void => {
     playButton.textContent = playing ? '❚❚ Pause' : '▶ Play';
-    for (const b of speedSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === speed));
+    for (const b of speedSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.speed === String(speed)));
+    autoButton.textContent = speed === 'auto' && plan ? `Auto · ${rateText(pace)}` : 'Auto';
+    // A manual speed: say what is playing while it glides, or while a burn holds it slower.
+    rateNow.textContent = speed !== 'auto' && plan && Math.abs(Math.log(pace / speed)) > 0.01 ? `now ${rateText(pace)}` : '';
     for (const b of viewSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === chosenView));
   };
 
@@ -459,8 +478,7 @@ export function mount(el: HTMLElement): void {
     if (!playing || !plan) return;
     const dt = Math.min(0.25, (now - lastFrameMs) / 1000);
     lastFrameMs = now;
-    const step = plan.steps[missionAt(plan, cursor).stepIndex];
-    const pace = SLOW_STEPS.includes(step.id) ? Math.min(speed, SLOW_SPEED) : speed;
+    pace = nextPace(pace, paceLimit(limits, cursor), dt);
     cursor = Math.min(endMs(), cursor + dt * pace * 1000);
     if (cursor >= endMs()) playing = false;
     drawFrame();
@@ -479,7 +497,7 @@ export function mount(el: HTMLElement): void {
     if (playing) {
       stop();
     } else {
-      if (cursor >= endMs()) cursor = plan.launchMs;
+      if (cursor >= endMs()) { cursor = plan.launchMs; settlePace(); }
       playing = true;
       lastFrameMs = performance.now();
       frame = requestAnimationFrame(tick);
@@ -489,7 +507,9 @@ export function mount(el: HTMLElement): void {
   scrub.addEventListener('input', () => {
     if (!plan) return;
     cursor = Math.min(endMs(), plan.launchMs + (Number(scrub.value) / 1000) * (plan.touchdownMs - plan.launchMs));
+    settlePace();   // a jump in time starts at that moment's speed
     drawFrame();
+    drawControls();
   });
 
   // --- Drawing a new plan ------------------------------------------------------------------------
@@ -511,7 +531,9 @@ export function mount(el: HTMLElement): void {
         make('span', 'ms-when', dayText(s.startMs)), make('span', 'ms-when', detail));
       b.addEventListener('click', () => {
         cursor = Math.min(endMs(), s.startMs);
+        settlePace();
         drawFrame();
+        drawControls();
       });
       stepButtons.set(id, b);
       return b;
@@ -667,6 +689,8 @@ export function mount(el: HTMLElement): void {
       stop();
       plan = p;
       cursor = p.launchMs;
+      limits = regions(p, speed);
+      settlePace();
       shownScale = null;
       pic = null;
       main.replaceChildren(view, controls, slowNote);
