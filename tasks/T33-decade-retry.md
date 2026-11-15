@@ -1,6 +1,6 @@
 # T33: A decade that failed to download is tried again
 
-Status: not started
+Status: in review (Yi Hung, branch `t33-decade-retry`, draft pull request #147). "Done when" lines 1-4 pass, line 4 as a Playwright page test (`web/e2e/decade-retry.spec.ts`) instead of DevTools by hand; line 5: `npm run build` passes, `npm test` 580 of 582 (two `core/` timing tests fail only under another session's load, pass alone). Wording agreed in #147 (as proposed). The mission and launch simulation pages say it too
 
 | | |
 |---|---|

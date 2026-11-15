@@ -4,8 +4,9 @@ import './readout.css';
 import { countdownText } from '../../core/windows';
 import {
   flipFor, getState, LIVE_ID, neverLitFor, neverLitPendingFor, samplesFor, selected, skylineFor,
-  subscribe,
+  subscribe, tableGap,
 } from '../../state';
+import { noRowText } from '../tableGap';
 import { azText, degText, pctText } from './format';
 
 function make<K extends keyof HTMLElementTagNameMap>(
@@ -69,7 +70,7 @@ export function mount(el: HTMLElement): void {
     }
     const now = samplesFor(sc, '30d')[0];
     if (!now || now.tMs !== sc.tMs) {
-      content.replaceChildren(make('p', 'ro-error', 'This time is outside the Sun and Earth table'));
+      content.replaceChildren(make('p', 'ro-error', noRowText(tableGap(sc.tMs), sc.tMs)));
       return;
     }
 

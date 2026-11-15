@@ -127,6 +127,27 @@
   overflow-wrap: anywhere;
 }
 
+/* "Why the Moon is different" (T39): five short points, each with a way to the page. */
+.about-explain {
+  padding-left: var(--space-4);
+}
+
+.about-explain li + li {
+  margin-top: var(--space-2);
+}
+
+/* A button that reads as a link: it closes the panel and scrolls, so it isn't an <a>. */
+.about-jump {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+
 @media (max-width: 800px) {
   .about-right {
     margin-left: 0;

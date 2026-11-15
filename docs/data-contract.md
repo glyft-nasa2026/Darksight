@@ -473,8 +473,11 @@ summaryFor(sc: Scenario): Summary                     // over 30 days from sc.tM
 flipFor(sc: Scenario, body: Body): Flip               // next rise or set after sc.tMs
 neverLitFor(sc: Scenario): boolean                    // no sunlight there from sc.tMs to the end of 2100
 neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still waits for decades to 2100
+tableGap(tMs: number): 'none' | 'outside' | 'failed'  // T33: why a time may have no row
+failedDecades(): number[]                             // T33: start of each failed decade, for the status line
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
-missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan: MissionPlan }
+missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'failed'; decadeMs: number }
+  | { status: 'ready'; plan: MissionPlan }            // 'failed' (T33): a decade it needs did not download
 ```
 
 **Selected and live.** `selectedId` is the live scenario's id or a pinned one's. The readout,
@@ -496,8 +499,24 @@ has touched anything.
 **Decades.** `eph` is null until the table has loaded, and null again while a decade that the
 live scenario (its time plus 60 days, and its timeline window) or a pinned scenario (its time
 plus 60 days or the range, whichever is longer) needs is still downloading. So a module that
-shows "Loading" while `eph` is null needs nothing more. `state.ts` fetches each decade once; one
-that fails to download reads as outside the table.
+shows "Loading" while `eph` is null needs nothing more.
+
+**A decade that fails to download (T33, issue #32 row 4)** (a dropped connection, a phone in a
+tunnel) is asked for again once a wait is over: 10 s (`RETRY_MS`) after the first failure,
+doubling after each failure in a row to at most 60 s (`RETRY_MAX_MS`), so a dead connection
+isn't asked over and over. A timer wakes the page when the wait is over, so a decade a scenario
+still needs is tried again with nobody touching the page; one no longer needed waits until it
+is. The browser's `online` event makes every failed decade due at once. While a retry
+downloads, the decade counts as downloading again: `eph` is null and modules show "Loading".
+Between tries its hours have no rows, as outside the table. `tableGap(tMs)` tells the two
+apart: `'outside'` before 1900 or after 2100, `'failed'` in a decade that failed, `'none'`
+otherwise. A module with no row for a time says so with `noRowText(tableGap(tMs), tMs)` from
+`ui/tableGap.ts`: `The Sun and Earth table for the 2050s did not download. Trying again…`, or
+`This time is outside the Sun and Earth table`. The status line lists `failedDecades()`.
+`missionFor` answers `{ status: 'failed', decadeMs }` (the start of that decade) when a decade
+from the arrival to touchdown failed, and `'outside'` only before 1900 or after 2100; the mission
+and launch simulation pages say `noRowText('failed', decadeMs)`, and the mission page's status
+line lists `failedDecades()` too.
 
 **Never lit.** `neverLitFor` is true when no part of the Sun's disc clears the skyline at any
 hour from the scenario's time to the end of the table (2100-12-31), whatever time is chosen. It
@@ -516,10 +535,10 @@ the modules when it is done.
 `neverLitPendingFor` reads true, so the countdown says `No sunrise in the next 60 days · checking
 to 2100…` and then, once they are in, `Permanently shadowed (until 2100)` (or plain "No sunrise"
 if the Sun does come back before 2100). A never-lit site never shows plain "No sunrise" in
-between. `neverLitPendingFor` is false once the decades are in, false when one of them failed to
-download (the text is then plain `No sunrise in the next 60 days`: no verdict can come before a
-reload), and false wherever `neverLitFor` is false at once, including within 60 days of the end
-of the table.
+between. `neverLitPendingFor` is false once the decades are in, false while one of them waits to
+be tried again after a failed download (the text is then plain `No sunrise in the next 60 days`;
+true again while the retry downloads), and false wherever `neverLitFor` is false at once,
+including within 60 days of the end of the table.
 
 **Timeline window.** `timelineFor` starts at the scenario's own time for a pinned scenario and
 at `windowStartMs` for live. `setLiveTime` leaves the window alone while the new time is inside
