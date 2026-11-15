@@ -7,18 +7,19 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Dem } from '../core/dem';
 import { MOON_RADIUS_KM, type Sample, type Site } from '../core/types';
-import { afterHeightMap } from '../loadOrder';
 import {
   getState, samplesFor, select, selected, setLiveSite, setMode, subscribe, type AppState,
 } from '../state';
 import { themeColor } from '../ui/plotTheme';
+import { moonFromIcrf, multiply, type Mat3 } from '../core/sky';
+import { makeStarField } from './stars';
 import { mount as mountMap, unmount as unmountMap } from '../map';
 import { carryOffset, gridSite, moonCentre, moonDirection, siteNorth, sitePosition, siteUp, sphereSite } from './coordinates';
 import {
   detailBounds, edgeHeight, globeGeometry, NORTH_RELIEF, northGeometry, recolorTerrain, restretchTerrain, setTerrainHole,
   terrainGeometry, type GridBounds,
 } from './terrain';
-import { colorTexture, GLOBE_RELIEF, globeNormalNear, loadNorth, normalTexture, sharedGlobe, type GlobeHeights } from './globe';
+import { colorTexture, GLOBE_RELIEF, globeNormalNear, normalTexture, sharedGlobe, sharedNorth, type GlobeHeights } from './globe';
 import {
   groundAngle, loadTileIndex, loadWindow, PATCH_MOVE_DEG, patchGeometry, patchLiftAt, patchWindow, stretchPatch,
   viewGround, type TileIndex,
@@ -36,6 +37,8 @@ const EARTH_DRAWN_KM = 20_000;
  * way, in km: most of the level-of-detail patch round it (patch.ts, about 180 km each way).
  */
 const SITE_SPAN_KM = 150;
+/** moonDirection (coordinates.ts) as a rotation: Moon-fixed to the render frame. */
+const MOON_TO_SCENE: Mat3 = [[0, 1, 0], [0, 0, -1], [-1, 0, 0]];
 
 type PinData = { site: Site; scenarioId?: string; label: string; base: Vector3; up: Vector3; scale: number };
 
@@ -172,6 +175,8 @@ export function mount(el: HTMLElement): void {
   const earthMaterial = new SpriteMaterial({ map: earthTexture(), depthTest: true });
   const earth = new Sprite(earthMaterial); earth.name = 'Earth'; world.add(earth);
   const pins = new Group(); world.add(pins);
+  // The real sky behind the Moon (issue #80), turned with the Moon at the selected time.
+  const stars = makeStarField(invalidate); world.add(stars.object);
   const pinGeometry = new SphereGeometry(1, 12, 8);
   const raycaster = new Raycaster(), pointer = new Vector2();
   let pointerDown: { x: number; y: number; id: number } | null = null, maxDrag = 0;
@@ -500,6 +505,7 @@ export function mount(el: HTMLElement): void {
     else if (changedTarget && orbitControls.target.distanceTo(lastTarget) < 1e-6) follow();
     updatePins(s);
     sun.target.position.copy(target);
+    stars.turn(multiply(MOON_TO_SCENE, moonFromIcrf(sc.tMs)));
     // vectorsAt answers a time it has no row for (outside 1900-2100, or in a decade that failed
     // to download) with the nearest row it does have. Lighting the scene from that would show a
     // picture of some other date while the readout says the time is outside the table.
@@ -543,6 +549,7 @@ export function mount(el: HTMLElement): void {
     // Until the height map arrives there is no 0 m colour; the middle of the ramp stands in.
     globeMaterial.color.set(themeColor('--terrain-lo')).lerp(new Color(themeColor('--terrain-hi')), 0.5);
     const old = earthMaterial.map; earthMaterial.map = earthTexture(); old?.dispose();
+    stars.recolor();
     update(getState());
   }
   function pick(event: PointerEvent): void {
@@ -587,7 +594,7 @@ export function mount(el: HTMLElement): void {
   const unsubscribe = subscribe(update);
   // Not needed for any number, so it loads after the height map (issue #96) and the plain sphere
   // shows meanwhile.
-  Promise.all([sharedGlobe(), afterHeightMap().then(loadNorth).catch(() => null), loadTileIndex().catch(() => null)]).then(([loaded, cap, tiles]) => {
+  Promise.all([sharedGlobe(), sharedNorth().catch(() => null), loadTileIndex().catch(() => null)]).then(([loaded, cap, tiles]) => {
     if (disposed) return;
     globeHeights = loaded; north = cap; tileIndex = tiles; update(getState());
   }).catch(() => { /* No whole-Moon heights (mock data set): the globe stays a plain sphere. */ });
@@ -602,7 +609,7 @@ export function mount(el: HTMLElement): void {
     buttons.forEach((b) => b.removeEventListener('click', changeMode)); window.removeEventListener('pagehide', onPageHide);
     orbitControls.dispose(); clearTerrain(); clearPins(); northMesh?.geometry.dispose(); clearPatch(); unmountMap(mapHost);
     pinGeometry.dispose(); globe.geometry.dispose(); globeMaterial.map?.dispose(); globeMaterial.normalMap?.dispose(); globeMaterial.dispose(); terrainMaterial.dispose(); detailMaterial.dispose();
-    earthMaterial.map?.dispose(); earthMaterial.dispose(); sun.dispose();
+    earthMaterial.map?.dispose(); earthMaterial.dispose(); sun.dispose(); stars.dispose();
     // Free the WebGL context now: browsers allow only a few, and a remount would leak one.
     renderer.dispose(); renderer.forceContextLoss(); canvas.remove(); mounts.delete(el);
   }

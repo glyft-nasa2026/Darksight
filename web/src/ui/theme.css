@@ -45,6 +45,11 @@
   --terrain-lo: #3a3f47;
   --terrain-hi: #d9dce1;
 
+  /* Star colours behind the 3D views (issue #80), by B-V: hot blue-white, Sun-like, cool orange */
+  --star-hot: #a8bfff;
+  --star: #fff4e6;
+  --star-cool: #ffc285;
+
   /* Gaps */
   --space-1: 4px;
   --space-2: 8px;

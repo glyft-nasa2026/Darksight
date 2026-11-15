@@ -154,22 +154,25 @@ export function shadePolar(dem: Dem, sun: Vec3, maxCells = 1300): PolarShade {
 /**
  * Cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, `width`
  * cells from 180 W to 180 E and `height` cells from 90 N to 90 S. Above 0 is day.
+ * With `rowStart` and `rowEnd`, only those rows (`rowStart` to `rowEnd - 1`) are worked out and
+ * returned, `width` values each: a polar map needs only the rows near its pole.
  */
-export function shadeGlobal(sun: Vec3, width: number, height: number): Float32Array {
+export function shadeGlobal(sun: Vec3, width: number, height: number, rowStart = 0, rowEnd = height): Float32Array {
   const n = Math.hypot(sun[0], sun[1], sun[2]) || 1;
   const [sx, sy, sz] = [sun[0] / n, sun[1] / n, sun[2] / n];
-  const out = new Float32Array(width * height);
+  const j0 = Math.max(0, rowStart), j1 = Math.min(height, rowEnd);
+  const out = new Float32Array(width * Math.max(0, j1 - j0));
   // The longitude terms are the same on every row: work them out once.
   const cosLon = new Float64Array(width), sinLon = new Float64Array(width);
   for (let i = 0; i < width; i++) {
     const lon = (-180 + ((i + 0.5) * 360) / width) * RAD;
     cosLon[i] = Math.cos(lon); sinLon[i] = Math.sin(lon);
   }
-  for (let j = 0; j < height; j++) {
+  for (let j = j0; j < j1; j++) {
     const lat = (90 - ((j + 0.5) * 180) / height) * RAD;
     const cl = Math.cos(lat), sl = Math.sin(lat);
     for (let i = 0; i < width; i++) {
-      out[j * width + i] = cl * cosLon[i] * sx + cl * sinLon[i] * sy + sl * sz;
+      out[(j - j0) * width + i] = cl * cosLon[i] * sx + cl * sinLon[i] * sy + sl * sz;
     }
   }
   return out;
