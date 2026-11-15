@@ -82,6 +82,8 @@ order given in `docs/team-workflow.md`, "The first three merges".
 | [T39](T39-moon-vs-earth.md) | Why the Moon is different, in plain words | if time | - |
 | [T40](T40-timeline-play.md) | Play the timeline | if time | M2 |
 | [T41](T41-slope.md) | Ground slope, as a map layer and a readout line | if time | M2, T14 |
+| [T42](T42-date-search.md) | Date search: the first date with enough sunlight and Earth | if time | M2; only before the M3 freeze |
+| [T43](T43-layers-whole-moon.md) | Map layers over the whole Moon | if time | M2, T14, T41; agree the `globe.bin` reader with T37 |
 
 ## Order
 
@@ -109,6 +111,9 @@ T36 to T41 (15 Nov) cover what the challenge statement asks for and the site doe
 All stop at the M3 freeze; T38 and T39 are text, and the team decides if they may merge after it.
 T38 and T39 both edit web/src/ui/about/index.ts, so agree an order. T37 waits for #146 and,
 like T33, changes `state.ts`. T37 starts with a team decision; T36's count is agreed (25 sites, 15 Nov).
+T42 (15 Nov) adds a date search to `core/` and the Scenarios panel; it may touch `state.ts`, like T40.
+T43 (15 Nov) takes every map layer past 80 S to the whole Moon. Like T37 it lets `core/` read
+`globe.bin`, so the two agree one reader. It edits `web/src/map/index.ts` and `ui/layers/`.
 ```
 
 After T00 and T20, several tasks can run in parallel: the page already shows live

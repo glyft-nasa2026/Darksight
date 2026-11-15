@@ -23,3 +23,23 @@ export function pctText(frac: number): string {
   if (p === 100 && f < 1) p = 99;
   return `${p} %`;
 }
+
+/** T41: what the readout knows about the ground slope at the selected site. */
+export type SlopeInfo =
+  | { kind: 'loading' }                               // the height map has not arrived
+  | { kind: 'outside'; minLat: number }               // the height map doesn't reach this far north
+  | { kind: 'nodata' }                                // a hole in the height map
+  | { kind: 'ok'; deg: number; baselineM: number };   // from core/slope.ts
+
+/** The readout's slope line: "Ground slope 7° (over 240 m)", or why there is none. */
+export function slopeText(info: SlopeInfo): string {
+  switch (info.kind) {
+    case 'loading': return 'Ground slope: waiting for the height map';
+    case 'outside': return `Ground slope: no height map here (it covers ${Math.abs(info.minLat)}° S to the pole)`;
+    case 'nodata': return 'Ground slope: the height map has no data around this point';
+    case 'ok': {
+      const d = info.deg < 0.5 ? 'under 1' : String(Math.round(info.deg));
+      return `Ground slope ${d}° (over ${info.baselineM} m)`;
+    }
+  }
+}

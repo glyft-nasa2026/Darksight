@@ -1,14 +1,16 @@
 // T14 map layers: settings, fading and colouring. Pure functions, no DOM: model.test.ts runs them
 // in node. index.ts holds the one store the page uses and draws with these.
+import { SLOPE_RAMP_MAX_DEG } from '../../core/slope';
 
-export type LayerKey = 'sun' | 'earth' | 'psr' | 'height';
-export const LAYER_KEYS: readonly LayerKey[] = ['sun', 'earth', 'psr', 'height'];
+export type LayerKey = 'sun' | 'earth' | 'psr' | 'height' | 'slope';
+export const LAYER_KEYS: readonly LayerKey[] = ['sun', 'earth', 'psr', 'height', 'slope'];
 
 export const LAYER_LABELS: Record<LayerKey, string> = {
   sun: 'Sunlight (share of time lit)',
   earth: 'Earth in view (share of time)',
   psr: 'Never lit (permanent shadow)',
   height: 'Height',
+  slope: `Slope (level to ${SLOPE_RAMP_MAX_DEG}° and steeper)`,
 };
 
 /** Theme variables (never colour codes) for the low and high end of each layer's colours. */
@@ -17,11 +19,13 @@ export const LAYER_COLORS: Record<LayerKey, readonly [string, string]> = {
   earth: ['--dark', '--earth'],
   psr: ['--bg', '--accent'],
   height: ['--terrain-lo', '--terrain-hi'],
+  // T41: brighter is steeper, so it reads without telling red from green.
+  slope: ['--dark', '--bad'],
 };
 
 /** 'ramp': every cell drawn, low to high colour. 'alpha': the high colour, as opaque as the value. */
 export const LAYER_MODE: Record<LayerKey, 'ramp' | 'alpha'> = {
-  sun: 'ramp', earth: 'ramp', psr: 'alpha', height: 'ramp',
+  sun: 'ramp', earth: 'ramp', psr: 'alpha', height: 'ramp', slope: 'ramp',
 };
 
 export const DEFAULT_OPACITY = 0.6;
@@ -131,5 +135,15 @@ export function normalise(values: ArrayLike<number>): Float32Array {
   const out = new Float32Array(values.length);
   const span = hi > lo ? hi - lo : 1;
   for (let i = 0; i < values.length; i++) out[i] = Number.isFinite(values[i]) ? (values[i] - lo) / span : NaN;
+  return out;
+}
+
+/** T41: slopes in degrees (NaN = none) as 0..1 along the Slope layer's ramp, steeper than its end as 1. */
+export function slopeRamp(degrees: ArrayLike<number>, maxDeg = SLOPE_RAMP_MAX_DEG): Float32Array {
+  const out = new Float32Array(degrees.length);
+  for (let i = 0; i < degrees.length; i++) {
+    const d = degrees[i];
+    out[i] = Number.isFinite(d) ? Math.min(1, Math.max(0, d / maxDeg)) : NaN;
+  }
   return out;
 }

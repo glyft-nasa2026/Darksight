@@ -108,8 +108,8 @@ export function summary(samples: Sample[]): Summary {
   };
 }
 
-/** "3 d 4 h", or "5 h 20 min" under one day. */
-function durationText(ms: number): string {
+/** "3 d 4 h", or "5 h 20 min" under one day. The countdowns' wording; T42's date search uses it too. */
+export function durationText(ms: number): string {
   const totalMin = Math.max(0, Math.floor(ms / MIN_MS));
   const totalH = Math.floor(totalMin / 60);
   if (totalH >= 24) return `${Math.floor(totalH / 24)} d ${totalH % 24} h`;

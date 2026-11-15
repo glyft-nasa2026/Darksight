@@ -1,8 +1,8 @@
 // T14: layer settings, fading and colouring (no DOM).
 import { describe, expect, it } from 'vitest';
 import {
-  colorize, createLayerStore, DEFAULT_OPACITY, fadeTowards, LAYER_COLORS, LAYER_KEYS, normalise,
-  parseColor, targetAlpha,
+  colorize, createLayerStore, DEFAULT_OPACITY, fadeTowards, LAYER_COLORS, LAYER_KEYS, LAYER_LABELS, normalise,
+  parseColor, slopeRamp, targetAlpha,
 } from './model';
 
 describe('layer store', () => {
@@ -83,5 +83,19 @@ describe('colours', () => {
 
   it('scales heights to 0..1', () => {
     expect([...normalise([-2000, 0, 2000, Number.NaN])].slice(0, 3)).toEqual([0, 0.5, 1]);
+  });
+
+  it('ramps slopes from level to 30 degrees, steeper as the end, none as no data (T41)', () => {
+    const v = slopeRamp([0, 15, 30, 55, Number.NaN]);
+    expect([...v].slice(0, 4)).toEqual([0, 0.5, 1, 1]);
+    expect(v[4]).toBeNaN();
+  });
+});
+
+describe('the Slope layer (T41)', () => {
+  it('is a fifth layer, after height, with a ramp from theme variables', () => {
+    expect(LAYER_KEYS).toEqual(['sun', 'earth', 'psr', 'height', 'slope']);
+    expect(LAYER_LABELS.slope).toBe('Slope (level to 30° and steeper)');
+    expect(LAYER_COLORS.slope).toEqual(['--dark', '--bad']);
   });
 });
