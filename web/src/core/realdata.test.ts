@@ -27,10 +27,12 @@ const demMeta = readJson<DemMeta>('dem.json');
 function whySkip(): string | null {
   if (!ephMeta) return 'web/public/data/ephemeris.json is missing';
   if (!demMeta) return 'web/public/data/dem.json is missing';
-  if (!existsSync(dataFile('dem.bin'))) return 'web/public/data/dem.bin is missing';
   const mock = [ephMeta.source === 'mock' && 'ephemeris.json', demMeta.source === 'mock' && 'dem.json']
     .filter(Boolean);
   if (mock.length > 0) return `${mock.join(' and ')} ${mock.length > 1 ? 'say' : 'says'} "source": "mock"`;
+  // A real dem.json without its dem.bin is an error, not a reason to skip, as for the table's
+  // decade files in readRealTable(): these checks would otherwise pass by not running.
+  if (!existsSync(dataFile('dem.bin'))) throw new Error('web/public/data/dem.json is real but dem.bin is not there');
   return null;
 }
 
