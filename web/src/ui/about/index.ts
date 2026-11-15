@@ -200,11 +200,16 @@ function buildDialog(): Panel {
     setCheck(c) {
       if (c.state === 'real') {
         const passed = !(c.maxDiffDeg > c.toleranceDeg);
-        checkP.textContent = `${badgeSentence(c)} Our angles were compared with NASA JPL's Horizons ` +
-          `system for ${c.cases} cases (Sun and Earth, several sites and times), ` +
+        // The figure in validation.json is the data pipeline's (contract section 2: `ours` is the
+        // Python calculation). The page's own code is held to PAGE_VS_HORIZONS_DEG on the same
+        // cases by core/horizons.test.ts: keep the two in step.
+        checkP.textContent = `${badgeSentence(c)} That is our data pipeline (Skyfield with JPL's DE440 ` +
+          `file) compared with NASA JPL's Horizons system for ${c.cases} cases (Sun and Earth, several ` +
+          `sites and times), ` +
           `${Number.isFinite(c.toleranceDeg) ? `against a tolerance of ${formatDeg(c.toleranceDeg)} degrees` : ''}` +
           `${passed ? '' : ' — over the tolerance'}. Checked ${c.checkedAt.replace('T', ' ').replace(/:\d\dZ$/, ' UTC')}. ` +
-          'A test runs the same comparison on the code in this page on every change.';
+          'The code in this page matches Horizons on the same cases to within 0.001 degrees, and a ' +
+          'test checks that on every change.';
       } else {
         checkP.textContent = badgeSentence(c);
       }
