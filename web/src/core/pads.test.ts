@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PAD_ID, PADS, padById } from './pads';
+import { BRIEF_PAD_COUNT, DEFAULT_PAD_ID, PADS, padById } from './pads';
 
 describe('launch pads', () => {
-  it('lists the brief\'s seven pads, each once', () => {
-    expect(PADS).toHaveLength(7);
-    expect(new Set(PADS.map((p) => p.id)).size).toBe(7);
+  it('lists the brief’s seven pads first, then more pads in use, each once', () => {
+    expect(PADS.slice(0, BRIEF_PAD_COUNT).map((p) => p.id)).toEqual(
+      ['ksc-39a', 'ccsfs-slc40', 'csg-ela4', 'baikonur-31', 'jiuquan-sls2', 'wenchang-101', 'mahia-lc1']);
+    expect(PADS.length).toBeGreaterThan(BRIEF_PAD_COUNT);
+    expect(new Set(PADS.map((p) => p.id)).size).toBe(PADS.length);
   });
 
   it('keeps every coordinate on Earth, longitude -180 to 180', () => {
@@ -22,6 +24,9 @@ describe('launch pads', () => {
     expect(padById('baikonur-31').lon).toBeGreaterThan(0);   // Kazakhstan: east
     expect(padById('mahia-lc1').lat).toBeLessThan(0);        // New Zealand: south
     expect(padById('mahia-lc1').lon).toBeGreaterThan(0);
+    expect(padById('vsfb-slc4e').lon).toBeLessThan(-120);       // California: west
+    expect(padById('sdsc-slp').lon).toBeGreaterThan(0);         // India: east
+    expect(padById('tanegashima-lp1').lon).toBeGreaterThan(0);  // Japan: east
   });
 
   it('falls back to Kennedy LC-39A for an unknown or missing id', () => {

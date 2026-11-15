@@ -14,8 +14,9 @@ import { PADS, padById } from '../../core/pads';
 import { countdownText } from '../../core/windows';
 import {
   flipFor, getState, landingScenario, missionFor, neverLitFor, samplesFor, setLander, setPad,
-  subscribe, summaryFor,
+  stateToAddress, subscribe, summaryFor,
 } from '../../state';
+import { openPadPicker } from '../launch/picker';
 import {
   coordText, dayText, durationText, dvText, elapsedText, kgText, kmText, pctText, shortUtcText,
   speedText, utcText,
@@ -295,11 +296,27 @@ export function mount(el: HTMLElement): void {
   const landerNote = make('p', 'ms-note muted',
     'Example lander, about the size of Intuitive Machines’ Nova-C (its Isp is an example value). Edit to match yours.');
 
+  // --- Proceed: choose the launch site on a globe, then the launch simulation page ------------
+  const proceedButton = make('button', 'btn btn-primary ms-proceed', 'Proceed ›');
+  proceedButton.type = 'button';
+  proceedButton.setAttribute('aria-haspopup', 'dialog');
+  const proceedNote = make('p', 'ms-note muted', 'Choose the launch site on the globe, then watch the whole flight on its own page.');
+  proceedButton.addEventListener('click', () => {
+    openPadPicker({
+      padId: getState().padId,
+      confirmLabel: 'Confirm launch pad · begin simulation',
+      onConfirm: (id) => {
+        setPad(id);
+        window.location.assign(`simulation.html#${stateToAddress()}`);
+      },
+    });
+  });
+
   // --- Side cards ----------------------------------------------------------------------------
   const launchInfo = make('div', 'ms-info');
   const landInfo = make('div', 'ms-info');
   const side = make('div', 'ms-side');
-  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote);
+  side.append(launchInfo, landInfo, padLabel, padBox, landerGrid, landerError, exampleButton, landerNote, proceedButton, proceedNote);
 
   // --- Animation -----------------------------------------------------------------------------
   const view = make('div', 'ms-view');
