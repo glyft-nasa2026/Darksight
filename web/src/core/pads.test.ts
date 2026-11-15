@@ -29,6 +29,22 @@ describe('launch pads', () => {
     expect(padById('tanegashima-lp1').lon).toBeGreaterThan(0);  // Japan: east
   });
 
+  it('takes the pad’s own coordinates where its page title gives the spaceport’s (docs/sources/T34.md)', () => {
+    // The pad's value on its source page, read on 15 Nov 2026; the title coordinate is elsewhere.
+    const own: Record<string, [number, number]> = {
+      'taiyuan-lc9': [38.8632, 111.589639],        // "Launch Site 9" list item; the title is 2.2 km away, by LC-7
+      'plesetsk-43': [62.929, 40.457],             // "Pad 43/4" in the list of launchpads
+      'vsfb-slc4e': [34.632012, -120.610635],      // SLC-4E marker of the Vandenberg launch pad map
+      'starbase-olpa': [25.996167, -97.154444],    // Orbital Launch Pad 1 (OLP-A), Wikidata Q123524133
+      'tanegashima-lp1': [30.401194, 130.977056],  // 第1射点（LP-1）, Japanese Wikipedia
+    };
+    for (const [id, [lat, lon]] of Object.entries(own)) {
+      expect(padById(id).id).toBe(id);
+      expect(Math.abs(padById(id).lat - lat), id).toBeLessThan(0.002);
+      expect(Math.abs(padById(id).lon - lon), id).toBeLessThan(0.002);
+    }
+  });
+
   it('falls back to Kennedy LC-39A for an unknown or missing id', () => {
     expect(padById('nowhere').id).toBe(DEFAULT_PAD_ID);
     expect(padById(null).id).toBe(DEFAULT_PAD_ID);
