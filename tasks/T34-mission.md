@@ -1,6 +1,6 @@
 # T34: Mission simulation, launch to touchdown
 
-Status: fourth delivery in progress (P5, branch `t34-mission-d`, draft pull request #123, issue #105 follow-up: gradual playback speed, and the arrival and orbit corrections at the Moon shown; #100, #104 and #106 merged). The team agreed on 15 Nov 2026 (F20 in `SPEC.md`); every "Done when" line passes. The twelve new pad coordinates from #104 still need a person's check. Not after the M3 freeze Issue #80 (pull request #115) added the real star sky behind the picker's globe (Earth's orientation at the planned launch) and the simulation (the transfer plane laid on the Moon's real orbit plane at touchdown).
+Status: fifth delivery in progress (P5, branch `t34-mission-e`: the simulation's zoom between Earth orbit, the TLI coast and the Moon glides smoothly; #100, #104, #106 and #123 merged). The team agreed on 15 Nov 2026 (F20 in `SPEC.md`); every "Done when" line passes. The twelve new pad coordinates from #104 still need a person's check. Not after the M3 freeze Issue #80 (pull request #115) added the real star sky behind the picker's globe (Earth's orientation at the planned launch) and the simulation (the transfer plane laid on the Moon's real orbit plane at touchdown).
 
 | | |
 |---|---|

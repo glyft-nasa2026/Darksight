@@ -33,7 +33,15 @@ const P = ([x, y]: [number, number]): THREE.Vector3 => new THREE.Vector3(x * KM,
 /** The same with the plane's normal (z) as the scene's up. */
 const P3 = ([x, y, z]: [number, number, number]): THREE.Vector3 => new THREE.Vector3(x * KM, z * KM, -y * KM);
 
-const GLIDE_MS = 1400;
+// A change of scale glides: a short one in about 1.5 s, Earth orbit out to the Earth-Moon
+// view (20 times wider) in about 3.2 s. The pan keeps pace with the zoom (see draw), so the
+// place being left and the place being reached both stay in view.
+const GLIDE_BASE_MS = 1200;
+const GLIDE_PER_E_FOLD_MS = 650;
+const GLIDE_MAX_MS = 3600;
+/** 0..1 eased with zero speed and zero acceleration at both ends (smootherstep). */
+const ease = (f: number): number => f * f * f * (f * (6 * f - 15) + 10);
+const isMoonScale = (s: Scale): boolean => s === 'moon' || s === 'descent';
 const VIEW_DIRECTION: Record<Scale, THREE.Vector3> = {
   near: new THREE.Vector3(0.25, 0.75, 1).normalize(),
   earth: new THREE.Vector3(0, 1, 0.55).normalize(),
@@ -247,7 +255,13 @@ export function createScene(
   controls.enablePan = false;
   controls.rotateSpeed = 0.6;
   let shown: Scale | null = null;
-  let glide: { from: THREE.Vector3; to: THREE.Vector3; fromTarget: THREE.Vector3; startMs: number } | null = null;
+  let glide: {
+    from: THREE.Vector3; to: THREE.Vector3; fromTarget: THREE.Vector3; startMs: number; ms: number;
+    fromMoon: number;   // the Moon frame's weight for the craft when the glide began
+  } | null = null;
+  // The craft's weight on its Moon-centred path (1) against the Earth-frame transfer (0): it
+  // changes over the glide, so the craft dot slides instead of jumping between the two.
+  let moonWeight = 0;
   const lastTarget = new THREE.Vector3();
 
   const distanceFor = (scale: Scale): number => {
@@ -324,6 +338,22 @@ export function createScene(
   };
 
   let last: { st: MissionState; scale: Scale; burning: boolean } | null = null;
+  // At Earth's scales the craft follows the transfer; at the Moon's, its Moon-centred path; in a
+  // glide between them, a blend. The Earth-frame lines, which run into the Moon's centre, fade
+  // out toward the Moon's scales by the same weight.
+  for (const l of [...earthTrack, moonPath]) l.userData.opacity = (l.material as THREE.LineBasicMaterial).opacity;
+  const placeCraft = (st: MissionState | undefined = last?.st): void => {
+    if (!st) return;
+    const w = st.moonPlane ? moonWeight : 0;
+    const fromEarth = P(st.earthPlane.craft);
+    craft.position.copy(w > 0 ? fromEarth.lerp(moon.position.clone().add(P(st.moonPlane!).applyQuaternion(moon.quaternion)), w) : fromEarth);
+    for (const l of [...earthTrack, moonPath]) {
+      const m = l.material as THREE.LineBasicMaterial;
+      m.transparent = true;
+      m.opacity = l.userData.opacity * (1 - moonWeight);
+      l.visible = m.opacity > 0.01;
+    }
+  };
   let settling = false;
   let frame = 0;
   const draw = (now: number): void => {
@@ -337,20 +367,33 @@ export function createScene(
       if (shown === null || prefersReducedMotion()) {
         offset = to;
         glide = null;
+        moonWeight = isMoonScale(scale) ? 1 : 0;
       } else {
-        glide = { from: offset.clone(), to, fromTarget: lastTarget.clone(), startMs: now };
+        const fold = Math.abs(Math.log(to.length() / offset.length()));
+        const ms = Math.min(GLIDE_MAX_MS, GLIDE_BASE_MS + GLIDE_PER_E_FOLD_MS * fold);
+        glide = { from: offset.clone(), to, fromTarget: lastTarget.clone(), startMs: now, ms, fromMoon: moonWeight };
       }
       shown = scale;
     }
     let aim = target;
     if (glide) {
-      const f = Math.min(1, (now - glide.startMs) / GLIDE_MS);
-      const e = f * f * (3 - 2 * f);
-      const len = Math.exp(Math.log(glide.from.length()) + (Math.log(glide.to.length()) - Math.log(glide.from.length())) * e);
+      const f = Math.min(1, (now - glide.startMs) / glide.ms);
+      const e = ease(f);
+      const d0 = glide.from.length();
+      const d1 = glide.to.length();
+      const len = Math.exp(Math.log(d0) + (Math.log(d1) - Math.log(d0)) * e);
       offset = glide.from.clone().normalize().lerp(glide.to.clone().normalize(), e).normalize().multiplyScalar(len);
-      aim = glide.fromTarget.clone().lerp(target, e);
+      // Pan in step with the zoom: the aim has moved the same share of the way as the view's
+      // width has changed. Zooming out, the start stays in view while the view widens; zooming
+      // in, the aim reaches the new place early, while the view is still wide enough to show it.
+      const u = Math.abs(d1 - d0) < 1e-9 ? e : (len - d0) / (d1 - d0);
+      aim = glide.fromTarget.clone().lerp(target, u);
+      moonWeight = glide.fromMoon + ((isMoonScale(scale) ? 1 : 0) - glide.fromMoon) * e;
       if (f >= 1) glide = null;
+    } else {
+      moonWeight = isMoonScale(scale) ? 1 : 0;
     }
+    placeCraft();
     if (!glide && scale === 'moon' && (st.approach || settling)) {
       // Ease the distance toward the one that fits the arrival, then leave the zoom to the user.
       const want = distanceFor('moon');
@@ -377,13 +420,7 @@ export function createScene(
       earth.quaternion.copy(tilt).multiply(spin);
       turnBody(st.tMs);
       placeSite(st.tMs);
-      // At Earth's scales the craft follows the transfer; at the Moon's, its Moon-centred path.
-      const atMoon = (scale === 'moon' || scale === 'descent') && st.moonPlane;
-      craft.position.copy(atMoon
-        ? moon.position.clone().add(P(st.moonPlane!).applyQuaternion(moon.quaternion))
-        : P(st.earthPlane.craft));
-      // The Earth-frame lines run into the Moon's centre: hidden at the Moon's scales.
-      for (const l of [...earthTrack, moonPath]) l.visible = scale === 'near' || scale === 'earth';
+      if (!glide) placeCraft(st);
       // Firing: the craft shows as a larger --warn dot, and its label says so.
       const cm = craft.material as THREE.PointsMaterial;
       cm.color.set(themeColor(burning ? '--warn' : '--ok'));
