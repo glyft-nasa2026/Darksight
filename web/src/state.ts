@@ -3,7 +3,7 @@
 
 import type { Dem } from './core/dem';
 import { loadEphemerisChunk, type Ephemeris } from './core/ephemeris';
-import { sunAltAz } from './core/geometry';
+import { sunAltAzAtSite } from './core/geometry';
 import { skylineAt, skylineElev } from './core/horizon';
 import {
   APOLLO_11_TIMES, earthMoonKmAt, EXAMPLE_LANDER, planMission, type Lander, type MissionPlan,
@@ -480,8 +480,10 @@ const skylineCache = new Map<string, Skyline>();
 const seriesCache = new Map<string, Sample[]>();
 const summaryCache = new Map<string, Summary>();
 const flipCache = new Map<string, Flip>();
-// Per site: the latest sunlit hour found scanning back from 2100, and how far back it got.
-const litScans = new Map<string, { litMs: number; fromMs: number }>();
+// Per site: the latest sunlit hour found scanning back from 2100, how far back it got, and how
+// far back it has been asked to go. A scan longer than one slice carries on in the background.
+type LitScan = { litMs: number; fromMs: number; toMs: number; running: boolean };
+const litScans = new Map<string, LitScan>();
 
 function clearCaches(): void {
   missionCache = null;
@@ -552,7 +554,8 @@ export function flipFor(sc: Scenario, body: Body): Flip {
  * clears the skyline at any hour. False within 60 days of the end, where that proves nothing. Answers false at once when the Sun is up or rises within 60
  * days, which needs no extra download. Otherwise it needs every decade from sc.tMs to 2100;
  * until they arrive it answers false (the countdown then reads "No sunrise in the next 60
- * days", which is also true) and the readout updates when they are in.
+ * days", which is also true) and the readout updates when they are in. The same while the scan
+ * itself runs: a long one carries on in slices between frames (issue #32, row 1).
  */
 export function neverLitFor(sc: Scenario): boolean {
   const eph = state.eph;
@@ -560,7 +563,8 @@ export function neverLitFor(sc: Scenario): boolean {
   if (!eph || sc.tMs < eph.startMs || eph.endMs - sc.tMs < FLIP_DAYS * DAY_MS) return false;
   if (sunlitTest(eph, sc)(sc.tMs) || flipFor(sc, 'sun') !== null) return false;
   if (!covered(sc.tMs, eph.endMs)) return false;
-  return lastLitMs(eph, sc, sc.tMs) < sc.tMs;
+  const litMs = lastLitMs(eph, sc, sc.tMs);
+  return litMs !== null && litMs < sc.tMs;
 }
 
 /**
@@ -568,36 +572,63 @@ export function neverLitFor(sc: Scenario): boolean {
  * and skyline are looked up once here, not once per hour: the scan below asks 650,000 times.
  */
 function sunlitTest(eph: Ephemeris, sc: Scenario): (tMs: number) => boolean {
-  const ground = groundFor(sc.site);
   const skyline = skylineFor(sc);
+  const sunAt = sunAltAzAtSite(eph, sc.site);   // the site's axes once, not once an hour
   return (tMs) => {
-    const sun = sunAltAz(eph, sc.site, ground, tMs);
+    const sun = sunAt(tMs);
     return sun.alt - skylineElev(skyline, sun.az) + SUN_RADIUS > 0;
   };
 }
 
 /**
- * The latest hour with sunlight there, at or after downToMs, or -Infinity if none. Scans back
- * hour by hour from the end of the table and remembers how far it got, so dragging the time
- * earlier only scans the new hours, and a site that sees the Sun again before 2100 stops at once.
+ * Hours scanned in one go. A dark spot near the pole scans about 650,000 hours from 2100 back
+ * to today: about 0.75 s in one piece on a mid-range phone (T27, issue #32 row 1). In slices of
+ * this size each takes about 15 ms there, and the page keeps drawing in between. A count, not a
+ * time limit, so the tests are the same on every machine.
  */
-function lastLitMs(eph: Ephemeris, sc: Scenario, downToMs: number): number {
+export const LIT_SCAN_SLICE_HOURS = 20_000;
+
+/**
+ * The latest hour with sunlight there, at or after downToMs, or -Infinity if none; null while
+ * the scan is still running. Scans back hour by hour from the end of the table and remembers
+ * how far it got, so dragging the time earlier only scans the new hours, and a site that sees
+ * the Sun again before 2100 stops at once. The first slice runs now; a longer scan carries on in
+ * slices between frames and calls notify() when it is done, so the modules read the answer.
+ */
+function lastLitMs(eph: Ephemeris, sc: Scenario, downToMs: number): number | null {
   const key = siteKey(sc.site);
   let scan = litScans.get(key);
   if (!scan) {
     if (litScans.size >= CACHE_LIMIT) litScans.clear();
-    scan = { litMs: -Infinity, fromMs: eph.endMs + HOUR_MS };
+    scan = { litMs: -Infinity, fromMs: eph.endMs + HOUR_MS, toMs: downToMs, running: false };
     litScans.set(key, scan);
   }
-  if (scan.litMs === -Infinity && scan.fromMs > downToMs) {
-    const sunlit = sunlitTest(eph, sc);
-    while (scan.litMs === -Infinity && scan.fromMs > downToMs) {
-      const t = scan.fromMs - HOUR_MS;
-      scan.fromMs = t;
-      if (sunlit(t)) scan.litMs = t;
-    }
+  scan.toMs = Math.min(scan.toMs, downToMs);
+  if (scan.running) return null;
+  if (!scanSlice(scan, sunlitTest(eph, sc))) return scan.litMs;
+  // Not done in one slice: carry on in the background. A scan dropped meanwhile (the caches were
+  // cleared, or the site fell out of them) stops at its next slice.
+  scan.running = true;
+  const sunlit = sunlitTest(eph, sc);
+  const next = (): void => {
+    if (litScans.get(key) !== scan) return;
+    if (scanSlice(scan, sunlit)) { setTimeout(next, 0); return; }
+    scan.running = false;
+    notify(false);
+  };
+  setTimeout(next, 0);
+  return null;
+}
+
+/** Scans up to one slice of hours. True when there is more to scan. */
+function scanSlice(scan: LitScan, sunlit: (tMs: number) => boolean): boolean {
+  for (let i = 0; i < LIT_SCAN_SLICE_HOURS; i++) {
+    if (scan.litMs !== -Infinity || scan.fromMs <= scan.toMs) return false;
+    const t = scan.fromMs - HOUR_MS;
+    scan.fromMs = t;
+    if (sunlit(t)) scan.litMs = t;
   }
-  return scan.litMs;
+  return scan.litMs === -Infinity && scan.fromMs > scan.toMs;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import { indexEphemeris, parseEphemeris, type Ephemeris } from './core/ephemeris
 import type { CuratedSite } from './core/types';
 import { EXAMPLE_LANDER } from './core/mission';
 import {
-  flipFor, getState, isLanding, LANDING_ID, landingScenario, LIVE_ID, missionFor, neverLitFor, pin,
+  flipFor, getState, isLanding, LANDING_ID, landingScenario, LIT_SCAN_SLICE_HOURS, LIVE_ID, missionFor, neverLitFor, pin,
   restoreFromAddress, samplesFor, select, selected, setData, setGhost, setLander, setLanding,
   setLiveSite, setLiveTime, setMode, setPad, setRange, shiftWindow, skylineFor, stateToAddress,
   subscribe, summaryFor, timelineFor, unpin, type Scenario,
@@ -691,6 +691,73 @@ describe('"never lit" from the chosen time to the end of the table', () => {
     expect(neverLitFor(getState().live)).toBe(true);
     setLiveTime(T0 + 50 * DAY);                          // the Sun is up then
     expect(neverLitFor(getState().live)).toBe(false);
+  });
+});
+
+describe('"never lit" on a long table: the scan runs in slices (issue #32, row 1)', () => {
+  // 50,000 hours, longer than two slices. The Sun is below the south-pole horizon (+z) except
+  // in the hours sunlit() names, where it is overhead (-z).
+  const ROWS = 50_001;
+  function table(sunlit: (row: number) => boolean): Ephemeris {
+    const buffer = new ArrayBuffer(ROWS * 24);
+    const view = new DataView(buffer);
+    for (let r = 0; r < ROWS; r++) {
+      [0, 0, sunlit(r) ? -1 : 1, 384400, 0, 0].forEach((v, c) => view.setFloat32((r * 6 + c) * 4, v, true));
+    }
+    return parseEphemeris({
+      start: '2027-01-01T00:00:00Z', step_s: 3600, rows: ROWS, frame: 'MOON_ME_DE421',
+      columns: [], source: 'made up for a test',
+    }, buffer);
+  }
+  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+  it('answers false at first, then notifies once and reads true when no hour has sunlight', async () => {
+    expect(ROWS - 1).toBeGreaterThan(2 * LIT_SCAN_SLICE_HOURS);
+    setData({ eph: table(() => false) });
+    let calls = 0;
+    const stop = subscribe(() => { calls++; });
+    expect(neverLitFor(getState().live)).toBe(false);   // one slice done, the rest to come
+    expect(calls).toBe(0);
+    await tick();
+    expect(neverLitFor(getState().live)).toBe(false);   // still scanning: two slices of three
+    for (let i = 0; i < 10 && calls === 0; i++) await tick();
+    stop();
+    expect(calls).toBe(1);
+    expect(neverLitFor(getState().live)).toBe(true);
+  });
+
+  it('reads false when the only sunlight is far back, found several slices in', async () => {
+    setData({ eph: table((r) => r >= 2400 && r < 2412) });   // 12 sunlit hours on day 100
+    let calls = 0;
+    const stop = subscribe(() => { calls++; });
+    expect(neverLitFor(getState().live)).toBe(false);
+    for (let i = 0; i < 10 && calls === 0; i++) await tick();
+    stop();
+    expect(calls).toBe(1);
+    expect(neverLitFor(getState().live)).toBe(false);
+    setLiveTime(T0 + 2412 * HOUR + DAY);                       // after that sunlight
+    expect(neverLitFor(getState().live)).toBe(true);           // already scanned: no wait
+  });
+
+  it('takes in an earlier time asked for while it is still scanning', async () => {
+    setData({ eph: table(() => false) });
+    setLiveTime(T0 + 20_000 * HOUR);
+    expect(neverLitFor(getState().live)).toBe(false);          // starts at the later time
+    setLiveTime(T0);
+    expect(neverLitFor(getState().live)).toBe(false);          // the same scan now goes further
+    for (let i = 0; i < 10 && !neverLitFor(getState().live); i++) await tick();
+    expect(neverLitFor(getState().live)).toBe(true);
+  });
+
+  it('stops a scan whose table was replaced, without notifying for it', async () => {
+    setData({ eph: table(() => false) });
+    neverLitFor(getState().live);
+    setData({ eph: table(() => false) });                      // clears the scans
+    let calls = 0;
+    const stop = subscribe(() => { calls++; });
+    for (let i = 0; i < 5; i++) await tick();
+    stop();
+    expect(calls).toBe(0);
   });
 });
 
