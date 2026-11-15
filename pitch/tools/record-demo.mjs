@@ -59,7 +59,9 @@ mkdirSync(join(raw, 'site'), { recursive: true });
 mkdirSync(join(raw, 'sim'), { recursive: true });
 mkdirSync(frames, { recursive: true });
 
-// The overlay: captions, cards, highlight ring and the AI-use label. Theme variables only.
+// The overlay: captions, cards and the highlight ring. Theme variables only. No AI-use label: the
+// video is a screen recording, not AI-generated footage (the guide's watermark rule), and the
+// submission text describes the AI help.
 const OVERLAY_CSS = `
   #t17-cap { position: fixed; left: 50%; bottom: var(--space-5); transform: translateX(-50%);
     width: min(92vw, 1100px); z-index: 2147483000; background: var(--panel); color: var(--text);
@@ -79,9 +81,6 @@ const OVERLAY_CSS = `
   #t17-card .kicker { font: calc(var(--fs-md) * 1.2) var(--font-num); color: var(--accent);
     letter-spacing: .14em; text-transform: uppercase; }
   .t17-ring { outline: 4px solid var(--accent) !important; outline-offset: 4px; border-radius: var(--radius); }
-  #t17-ai { position: fixed; right: var(--space-3); bottom: var(--space-1); z-index: 2147483002;
-    font: var(--fs-sm) var(--font-num); color: var(--muted); background: var(--panel);
-    border: 1px solid var(--border); border-radius: 999px; padding: var(--space-1) var(--space-3); }
 `;
 
 /** Adds the overlay to a page and returns the helpers that drive it. */
@@ -90,9 +89,6 @@ async function overlay(page) {
   await page.evaluate(() => {
     const cap = document.createElement('div'); cap.id = 't17-cap'; document.body.append(cap);
     const card = document.createElement('div'); card.id = 't17-card'; card.className = 'off'; document.body.append(card);
-    const ai = document.createElement('div'); ai.id = 't17-ai';
-    ai.textContent = 'AI-assisted build (Claude Code) · screen recording of the real site';
-    document.body.append(ai);
   });
   return {
     caption: (html, where = '') => page.evaluate(([h, w]) => {

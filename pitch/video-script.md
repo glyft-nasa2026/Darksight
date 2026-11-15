@@ -1,7 +1,7 @@
 # Demo video: script (second version)
 
 **Limit:** 30 seconds or less (Space Apps project submission guide, 13 Nov 2026; a longer video
-is not eligible for global judging). **File:** `pitch/demo/darksight-demo.webm`, 29.4 s,
+is not eligible for global judging). **File:** `pitch/demo/darksight-demo.webm`, 29.7 s,
 1280 × 720, silent, English captions burned in. **Made by** `node pitch/tools/record-demo.mjs`,
 which drives the deployed site at darksight.space and its launch simulation page, and cuts out
 the loading.
@@ -27,8 +27,9 @@ page plans the landing at Shackleton rim at the same hour.
 | 0:24.3–27.3 | Back on the site; ring around the Horizons badge | "Every angle is checked against NASA JPL Horizons." Caption adds the badge's number, read from the page: 0.000001°. |
 | 0:27.3–29.7 | End card: **DARKSIGHT** · Sunlight and Earth contact, in a single website · darksight.space | "Sunlight and Earth contact, in a single website. Darksight." |
 
-A small label stays in the bottom-right corner the whole time: "AI-assisted build (Claude Code) ·
-screen recording of the real site" (the guide's rule on AI help, as in the first version).
+No AI-use label on the video (the first version had one). The guide asks for a watermark on
+AI-generated images and videos; this is a screen recording of the real site, and the submission
+text says how AI helped build it.
 
 ## Fitting a voiceover into 30 seconds
 

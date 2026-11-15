@@ -21,10 +21,10 @@ made both. The video is the demo link; the slides are linked from the detailed d
 |---|---|---|---|---|
 | Project Name | yes | none stated | "Darksight" (`submission.md`) | ready |
 | High-Level Project Summary | yes | none stated; what, how it addresses the challenge, why it matters | `submission.md` (about 180 words) | ready |
-| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 29.4 s, English captions | **needs a person:** upload to YouTube (public or unlisted) and paste the link |
+| Link to Project Demo | yes | video ≤ 30 s or ≤ 7 slides; public link, no login; English or English subtitles | `demo/darksight-demo.webm`, 29.7 s, English captions | **needs a person:** upload to YouTube (public or unlisted) and paste the link |
 | Link to Final Project | yes | public, no login | https://darksight.space (repo linked in the description) | ready |
 | Detailed Project Description | yes | none stated; what, how, benefits, goals, tools | `submission.md` | ready |
-| Use of Super Intelligence (SI) | yes | say where and how; AI images and videos need a visible watermark; code and data need a note in text and metadata; judges don't see this answer | `submission.md`; labels on every slide and in the video | ready (see open item 3) |
+| Use of Super Intelligence (SI) | yes | say where and how; AI images and videos need a visible watermark; code and data need a note in text and metadata; judges don't see this answer | `submission.md`; labels on every slide (the video is a screen recording, not AI-generated, so it carries none) | ready (see open item 3) |
 | NASA Data | yes | at least one NASA dataset or resource, for a Global Award | `submission.md` | ready |
 | Space Agency Partner Data and Other References | yes | every data source, resource and tool, open source included | `submission.md`, full list in `references.md` | ready (run the last check below) |
 | Images on the Project page | optional | JPG, PNG or GIF up to 10 MB; no video or document uploads | `slides-png/slide-1.png` … `slide-7.png` (1280 × 720) | optional |
@@ -62,7 +62,7 @@ reads them from the page while it records.
 | Line | Status |
 |---|---|
 | Every field above has its text or file | Pass, except the demo **link**: the file is ready, but a person has to upload it |
-| The video runs within the form's limit and shows compare, nudge and the Horizons badge | Pass, except the nudge: 29.4 s (ffprobe `duration=29.360000`); compare 0:13.3, badge 0:24.3 (`video-script.md`); re-recorded from darksight.space on 15 Nov 2026 (`t17-pitch-b`). The second version leaves out the nudge on purpose: the team chose a feature tour with the launch simulation instead |
+| The video runs within the form's limit and shows compare, nudge and the Horizons badge | Pass, except the nudge: 29.7 s (ffprobe `duration=29.680000`); compare 0:13.3, badge 0:24.3 (`video-script.md`); re-recorded from darksight.space on 15 Nov 2026 (`t17-pitch-b`). The second version leaves out the nudge on purpose: the team chose a feature tour with the launch simulation instead |
 | Someone outside the team can say what the tool does after watching it once | **Not done yet**: needs a person (test below) |
 | Slides use the palette in `docs/design.md`; T19's two screenshots or updated ones | Pass: palette tokens copied from `docs/design.md`; desktop and phone screenshots of darksight.space in `img/`, taken again at main 4626e8e |
 | Last check after the last pull request has merged | **Not yet possible**: other pull requests are still open. Run it as below |
@@ -134,7 +134,7 @@ branch has merged and deployed, which is one more reason to run the check at the
 | `checklist.md` | This file |
 | `submission.md` | The text for every form field |
 | `video-script.md` | Scene-by-scene script and timings of the demo video |
-| `demo/darksight-demo.webm` | The demo video, 29.4 s, 1280 × 720, VP9 |
+| `demo/darksight-demo.webm` | The demo video, 29.7 s, 1280 × 720, VP9 |
 | `slides.html`, `darksight-slides.pdf`, `slides-png/` | The 7-slide deck: source, PDF, one PNG per slide |
 | `img/` | Screenshots of darksight.space used on the slides |
 | `references.md`, `ai-use.md` | Every source and AI-use record, generated from `docs/` |
