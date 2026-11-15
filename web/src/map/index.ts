@@ -444,7 +444,11 @@ export function mount(el: HTMLElement): void {
       const r = Math.abs(polarForward(lat, 0, p).y) * view.scale;
       ctx.beginPath(); ctx.arc(pole0.px, pole0.py, r, 0, Math.PI * 2); ctx.stroke();
       const at = viewToScreen(view, 0, polarForward(lat, 0, p).y);
-      if (at.py > 0 && at.py < height) label(degLabel(lat, 'N', 'S'), pole0.px + 4, at.py - theme.fontPx / 2);
+      // Only a label that fits whole in the view, outline included (issue #112).
+      const text = degLabel(lat, 'N', 'S'), pad = theme.pinPx / 2;
+      const fits = at.py - theme.fontPx - pad >= 0 && at.py + pad <= height
+        && pole0.px + 4 - pad >= 0 && pole0.px + 4 + ctx.measureText(text).width + pad <= width;
+      if (fits) label(text, pole0.px + 4, at.py - theme.fontPx / 2);
     }
     // Meridians: straight lines from the pole. Spacing from the circle 60 px out from the view's middle.
     const middleR = Math.max(60, Math.hypot(pole0.px - width / 2, pole0.py - height / 2));
@@ -454,12 +458,12 @@ export function mount(el: HTMLElement): void {
       const end = polarForward(edgeLat, lon, p);
       const s = viewToScreen(view, end.x, end.y);
       ctx.beginPath(); ctx.moveTo(pole0.px, pole0.py); ctx.lineTo(s.px, s.py); ctx.stroke();
-      // Label where the meridian leaves the view, or at the map's edge.
-      const t = Math.min(1, clipT(pole0.px, pole0.py, s.px, s.py, width, height));
-      if (t > 0.05) {
-        const lx = pole0.px + (s.px - pole0.px) * t * 0.97, ly = pole0.py + (s.py - pole0.py) * t * 0.97;
-        label(degLabel(lon, 'E', 'W'), lx, ly);
-      }
+      // Label where the meridian leaves the view, or at the map's edge: the whole label inside the
+      // view, so the view's edge is moved in by half the label and its outline (issue #112).
+      const text = degLabel(lon, 'E', 'W');
+      const mx = ctx.measureText(text).width / 2 + theme.pinPx, my = theme.fontPx / 2 + theme.pinPx;
+      const t = Math.min(1, clipT(pole0.px - mx, pole0.py - my, s.px - mx, s.py - my, width - 2 * mx, height - 2 * my));
+      if (t > 0.05) label(text, pole0.px + (s.px - pole0.px) * t, pole0.py + (s.py - pole0.py) * t);
     }
   }
   /** How far along a segment from inside the view it stays inside, 0..1 (or more: it ends inside). */
