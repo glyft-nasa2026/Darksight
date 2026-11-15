@@ -374,7 +374,7 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
 | `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `approachSeconds(plan)`, `hyperbolaAt`, `hyperbolaTimeToRadius`, `MOON_SOI_KM` (the arrival hyperbola round the Moon, from its sphere of influence to LOI; `missionAt` gives `approach: true` and a `moonPlane` point there, with altitude and speed above the Moon) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent`, `planDescent`, `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`. A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent; times run back from touchdown with Apollo 11's phase lengths |
-| `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false): string` |
+| `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false, checking = false): string` |
 
 **First pass** means T00 writes the function straight from the formulas below, with a few sanity
 tests, so the site shows live numbers from the first hour. The follow-up task adds the real
@@ -389,10 +389,14 @@ documented names and signatures unless a coordinated contract change updates the
 | Sun down, a rise found | `Sunrise in 3 d 4 h` |
 | Sun up, no set found | `No sunset in the next 60 days` |
 | Sun down, no rise found | `No sunrise in the next 60 days` |
+| Sun down, no rise found, `checking` true (T32) | `No sunrise in the next 60 days · checking to 2100…` |
 | Sun down, `neverLit` true | `Permanently shadowed (until 2100)` |
 | Earth up or down, a flip found | `Earthset in 3 d 4 h` or `Earthrise in 3 d 4 h` |
 | Earth up, no flip found | `Earth always visible` |
 | Earth down, no flip found | `Earth never visible` |
+
+`neverLit` wins over `checking` when both are true. Callers pass `neverLitFor(sc)` and
+`neverLitPendingFor(sc)` from `state.ts` (section 4); no module works either out itself.
 
 ### Geometry (T02)
 
@@ -468,6 +472,7 @@ timelineFor(sc: Scenario, range: Range): Sample[]    // hourly from the window s
 summaryFor(sc: Scenario): Summary                     // over 30 days from sc.tMs
 flipFor(sc: Scenario, body: Body): Flip               // next rise or set after sc.tMs
 neverLitFor(sc: Scenario): boolean                    // no sunlight there from sc.tMs to the end of 2100
+neverLitPendingFor(sc: Scenario): boolean             // T32: neverLitFor still waits for decades to 2100
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
 missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'ready'; plan: MissionPlan }
 ```
@@ -507,6 +512,15 @@ spot doesn't freeze the page (issue #32, row 1): a new spot near the pole scans 
 hours. It reads false while the scan runs, as while decades download, and `state.ts` notifies
 the modules when it is done.
 
+**Still checking (T32, issue #32 row 3).** While `neverLitFor` still waits for those decades,
+`neverLitPendingFor` reads true, so the countdown says `No sunrise in the next 60 days · checking
+to 2100…` and then, once they are in, `Permanently shadowed (until 2100)` (or plain "No sunrise"
+if the Sun does come back before 2100). A never-lit site never shows plain "No sunrise" in
+between. `neverLitPendingFor` is false once the decades are in, false when one of them failed to
+download (the text is then plain `No sunrise in the next 60 days`: no verdict can come before a
+reload), and false wherever `neverLitFor` is false at once, including within 60 days of the end
+of the table.
+
 **Timeline window.** `timelineFor` starts at the scenario's own time for a pinned scenario and
 at `windowStartMs` for live. `setLiveTime` leaves the window alone while the new time is inside
 it, and restarts it at the new time otherwise. `shiftWindow` moves it by half the range. This
@@ -534,6 +548,11 @@ Each folder has `index.ts` exporting `mount(el)`, and its own CSS file. `main.ts
 one, from the list in `site.ts`, after "Start exploring" (`web/src/ui/intro/`). T00 wired the
 first eight with placeholders; T15 added `#panel`. A task that adds a slot includes `site.ts`,
 `index.html` and this contract in its scope, and coordinates with active layout work.
+
+The main page (`web/src/ui/intro/`) is not a slot. Under its first screen it scrolls to About,
+Meet the team, Privacy, Licence and a footer (issue #117). Their words and the team list are in
+`intro/landing.ts`; the team photos are `web/public/team/*.jpg`. Links there to a section are
+buttons that scroll, never `#id` links: the page address hash holds the state (section 4).
 
 `#mission` (T34) is a full-width card after `#sky`, and last on a phone. "Land here" on a
 scenario card sets its landing point; the page address keeps it as `land=`, with `pad=` and

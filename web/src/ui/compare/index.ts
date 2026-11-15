@@ -11,6 +11,8 @@ import {
 } from '../../state';
 import { axisTitle, plotLayout, themeColor } from '../plotTheme';
 import { best, countdownScore, daysCovered, discPctText, hoursText, pctText, runs } from './model';
+// A line of its own, so the state import above stays as other branches edit it (T32).
+import { neverLitPendingFor } from '../../state';
 
 const SPAN_DAYS = 30;
 
@@ -49,7 +51,8 @@ function countdownRow(name: string, body: Body, cols: Column[]): Row {
     if (!c.now) { cells.push('–'); values.push(null); continue; }
     const up = body === 'sun' ? c.sunUp : c.earthUp;
     const flip = flipFor(c.sc, body);
-    cells.push(countdownText(body, up, flip, c.sc.tMs, body === 'sun' && neverLitFor(c.sc)));
+    const sun = body === 'sun';
+    cells.push(countdownText(body, up, flip, c.sc.tMs, sun && neverLitFor(c.sc), sun && neverLitPendingFor(c.sc)));
     values.push(countdownScore(up, flip, c.sc.tMs));
   }
   return { name, cells, values, higherIsBetter: true };
