@@ -186,3 +186,16 @@
 .scn-land[aria-pressed='true'] {
   color: var(--accent);
 }
+
+/* T34: "Open mission" beside "Landing site", on the landing card only: the mission planner page. */
+.scn-open {
+  align-self: center;
+  flex: none;
+  font-size: var(--fs-sm);
+  padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
+}
+
+.scn-open[hidden] {
+  display: none;
+}

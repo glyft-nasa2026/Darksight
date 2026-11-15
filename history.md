@@ -4,6 +4,19 @@ What a rule or fact in this repo's notes used to say, and why it changed. Newest
 files say what is true now; decisions are in `docs/decisions.md`. Anyone can record a change;
 coordinate overlapping edits.
 
+## 15 Nov 2026: the mission card gets its own page (T34)
+
+P5 asked for it.
+
+### docs/data-contract.md: 5. Page slots, `#mission`
+
+- Was: "`#mission` (T34) is a full-width card after `#sky`, and last on a phone", on the site's
+  page; the launch simulation's "Back" went to `index.html`.
+- Now `#mission` is the card of its own page, `mission.html`, opened by "Open mission" on the
+  landing scenario's card; the simulation's "Back" goes to `mission.html`.
+- Why: the card is long and sat at the very bottom of the site, far from the "Land here" that
+  fills it.
+
 ## 15 Nov 2026: a nudge moves at once (issue #126)
 
 MarsRon raised it; P5 asked for it, with the pole steps, transparency and corner button.

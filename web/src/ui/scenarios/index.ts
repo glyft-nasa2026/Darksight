@@ -242,7 +242,7 @@ export function mount(el: HTMLElement): void {
   // card or its × would be lost.
   type Card = {
     li: HTMLLIElement; body: HTMLButtonElement; label: HTMLSpanElement; where: HTMLSpanElement;
-    when: HTMLSpanElement; land: HTMLButtonElement; remove: HTMLButtonElement | null;
+    when: HTMLSpanElement; land: HTMLButtonElement; open: HTMLButtonElement; remove: HTMLButtonElement | null;
   };
   const cards = new Map<string, Card>();
 
@@ -271,6 +271,20 @@ export function mount(el: HTMLElement): void {
     });
     li.append(land);
 
+    // T34: on the landing site's card only, the mission planner on a page of its own. A new tab,
+    // so this page and its scenarios stay as they are (as "Proceed" does, issue #105). Not
+    // 'noopener': a blocked tab must be told apart, and the page's "Back" uses the opener.
+    const open = make('button', 'btn btn-primary scn-open', 'Open mission ›');
+    open.type = 'button';
+    open.title = 'Plan and watch the mission to this landing site, on its own page';
+    open.hidden = true;
+    open.addEventListener('click', () => {
+      const url = `mission.html#${stateToAddress()}`;
+      const tab = window.open(url, '_blank');
+      if (!tab) window.location.assign(url);   // a pop-up blocker stopped it: this tab instead
+    });
+    li.append(open);
+
     let remove: HTMLButtonElement | null = null;
     if (id !== LIVE_ID) {
       remove = make('button', 'btn scn-remove', '×');
@@ -278,7 +292,7 @@ export function mount(el: HTMLElement): void {
       remove.addEventListener('click', () => unpin(id));
       li.append(remove);
     }
-    return { li, body, label, where, when, land, remove };
+    return { li, body, label, where, when, land, open, remove };
   };
 
   const setText = (node: HTMLElement, text: string): void => {
@@ -295,6 +309,7 @@ export function mount(el: HTMLElement): void {
     const landing = isLanding(sc);
     setText(c.land, landing ? 'Landing site' : 'Land here');
     c.land.setAttribute('aria-pressed', String(landing));
+    if (c.open.hidden === landing) c.open.hidden = !landing;
     c.land.title = landing
       ? 'The mission lands here. Press again to clear it.'
       : `Land the mission at ${sc.id === LIVE_ID ? 'the live scenario' : `scenario ${sc.label}`}: its site and time`;
