@@ -291,8 +291,10 @@ describe('skylineAt on globe.bin (T37): walk', () => {
   // on the wall itself, every 10 m out to 150 km; "one cell's worth" is how much the elevation of
   // the wall's top changes when it is one cell (3.8 km) further away.
   const wallH = (d: number): number => Math.max(0, Math.min(1000, (d - 22_000) / 8, (48_000 - d) / 8));
+  // Rows more than 2 degrees (61 km) from the site are flat: the wall ends at 48 km. Skipping the
+  // distance there keeps building a real-size grid quick (it shares the machine with timing tests).
   const ringAt = (c: { lat: number; lon: number }): GlobeHeights =>
-    makeGlobe(GW, GH, (lat, lon) => wallH(gcDist(c.lat, c.lon, lat, lon)));
+    makeGlobe(GW, GH, (lat, lon) => (Math.abs(lat - c.lat) > 2 ? 0 : wallH(gcDist(c.lat, c.lon, lat, lon))));
   let exact = -Infinity;
   for (let d = 10; d <= SKYLINE_MAX_DIST_M; d += 10) exact = Math.max(exact, elevOf(0, DEFAULT_EYE_M, d, wallH(d)));
   const oneCell = elevOf(0, DEFAULT_EYE_M, 30_000, 1000) - elevOf(0, DEFAULT_EYE_M, 30_000 + CELL, 1000);
