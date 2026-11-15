@@ -32,6 +32,7 @@ export const MODEL_LIMITS: readonly string[] = [
   'The launch vehicle’s propellant is not modelled, and its Δv is ideal, without gravity and drag losses.',
   'No ascent from the Moon and no return to Earth.',
   'The Moon has no atmosphere: no drag, and no refraction of the Sun or Earth.',
+  'For a flight-dynamics solution (full gravity, finite burns, targeting, a launch window), take this plan into a tool such as NASA’s General Mission Analysis Tool (GMAT), which is open source.',
 ];
 
 /** Where the numbers come from (docs/sources/T34.md, docs/sources/T35.md). */
@@ -42,6 +43,7 @@ export const REPORT_SOURCES: readonly { name: string; url: string }[] = [
   { name: 'Phase lengths: NASA SP-4029, Apollo 11 timeline', url: 'https://www.nasa.gov/wp-content/uploads/static/history/SP-4029/Apollo_11i_Timeline.htm' },
   { name: 'Example lander: Intuitive Machines Nova-C (Isp an example value)', url: 'https://en.wikipedia.org/wiki/Intuitive_Machines_Nova-C' },
   { name: 'Moon’s sidereal rotation: NASA Moon fact sheet', url: 'https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html' },
+  { name: 'The next step, not used for these numbers: NASA General Mission Analysis Tool (GMAT), open source', url: 'https://etd.gsfc.nasa.gov/capabilities/capabilities-listing/general-mission-analysis-tool-gmat/' },
 ];
 
 // ---------------------------------------------------------------------------------------------
