@@ -61,6 +61,16 @@ describe('projectToGrid', () => {
 });
 
 describe('parseDem', () => {
+  it('reads one stored cell by row and column, a cell with no data as 0', () => {
+    const dem = parseDem(META, grid((v) => { v[100 * META.size + 400] = 3000; v[7 * META.size + 9] = META.nodata; }));
+    expect(dem.cell(100, 400)).toBe(1500);
+    expect(dem.cell(400, 100)).toBe(0);
+    expect(dem.cell(7, 9)).toBe(0);
+    // The same value heightAt gives exactly on the cell.
+    const at = latLonOf(400, 100);
+    expect(dem.heightAt(at.lat, at.lon)).toBeCloseTo(dem.cell(100, 400), 6);
+  });
+
   it('reads rows from the top, and applies height_scale', () => {
     const dem = parseDem(META, grid((v) => { v[100 * META.size + 400] = 3000; }));
     const at = latLonOf(400, 100);

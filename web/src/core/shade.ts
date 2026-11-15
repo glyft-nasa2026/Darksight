@@ -3,7 +3,6 @@
 
 import type { Dem } from './dem';
 import type { Vec3 } from './ephemeris';
-import { polarInverse } from './projection';
 import { MOON_RADIUS_KM } from './types';
 
 const RAD = Math.PI / 180;
@@ -53,19 +52,25 @@ function polarGround(dem: Dem, stride: number): PolarGround {
   const z = new Float32Array(size * size), covered = new Uint8Array(size * size);
   const height = new Float32Array(size * size);
   let lo = Infinity, hi = -Infinity;
+  // Every layer cell is a stored cell of the height map, so its height is read straight from the
+  // grid, and it is covered when it is not north of min_lat (it is always inside the grid). Going
+  // through latitude and longitude for each (covers, heightAt) took about 0.5 s on the real
+  // height map, as the map first drew (issue #118). With k = r / 2R, the stereographic radius
+  // over twice the Moon's, k = tan(c / 2) for the angle c from the pole, so cos c is
+  // (1 - k^2) / (1 + k^2), and "not north of min_lat" is c <= 90 + min_lat: no trigonometry a cell.
+  const kMax2 = Math.tan(((90 + meta.min_lat) / 2) * RAD) ** 2;
   for (let row = 0; row < size; row++) {
     const y = meta.y_max_m - row * cell_m;
     for (let col = 0; col < size; col++) {
       const x = meta.x_min_m + col * cell_m;
-      const { lat, lon } = polarInverse(x, y);
+      const k2 = (x * x + y * y) / (4 * R_M * R_M);
       const i = row * size + col;
-      covered[i] = dem.covers(lat, lon) ? 1 : 0;
-      const h = covered[i] ? dem.heightAt(lat, lon) : 0;
+      covered[i] = k2 <= kMax2 ? 1 : 0;
+      const h = covered[i] ? dem.cell(row * stride, col * stride) : 0;
       height[i] = covered[i] ? h : NaN;
       if (covered[i]) { lo = Math.min(lo, h); hi = Math.max(hi, h); }
-      // Angle from the pole at the Moon's centre, and the point's height above the polar plane.
-      const c = (90 + lat) * RAD;
-      z[i] = (R_M + h) * Math.cos(c) - R_M;
+      // The point's height above the plane touching the pole.
+      z[i] = (R_M + h) * ((1 - k2) / (1 + k2)) - R_M;
     }
   }
   const heightRange: [number, number] = lo <= hi ? [lo, hi] : [0, 0];

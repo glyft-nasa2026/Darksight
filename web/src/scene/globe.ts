@@ -9,7 +9,7 @@ import {
 import { parseDem, type Dem, type DemMeta } from '../core/dem';
 import { MOON_RADIUS_KM } from '../core/types';
 import { afterHeightMap } from '../loadOrder';
-import { GLOBE_RELIEF, globeNormalAt, type GlobeHeights } from './globeHeights';
+import { GLOBE_RELIEF, globeNormalRows, type GlobeHeights } from './globeHeights';
 
 export * from './globeHeights';
 
@@ -100,17 +100,14 @@ export function globeColors(globe: GlobeHeights, low: Color, high: Color, range:
 /** RGBA bytes: every cell's globeNormalAt, stored as n * 0.5 + 0.5. */
 export function globeNormals(globe: GlobeHeights, relief = GLOBE_RELIEF): Uint8Array {
   const { width, height } = globe.meta;
-  const out = new Uint8Array(width * height * 4), n = [0, 0, 0];
-  for (let row = 0; row < height; row++) {
-    for (let col = 0; col < width; col++) {
-      globeNormalAt(globe, row, col, relief, n);
-      const o = (row * width + col) * 4;
-      out[o] = Math.round((n[0] * 0.5 + 0.5) * 255);
-      out[o + 1] = Math.round((n[1] * 0.5 + 0.5) * 255);
-      out[o + 2] = Math.round((n[2] * 0.5 + 0.5) * 255);
-      out[o + 3] = 255;
-    }
-  }
+  const out = new Uint8Array(width * height * 4);
+  globeNormalRows(globe, relief, 0, height, (k, x, y, z) => {
+    const o = k * 4;
+    out[o] = Math.round((x * 0.5 + 0.5) * 255);
+    out[o + 1] = Math.round((y * 0.5 + 0.5) * 255);
+    out[o + 2] = Math.round((z * 0.5 + 0.5) * 255);
+    out[o + 3] = 255;
+  });
   return out;
 }
 

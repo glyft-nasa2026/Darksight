@@ -16,7 +16,7 @@ import {
 import { shadeGlobal, shadePolar, subPoint, type PolarShade } from '../core/shade';
 import { MOON_RADIUS_KM, type Site } from '../core/types';
 import { sharedNorth } from '../scene/globe';
-import { globeSlopes, sharedGlobe, type GlobeHeights } from '../scene/globeHeights';
+import { GLOBE_RELIEF, globeSlopes, sharedGlobe, type GlobeHeights } from '../scene/globeHeights';
 import { getState, select, selected, setLiveSite, subscribe, type AppState } from '../state';
 import { drawLayers, onLayersChange } from '../ui/layers';
 import { themeColor } from '../ui/plotTheme';
@@ -120,6 +120,9 @@ export function mount(el: HTMLElement): void {
   // The whole-Moon heights, once fetched; the map is plain grey outside the polar grid until then.
   let globe: GlobeHeights | null = null, slopes: Int8Array | null = null;
   let tones: Uint8Array | null = null, tonesKey = '';
+  // Which rows of `slopes` and `tones` are worked out: only the rows a picture needs, when it
+  // first needs them (issue #118). A polar view needs about a tenth of the grid.
+  let slopeRows: Uint8Array | null = null, toneRows: Uint8Array | null = null;
   let theme = { key: '', lo: [0, 0, 0] as Rgb, hi: [0, 0, 0] as Rgb, pinPx: 0, fontPx: 0, font: '' }; // set by readTheme()
 
   function readTheme(): void {
@@ -290,17 +293,20 @@ export function mount(el: HTMLElement): void {
    */
   function paintHeights(data: Uint8ClampedArray, g: GlobeHeights, range: number[], span: number, sun: Vec3 | null, day: Float32Array | null, rows: [number, number]): void {
     const { width, height } = g.meta, count = width * height;
-    slopes ??= globeSlopes(g);
+    if (!slopes || !slopeRows) { slopes = new Int8Array(count * 3); slopeRows = new Uint8Array(height); }
     const key = `${range[0]},${range[1]}`;
-    if (!tones || tonesKey !== key) {
-      // Each cell's place on the colour ramp, 0..255: it changes only with the ramp's range.
-      tones = new Uint8Array(count);
-      for (let row = 0, k = 0; row < height; row++) {
-        for (let col = 0; col < width; col++, k++) {
-          tones[k] = Math.round(255 * Math.min(1, Math.max(0, (g.cell(row, col) - range[0]) / span)));
-        }
-      }
+    if (!tones || !toneRows || tonesKey !== key) {
+      tones = new Uint8Array(count); toneRows = new Uint8Array(height);
       tonesKey = key;
+    }
+    for (let row = rows[0]; row < rows[1]; row++) {
+      if (!slopeRows[row]) { globeSlopes(g, GLOBE_RELIEF, row, row + 1, slopes); slopeRows[row] = 1; }
+      if (toneRows[row]) continue;
+      // Each cell's place on the colour ramp, 0..255: it changes only with the ramp's range.
+      for (let col = 0, k = row * width; col < width; col++, k++) {
+        tones[k] = Math.round(255 * Math.min(1, Math.max(0, (g.cell(row, col) - range[0]) / span)));
+      }
+      toneRows[row] = 1;
     }
     const { lo, hi } = theme;
     const ramp = new Float32Array(256 * 3);
@@ -747,7 +753,7 @@ export function mount(el: HTMLElement): void {
     canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', key);
     el.removeEventListener('map:centre', onCentre);
     canvas.remove(); base = null; ring = null; ringCells = null; shade = null; globe = null; north = null;
-    slopes = null; tones = null; mounts.delete(el);
+    slopes = null; tones = null; slopeRows = null; toneRows = null; mounts.delete(el);
   }
   mounts.set(el, dispose);
 }

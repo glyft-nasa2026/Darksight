@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Color, Vector3 } from 'three';
 import type { DemMeta } from '../core/dem';
 import { moonCentre, sitePosition, sphereSite } from './coordinates';
-import { globeColors, globeNormals, globeSlopes, mapGlobeUv, parseGlobe, parseNorth, uvSite, type GlobeMeta } from './globe';
+import { globeColors, globeNormalAt, globeNormalRows, globeNormals, globeSlopes, mapGlobeUv, parseGlobe, parseNorth, uvSite, type GlobeMeta } from './globe';
 import { capWeight, globeGeometry, northGeometry, restretchTerrain } from './terrain';
 
 const meta: GlobeMeta = { width: 72, height: 36, height_scale: 0.5, source: 'test' };
@@ -262,6 +262,29 @@ describe('north cap', () => {
     expect(north).toBeGreaterThan(80);       // the globe runs on under the cap's edge: no gap
     expect(north).toBeLessThan(81);          // and stops soon after: the cap is not buried
     expect(south).toBeCloseTo(-90, 3);       // the other pole is closed without a south height map
+  });
+});
+
+describe('normals a row at a time (issue #118)', () => {
+  const bumpy = () => grid((lat, lon) => 3000 * Math.sin(lat * 0.21) * Math.cos(lon * 0.13) + lat * lon);
+  it('gives globeNormalAt for every cell', () => {
+    const g = bumpy(), n = [0, 0, 0];
+    let cells = 0;
+    globeNormalRows(g, 6, 0, meta.height, (k, x, y, z) => {
+      globeNormalAt(g, Math.floor(k / meta.width), k % meta.width, 6, n);
+      expect(x).toBeCloseTo(n[0], 12); expect(y).toBeCloseTo(n[1], 12); expect(z).toBeCloseTo(n[2], 12);
+      cells++;
+    });
+    expect(cells).toBe(meta.width * meta.height);
+  });
+
+  it('works out only the rows asked for, into the array given', () => {
+    const g = bumpy(), whole = globeSlopes(g), out = new Int8Array(whole.length);
+    expect(globeSlopes(g, undefined, 3, 5, out)).toBe(out);
+    for (let k = 0; k < meta.width * meta.height * 3; k++) {
+      const row = Math.floor(k / 3 / meta.width);
+      expect(out[k]).toBe(row >= 3 && row < 5 ? whole[k] : 0);
+    }
   });
 });
 
