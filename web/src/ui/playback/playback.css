@@ -1,0 +1,32 @@
+/* Timeline playback (T40). Only ui/theme.css variables; the phone breakpoint is the one pixel value. */
+#playback { display: flex; flex-direction: column; gap: var(--space-3); }
+#playback[hidden] { display: none; }
+#playback h2 { margin: 0; }
+.pb-intro, .pb-setup, .pb-message { margin: 0; font-size: var(--fs-sm); }
+.pb-message:empty { display: none; }
+.pb-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pb-play { min-inline-size: 7em; }
+.pb-speeds { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.pb-speed { font-size: var(--fs-sm); padding: var(--space-1) var(--space-2); }
+.pb-clock { margin: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--fs-lg); }
+.pb-list {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2) var(--space-3);
+  margin: 0; align-items: baseline;
+}
+.pb-list[hidden] { display: none; }
+.pb-list dt { color: var(--muted); font-size: var(--fs-sm); }
+.pb-list dd { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); min-inline-size: 0; }
+.pb-value { font-weight: 500; }
+.pb-detail { font-size: var(--fs-sm); }
+.pb-list dd[data-tone='ok'] .pb-value { color: var(--ok); }
+.pb-list dd[data-tone='warn'] .pb-value { color: var(--warn); }
+.pb-list dd[data-tone='bad'] .pb-value { color: var(--bad); }
+.pb-meter {
+  block-size: var(--space-2); background: var(--dark); border: thin solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.pb-meter span { display: block; block-size: 100%; inline-size: 0; background: var(--ok); }
+.pb-meter[data-tone='warn'] span { background: var(--warn); }
+.pb-meter[data-tone='bad'] span { background: var(--bad); }
+.pb-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.pb-full { font-size: var(--fs-sm); padding: var(--space-1) var(--space-2); }

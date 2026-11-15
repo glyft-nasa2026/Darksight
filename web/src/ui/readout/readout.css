@@ -26,6 +26,11 @@
   font-family: var(--font-num);
 }
 
+/* T41: the ground slope at the site, one line under the place and time. */
+.ro-slope {
+  font-size: var(--fs-sm);
+}
+
 .ro-note {
   align-self: flex-start;
   color: var(--warn);

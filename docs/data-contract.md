@@ -127,9 +127,12 @@ hard-codes them. File budget: 15 MB.
 
 ### `globe.bin` + `globe.json`, `north.bin` + `north.json` (made by `data-prep/make_globe.py`, issue #66)
 
-Heights of the Moon north of the south-pole height map, for pictures only: the 3D globe, and
+Heights of the Moon north of the south-pole height map, for pictures: the 3D globe, and
 the flat map (whole-Moon view, the fading ring around a polar view, and the north polar view).
-No number shown to the user comes from them, and nothing in `core/` loads them:
+One exception, agreed 15 Nov 2026 (`docs/decisions.md`): map layers cover the whole Moon (SPEC
+section 6), so the height and slope layers, and the readout's slope line, take heights from these
+files where `dem.bin` does not reach, through a reader in `core/` that T43 adds to this section.
+Until T43 merges, no number shown to the user comes from them, and nothing in `core/` loads them:
 `web/src/scene/globe.ts` fetches them by itself, beside the other files, and the globe is a
 plain sphere until they arrive or when they are missing (the mock data set has none). Both come
 from the same LOLA gridded data record as `dem.bin`.
@@ -365,16 +368,18 @@ export type CuratedSite = { id: string; name: string; lat: number; lon: number; 
 | File | Task | Functions |
 |---|---|---|
 | `ephemeris.ts` | T00 | `loadEphemeris(): Promise<Ephemeris>` (index + home decade) · `loadEphemerisChunk(eph, i): Promise<ArrayBuffer>` · `indexEphemeris(meta): Ephemeris` and `parseEphemeris(meta, buffer: ArrayBuffer): Ephemeris` (no network; tests use them) · `eph.startMs`, `eph.endMs` (whole table), `eph.homeStartMs`, `eph.homeEndMs`, `eph.meta` · `eph.vectorsAt(tMs): { sun: [x,y,z]; earthKm: [x,y,z] }` (straight-line step between rows; Sun re-normalised) · `eph.missing(fromMs, toMs): number[]` (decades not yet loaded) · `eph.withChunk(i, buffer): Ephemeris` (a new value, one more decade) |
-| `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.cell(row, col): number` (one stored cell, metres; row 0 at the top as in the file; no data is 0) · `dem.meta` |
+| `dem.ts` | T00 | `loadDem(onProgress?): Promise<Dem>` · `parseDem(meta, buffer: ArrayBuffer): Dem` (no network; tests use it) · `dem.covers(lat, lon): boolean` · `dem.heightAt(lat, lon): number` (bilinear, metres; 0 outside) · `dem.cell(row, col): number` (one stored cell, metres; row 0 at the top as in the file; no data is 0) · `dem.hasData(row, col): boolean` (T41: false on a `nodata` cell or outside the grid) · `dem.meta` |
 | `geometry.ts` | T00 first pass, then T02 | `sunAltAz(eph, site, groundM, tMs): AltAz` · `earthAltAz(eph, site, groundM, tMs): AltAz` · `destination(lat, lon, bearingDeg, distM): { lat, lon }` · `sunAltAzAtSite(eph, site): (tMs) => AltAz` (issue #32: `sunAltAz` for one site at many times, the site's axes worked out once; the same numbers bit for bit) |
 | `horizon.ts` | T00 flat skyline, then T05 | `skylineAt(dem: Dem | null, site: Site): Skyline` · `skylineElev(s: Skyline, az: number): number` (interpolated) |
 | `projection.ts` | T31 | `polarForward(lat, lon, pole = 'south'): { x, y }` and `polarInverse(x, y, pole = 'south'): { lat, lon }` (polar stereographic in metres, seen from above the pole. `'south'`: dem.bin's grid, section 2's formulas, longitude 0 up, 90 E right. `'north'`: longitude 0 down, 180 up, 90 E right; that is north.bin's grid upside down, `y = -r cos lon`, because north.bin's own grid is a mirror image) · `cylForward(lat, lon, lon0 = 0): { x, y }` and `cylInverse(x, y, lon0 = 0): { lat, lon } \| null` (equidistant cylindrical, km, `x = R (lon - lon0) rad`, `y = R lat rad`; longitude wrapped to -180..180; null beyond a pole) · `MapView = { cx, cy, scale, width, height }` (map units at the centre, screen pixels per unit, canvas size in pixels; screen y grows down, map y grows up) · `viewToScreen(view, x, y)` and `screenToView(view, px, py)` |
 | `shade.ts` | T31 | `shadePolar(dem, sun: Vec3, maxCells = 1300): PolarShade` (`{ size, stride, frac, cosI, height, heightRange }`: on every `stride`th cell of the height map, the fraction of the Sun's disc above the terrain, 0, 0.5 or 1, the cosine of the Sun's incidence on the ground, and the cell's height; NaN outside coverage) · `shadeGlobal(sun: Vec3, width, height, rowStart = 0, rowEnd = height, out?: Float32Array): Float32Array` (cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, row 0 at 90 N; only rows `rowStart` to `rowEnd - 1`, `width` values each; written into `out` and returned when `out` is long enough) · `subPoint(v: Vec3): { lat, lon }` (where a direction from the Moon's centre meets the surface). Illustration for the map only: lit and dark answers come from `windows.ts` |
 | `sky.ts` | issue #80 | `Mat3` (three rows; `apply(m, v)` takes a vector from the first frame to the second) · `moonFromIcrf(tMs)` (ICRF to the Moon-fixed frame: the IAU WGCCRE lunar model, Archinal et al. 2011; within 0.02 degrees of DE440's mean-Earth frame) · `earthFromIcrf(tMs)` (ICRF to Earth-fixed: IAU 1976 precession and 1982 sidereal time, UTC for UT1, no nutation) · `moonFromEarthIcrf(earthKm, tMs)` · `moonOrbitIcrf(eph, tMs): { toMoon, pole }` · `alignFrames(fromX, fromZ, toX, toZ)` · `apply`, `applyInverse`, `multiply`, `angleBetween`. Turns the star map only; Sun and Earth angles still come from `geometry.ts` |
+| `slope.ts` | T41 | `slopeAt(dem, lat, lon): number \| null` (ground slope in degrees from level; null off the height map, north of its `min_lat`, or where a cell it needs is `nodata`) · `cellSlope(dem, row, col)` and `cellGradient(dem, row, col)` (one stored cell; null on the grid's edge or next to `nodata`) · `slopeBaselineM(dem)` (what it is measured over: `pixel_m`, 240 m on the real map) · `SLOPE_RAMP_MAX_DEG` (30: the Slope layer's ramp ends there). Central differences on the grid, `dz/dx = (z[c+1] - z[c-1]) / (2 pixel_m / k)` and the same along rows, with the projection's scale `k = 1 + (r / 2R)^2` (conformal, so one `k` for both directions); slope = `atan(hypot(dz/dx, dz/dy))`. At a point, the gradient is interpolated bilinearly from the four cells around it. A baseline slope: a boulder or a 10 m crater does not show |
 | `panel.ts` | T15 | `panelPower(sample): { flat, upright }` (each 0..1 of full power: flat = `sunFrac * sin(alt)`, none below 0 degrees; upright and turned to the Sun = `sunFrac * cos(alt)`) · `panelAverage(samples): { flat, upright }` (mean, dark hours count as 0) |
 | `pads.ts` | T34 | `PADS` (Earth launch pads in use: the brief's seven first, then twelve more for the launch-site picker; `{ id, name, pad, country, lat, lon }`, each from a cited source) · `BRIEF_PAD_COUNT` · `padById(id): Pad` (Kennedy LC-39A for an unknown id) · `DEFAULT_PAD_ID` |
 | `mission.ts` | T34 | `planMission(input): MissionPlan` (from a pad to touchdown at `input.site` at `input.touchdownMs` exactly: `{ ok: true, launchMs, touchdownMs, steps, totals, orbit, runsOutMs }`, or `{ ok: false, error }` with `'bad-input' \| 'coast-out-of-range' \| 'thrust-too-low'`) · `missionAt(plan, tMs): MissionState` (step, altitude, speed, propellant left, positions in the transfer plane and the lunar-orbit plane, the Moon-fixed point under the craft, distance to the site in the descent; what the animation draws) · `approachSeconds(plan)`, `hyperbolaAt`, `hyperbolaTimeToRadius`, `MOON_SOI_KM` (the arrival hyperbola round the Moon, from its sphere of influence to LOI; `missionAt` gives `approach: true` and a `moonPlane` point there, with altitude and speed above the Moon) · `moonFixedInPlane(plan, tMs, lat, lon, altKm?)` (a Moon-fixed point in `missionAt`'s lunar-orbit frame, `[x, y]` as `moonPlane` and `z` along the orbit's normal; the inverse of the ground point; the simulation page places the landing site and turns the Moon with it) · `earthMoonKmAt(eph, tMs)` · the pieces, each tested: `transferFor`, `captureDv`, `descentOrbitDv`, `simulateDescent`, `planDescent`, `propellantFor`, `dvFor`, `burnSeconds` · `EXAMPLE_LANDER`, `APOLLO_11_TIMES`, `SEQUENCE`. A planning model, not a flight-dynamics solution: patched conics, instant burns but the descent, a 100 km circular polar lunar orbit, a gravity-turn powered descent; times run back from touchdown with Apollo 11's phase lengths |
-| `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false, checking = false): string` |
+| `windows.ts` | T00 first pass, then T06 | `series(eph, site, groundM, skyline, startMs, endMs, stepMs): Sample[]` · `nextFlip(eph, site, groundM, skyline, tMs, body: Body, maxDays = 60): Flip` · `summary(samples: Sample[]): Summary` · `countdownText(body: Body, upNow: boolean, flip: Flip, tMs: number, neverLit = false, checking = false): string` · `durationText(ms): string` (`3 d 4 h`, or `5 h 20 min` under one day; T42) |
+| `datesearch.ts` | T42 | `firstWindow(eph, site, groundM, skyline, startMs, endMs, need: Need, minHours): DateSearch` (`Need` is `'both' \| 'sun' \| 'earth'`; the first window at or after `startMs`, starting before `endMs`, in which the Sun (any of its disc showing), Earth, or both at once stay up for at least `minHours`. `{ status: 'found', startMs, endMs }`, `endMs` null when it lasts more than `END_LOOK_DAYS` (60) days; `{ status: 'none', checkedToMs }` (the search's end, or the end of the table first); `{ status: 'no-rows', atMs }` where a decade is not in memory or before 1900, never read as dark. Hourly samples from `series()`, each edge halved to under a minute as `nextFlip()` does; a start after `startMs` is rounded up to the whole minute) · `monthsLater(tMs, months)` (calendar months in UTC; a day the month lacks becomes its last day) · `END_LOOK_DAYS` |
 
 **First pass** means T00 writes the function straight from the formulas below, with a few sanity
 tests, so the site shows live numbers from the first hour. The follow-up task adds the real
@@ -456,6 +461,7 @@ export type AppState = {
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
   landing: { site: Site; tMs: number } | null;   // T34: a copy of a scenario's site and time
   padId: string; lander: Lander;                 // T34: core/pads.ts id, core/mission.ts Lander
+  battery: Battery;    // T40: core/battery.ts; in the address as bat=capacityWh,panelW,useW when changed
 };
 
 getState(): AppState
@@ -463,6 +469,7 @@ subscribe(fn: (s: AppState) => void): () => void
 setLiveSite(site: Site) · setLiveTime(tMs: number) · pin() · unpin(id) · select(id)
 setRange(r: Range) · shiftWindow(dir: -1 | 1) · setGhost(s: Scenario | null) · setMode(m)
 setLanding(sc: Scenario | null) · setPad(id) · setLander(l)            // T34
+setBattery(b: Battery)                                                 // T40
 selected(): Scenario                     // the live or pinned scenario named by selectedId
 
 // computed once and cached here, so modules don't repeat the work
@@ -478,6 +485,8 @@ failedDecades(): number[]                             // T33: start of each fail
 isLanding(sc) · landingScenario(): Scenario | null    // T34: the landing point as a scenario ('land')
 missionFor(): { status: 'none' | 'loading' | 'outside' } | { status: 'failed'; decadeMs: number }
   | { status: 'ready'; plan: MissionPlan }            // 'failed' (T33): a decade it needs did not download
+dateSearchFor(sc, need, minHours, months): DateSearch | { status: 'loading' } | { status: 'failed'; decadeMs }
+                                                      // T42: core's firstWindow from sc's site and time
 ```
 
 **Selected and live.** `selectedId` is the live scenario's id or a pinned one's. The readout,
@@ -545,6 +554,13 @@ at `windowStartMs` for live. `setLiveTime` leaves the window alone while the new
 it, and restarts it at the new time otherwise. `shiftWindow` moves it by half the range. This
 is what lets a drag move the marker without the chart sliding under the cursor.
 
+**Date search (T42).** `dateSearchFor` runs `firstWindow` from the scenario's site and time to
+`monthsLater(sc.tMs, months)`. It asks for every decade from the scenario's time to that end plus
+the look for the window's end (the longer of `minHours` and 60 days), without holding the page on
+"Loading": `eph` stays as it is, and the answer is `'loading'` until they are in. `'failed'` when
+the decade holding the scenario's time did not download; a failed decade further on stops the
+search there (`'no-rows'`). The last answer is kept, so the scenario panel asks on every redraw.
+
 **While data is loading** (`eph` is null), the accessors return empty arrays, `null` flips, a
 flat skyline and zeros. Modules show "Loading" and must not crash.
 
@@ -554,6 +570,8 @@ flat skyline and zeros. Modules show "Loading" and must not crash.
 |---|---|---|
 | `#scene` | `web/src/scene/` | T12 |
 | `#scenarios` | `web/src/ui/scenarios/` | T08 |
+| `#playback` | `web/src/ui/playback/` | T40 (shares the place of `#scenarios`, see below) |
+| `#sidetabs` | `web/src/ui/sidetabs/` | T40 |
 | `#readout` | `web/src/ui/readout/` | T08 |
 | `#compare` | `web/src/ui/compare/` | T09 |
 | `#timeline` | `web/src/ui/timeline/` | T10 |
@@ -572,6 +590,8 @@ The main page (`web/src/ui/intro/`) is not a slot. Under its first screen it scr
 Meet the team, Privacy, Licence and a footer (issue #117). Their words and the team list are in
 `intro/landing.ts`; the team photos are `web/public/team/*.jpg`. Links there to a section are
 buttons that scroll, never `#id` links: the page address hash holds the state (section 4).
+
+`#scenarios` and `#playback` (T40) sit in one place, `#sidecard`, with `#sidetabs` over them: two tabs, Scenarios and Timeline, that show one card and hide the other. The playback keeps playing while Scenarios is shown. It moves the live time through `setLiveTime`, and pauses when anything else moves the live scenario.
 
 `#mission` (T34) is not on the site's page: it is the card of the page `web/mission.html`
 (`web/src/missionPage/`), which loads the same data files and mounts `ui/mission`. "Land here" on a
@@ -603,11 +623,14 @@ creates `<section class="scene-layers">` under its map caption, outside the view
 floats over the map, and calls `mount(el)` on it. The controls show in 2D mode only and say when
 the map shows the whole Moon or the north pole rather than the south pole. The layers are drawn
 by the 2D map (`web/src/map/`): in its draw step, after the terrain and before the grid and pins,
-on the south-polar map only (`kind === 'south'`; the LOLA maps used here cover the south pole
-only), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
+on the south-polar map only for now (`kind === 'south'`; T43 extends every layer to the north
+polar and whole-Moon maps, SPEC section 6), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
 stereographic metres (section 2) into canvas pixels, and it redraws whenever `onLayersChange()`
 fires (data arriving, a switch, an opacity change, each frame of a fade). Both come from
 `web/src/ui/layers/index.ts`, which also holds the one store of layer settings (`layerStore`).
+The height and slope layers (T41) are built in the browser from the height map in state, on the
+LOLA layers' 480 m grid: slope from `core/slope.ts`, coloured `--dark` (level) to `--bad`
+(`SLOPE_RAMP_MAX_DEG` and steeper).
 
 ## 6. Look: `web/src/ui/theme.css` (T00 creates, T19 designs)
 

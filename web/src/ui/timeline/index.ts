@@ -3,7 +3,7 @@
 // time. Clicking or dragging on the chart sets the live time. Every number comes from core/
 // through state.ts.
 import './timeline.css';
-import type { Data, Layout, Shape } from 'plotly.js-dist-min';
+import type { Data, Layout, Shape } from 'plotly.js-basic-dist-min';
 import {
   flipFor, getState, LIVE_ID, selected, setLiveTime, setRange, shiftWindow, subscribe,
   timelineFor, type Range, type Scenario,
