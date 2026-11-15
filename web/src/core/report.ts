@@ -5,7 +5,7 @@
 //
 // Units: times in ms since 1970 (UTC) inside the report, ISO 8601 with Z in the files; Δv and
 // speeds in km/s inside, m/s in the files; altitudes and distances in km; masses in kg.
-import {
+import { ASCENT_LOSSES_KMS, HIGH_GATE_KM,
   APOLLO_11_TIMES, approachSeconds, DESCENT_START_ALT_KM, EXAMPLE_LANDER, missionAt,
   type Lander, type MissionTimes, type OkPlan, type Step, type StepId,
 } from './mission';
@@ -22,14 +22,18 @@ export const PHASE_NAMES: Record<StepId, string> = {
 };
 
 /** The model's simplifications, the card's list (tasks/T34-mission.md, Model). */
+/** The note on the launch's Δv, on the mission card and in the report (issue #181). */
+export const LAUNCH_DV_NOTE =
+  `* Includes ${ASCENT_LOSSES_KMS.toFixed(2)} km/s of gravity and drag losses, the middle of the usual 1.5 to 2 km/s; the launch vehicle is not modelled.`;
+
 export const MODEL_LIMITS: readonly string[] = [
   'A planning model, not a flight-dynamics solution.',
   'Patched conics from Earth to the Moon; the Earth–Moon picture is the model’s plane, not an ephemeris track.',
   'Burns are instant, except the powered descent, which is simulated.',
   'A 100 km circular polar lunar orbit.',
-  'A gravity-turn powered descent at one throttle, held to the ground.',
+  `A guided powered descent from 15 km in Apollo’s phases: braking at full thrust to a ${HIGH_GATE_KM} km high gate, then throttled straight down to touchdown (Bennett 1970).`,
   'Phase lengths from Apollo 11 (NASA SP-4029). The launch time is touchdown less the phases: no launch window is solved.',
-  'The launch vehicle’s propellant is not modelled, and its Δv is ideal, without gravity and drag losses.',
+  'The launch vehicle’s propellant is not modelled. Its Δv includes a cited budget for gravity and drag losses, not a simulated ascent.',
   'No ascent from the Moon and no return to Earth.',
   'The Moon has no atmosphere: no drag, and no refraction of the Sun or Earth.',
   'For a flight-dynamics solution (full gravity, finite burns, targeting, a launch window), take this plan into a tool such as NASA’s General Mission Analysis Tool (GMAT), which is open source.',
