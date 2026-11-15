@@ -1,6 +1,6 @@
 # T37: Terrain skyline north of 85 S
 
-Status: in review (Fabian started it, MarsRon took over the second half; branch `t37-terrain-north`, pull request #193). Option C. Every "Done when" line passes on `676a781` and after (`npm test` 778 passed, `npm run build` passed; height map in at 6.97 s on Fast 4G, `docs/load-time.md` section 9). `npx playwright test`: 18 of 20, the two `landing-wide.spec.ts` fails also fail on `main` (`4df5398`). Next: a person reviews and merges
+Status: in review (Fabian started it, MarsRon took over the second half; branch `t37-terrain-north`, pull request #193). Option C. Every "Done when" line passes on `676a781` and again on `d74002a` (`npm test` 779 passed, `npm run build` passed; height map in at 6.97 s on Fast 4G, `docs/load-time.md` section 9). `npx playwright test`: 18 of 20, the two `landing-wide.spec.ts` fails also fail on `main` (`4df5398`). Next: a person reviews and merges
 
 | | |
 |---|---|
