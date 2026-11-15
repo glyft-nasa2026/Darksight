@@ -171,13 +171,15 @@ export function shadePolar(dem: Dem, sun: Vec3, maxCells = 1300): PolarShade {
  * Cosine of the Sun's zenith angle at each cell centre of a latitude-longitude grid, `width`
  * cells from 180 W to 180 E and `height` cells from 90 N to 90 S. Above 0 is day.
  * With `rowStart` and `rowEnd`, only those rows (`rowStart` to `rowEnd - 1`) are worked out and
- * returned, `width` values each: a polar map needs only the rows near its pole.
+ * returned, `width` values each: a polar map needs only the rows near its pole. With `out` (at
+ * least that long), the values go into it and it is returned, so a redraw needs no new array.
  */
-export function shadeGlobal(sun: Vec3, width: number, height: number, rowStart = 0, rowEnd = height): Float32Array {
+export function shadeGlobal(sun: Vec3, width: number, height: number, rowStart = 0, rowEnd = height, out?: Float32Array): Float32Array {
   const n = Math.hypot(sun[0], sun[1], sun[2]) || 1;
   const [sx, sy, sz] = [sun[0] / n, sun[1] / n, sun[2] / n];
   const j0 = Math.max(0, rowStart), j1 = Math.min(height, rowEnd);
-  const out = new Float32Array(width * Math.max(0, j1 - j0));
+  const count = width * Math.max(0, j1 - j0);
+  if (!out || out.length < count) out = new Float32Array(count);
   // The longitude terms are the same on every row: work them out once.
   const cosLon = new Float64Array(width), sinLon = new Float64Array(width);
   for (let i = 0; i < width; i++) {
