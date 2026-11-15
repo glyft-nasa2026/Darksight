@@ -1,6 +1,6 @@
 # T33: A decade that failed to download is tried again
 
-Status: not started
+Status: in progress (Yi Hung, branch `t33-decade-retry`, draft pull request). Next: retry in `state.ts`, `tableGap`, the wording in the modules, a Playwright page test for the browser check
 
 | | |
 |---|---|
