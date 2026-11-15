@@ -7,6 +7,7 @@ import { getState, samplesFor, selected, skylineFor, subscribe, tableGap } from 
 import { axisTitle, chartLine, plotLayout, themeColor } from '../plotTheme';
 import { clearChartWait, plotlyIfLoaded, plotlyNow, showChartWait, whenPlotly } from '../plotly';
 import { noRowText } from '../tableGap';
+import { terrainCaption } from '../terrain';
 import { skyModel, sunMarkerPx, Y_BOTTOM, type SkyModel, type SunState } from './model';
 
 const SUN_WORDS: Record<SunState, string> = {
@@ -23,8 +24,8 @@ function themeNumber(name: string): number {
 
 const fmt = (v: number): string => v.toFixed(2);
 
-function caption(m: SkyModel, terrain: boolean, tMs: number): string {
-  const ground = terrain ? 'Terrain skyline from LOLA heights' : 'No terrain here: smooth Moon horizon';
+/** `ground` names the terrain (T37, ui/terrain.ts): detailed, coarse, or a smooth Moon and why. */
+function caption(m: SkyModel, ground: string, tMs: number): string {
   if (!m.now) {
     const gap = tableGap(tMs);
     return `${ground}. ${gap === 'failed' ? noRowText(gap, tMs) : 'This time is outside the table.'}`;
@@ -141,13 +142,13 @@ export function mount(el: HTMLElement): void {
     }
     const sc = selected();
     const key = `${sc.id}|${sc.site.lat},${sc.site.lon},${sc.site.eye_m ?? ''}|${sc.tMs}|` +
-      `${st.dem ? 1 : 0}|${chart.clientWidth}x${chart.clientHeight}`;
+      `${st.dem ? 1 : 0}|${st.globeStatus}|${chart.clientWidth}x${chart.clientHeight}`;
     if (!force && key === lastKey) return;
     lastKey = key;
 
     const skyline = skylineFor(sc);
     const m = skyModel(samplesFor(sc, '30d'), skyline, sc.tMs);
-    note.textContent = caption(m, skyline.terrain, sc.tMs);
+    note.textContent = caption(m, terrainCaption(skyline, sc.site, st.globeStatus), sc.tMs);
 
     const lay = layout(m);
     const margin = lay.margin ?? {};
