@@ -5,13 +5,8 @@
 // Every number comes from core/report.ts (built from the plan and missionAt) or from
 // ui/mission/conditions.ts, the card's own landing-site numbers. This file lays them out.
 import './report.css';
-<<<<<<< HEAD
 import { PADS, padById } from '../../core/pads';
-import {
-=======
-import { BRIEF_PAD_COUNT, PADS, padById } from '../../core/pads';
 import { LAUNCH_DV_NOTE,
->>>>>>> origin/main
   buildReport, descentTrack, EVENT_NAMES, reportCsv, reportFileName, reportJson,
   type LandingConditions, type Report, type ReportWarning,
 } from '../../core/report';
