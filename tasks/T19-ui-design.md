@@ -1,6 +1,6 @@
 # T19: Theme, layout, chart style
 
-Status: done (pull request #23); `t19-ui-design-b` (pull request #94, in review) puts Scenarios beside the map with the Solar panel straight under it, the Readout straight under the map, and Sun and Earth side by side in a wide Readout. Palette from docs/design.md, --dark #0e1116, #panel placed beside scenarios, chart animation opt-in. "Done when" line 2 (contrast on the built site) does not pass: see "After the merge"
+Status: done (pull request #23); `t19-ui-design-b` (pull request #94, in review) puts Scenarios beside the map with the Solar panel straight under it, the Readout straight under the map, and Sun and Earth side by side in a wide Readout. Palette from docs/design.md, --dark #0e1116, #panel placed beside scenarios, chart animation opt-in. "Done when" line 2 (contrast on the built site) passes since `t19-ui-design-c` (pull request #116): `web/e2e/contrast.spec.ts` checks it in CI
 
 | | |
 |---|---|
@@ -56,7 +56,7 @@ section 6). **Before starting, read `docs/mcp-and-skills.md` section 3.**
 ## Done when
 
 - [x] Every variable in contract section 6 is set; none renamed or removed.
-- [ ] On the built site, text against its background passes a contrast check of 4.5 to 1 or better (name the checker used in the pull request).
+- [x] On the built site, text against its background passes a contrast check of 4.5 to 1 or better (name the checker used in the pull request).
 - [x] Searching `web/src/ui/` and `web/src/scene/` for `#` colour codes finds them only in `theme.css`. List any others in the pull request so someone can claim the module fix.
 - [x] At 1280 px wide nothing overlaps or scrolls sideways; at 390 px wide every slot is reachable by scrolling down.
 - [x] `#panel` sits under `#nudge` in the right-hand column, beside `#scenarios`, at 1280 px, and after `#nudge` at 390 px.
@@ -78,8 +78,8 @@ Open, for the theme's owner and the team. Nothing was changed: each of these cha
 
 - *costs time*: **every type size is one eighth smaller than the theme says.** `theme.css` sets `font-size: var(--fs-md)` on `html` as well as `body`, so the root is 14 px and every `rem` shrinks with it. Measured: 10.5, 12.25, 19.25 and 28 px for `--fs-sm` to `--fs-xl`, where the file's own comment and `docs/design.md` say 12, 14, 22 and 32. Chart tick labels are 10.5 px. Setting the size on `body` alone gives the documented sizes; `layout.css` then needs a look at every width, because all text grows by a seventh.
 - *costs time*: **the timeline's "Hidden (below skyline)" band can't be seen.** It is drawn in `--dark`, which is now the same colour as `--bg`: 1.04 to 1 against the card (the legend swatch 1.10 to 1).
-- *costs time*: **"Done when" line 2 fails for text drawn over the map.** Map labels are 2.9 to 3.3 to 1 on lit ground ("89°S", "60°E", "Sun overhead"), and the out-of-table message over the map is under 4.5 to 1 on 31 % of its pixels. The pull request checked the palette's pairs only. An outline in `--bg` round map text, and a card background behind the message, would fix both (`web/src/map/index.ts`, `web/src/scene/scene.css`).
-- *cosmetic*: the empty time box's placeholder is the browser's grey, 4.10 to 1; `.field::placeholder { color: var(--muted) }` fixes it.
+- *costs time*: **"Done when" line 2 fails for text drawn over the map.** Map labels are 2.9 to 3.3 to 1 on lit ground ("89°S", "60°E", "Sun overhead"), and the out-of-table message over the map is under 4.5 to 1 on 31 % of its pixels. The pull request checked the palette's pairs only. An outline in `--bg` round map text, and a card background behind the message, would fix both (`web/src/map/index.ts`, `web/src/scene/scene.css`). *15 Nov: fixed that way in #116; `web/e2e/contrast.spec.ts` now checks every page text, map label and placeholder in CI.*
+- *cosmetic*: the empty time box's placeholder is the browser's grey, 4.10 to 1; `.field::placeholder { color: var(--muted) }` fixes it. *15 Nov: fixed in #116.*
 - *cosmetic*: graphics under 3 to 1: scenario B's dot and bar on its card (2.97), the field outline (1.46), map pins for B and C on some ground (2.77, 1.76; the pins carry no letters), the half-strength Earth strips (item 4 of "Needs team decision" in `docs/design.md`).
 - *cosmetic*: a chart that sets an axis title loses the theme's title style (`title: { text }` replaces `title.font`): the sky chart's and the compare strips' titles are 13 px in `--text`, the ticks 10.5 px in `--muted`.
 - *cosmetic*: at 801 px the nudge panel covers 288 px of a 399 px map; at 1280 × 600 there is a 101 px empty band under the map captions.
