@@ -677,7 +677,11 @@ panel is ordinary HTML floating over the map, never drawn in the canvas. The nud
 in one of the viewport's four corners (`data-corner="tl" | "tr" | "bl" | "br"`, bottom left to
 start); one button moves it on, top left, top right, bottom left, bottom right (issue #126). Any map control the scene puts inside the viewport marks its corner with
 `data-map-corner="tl"` (and so on); the nudge then skips that corner for the next free one,
-clockwise. The scene's toolbar sits above the viewport and claims no corner.
+clockwise. The scene's toolbar sits above the viewport and claims no corner. The map-layer
+controls float in the viewport's top right corner (`.scene-layers`, `data-map-corner="tr"`), as
+icon switches with a fold button for transparency and notes; the nudge panel sits above them
+(`z-index`) so its buttons stay reachable where the two meet on a narrow map. This replaces the
+"under its map caption, outside the viewport" placement in the next paragraph.
 
 The map-layer controls (T14, `web/src/ui/layers/`) are not in `index.html` either. The scene
 creates `<section class="scene-layers">` under its map caption, outside the viewport, so nothing
