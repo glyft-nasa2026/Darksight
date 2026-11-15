@@ -54,8 +54,8 @@ reads them from the page while it records.
 | 0.000001°, 18 cases, 0.1° tolerance | Horizons badge and About panel, from `web/public/data/validation.json` |
 | Real terrain everywhere: 240 m cells south of 85° S, 3.8 km elsewhere; 150 km skyline; 1900–2100 every 3 h | About panel, "Known limits"; `SPEC.md` sections 5, 6 and 8 |
 | 24 curated sites (14 landed, 4 planned, 4 candidates, 2 references) | About panel; `web/public/data/sites.json` |
-| 785 tests | `npm test` on this branch after merging main (047b560), 15 Nov 2026 |
-| 304 distinct sources from 68 files, 237 AI-use records from 71 files | `references.md`, `ai-use.md`, built from `docs/` |
+| 785 tests | `npm test` on main 624fc93, 15 Nov 2026 |
+| 307 distinct sources from 68 files, 241 AI-use records from 71 files | `references.md`, `ai-use.md`, built from `docs/` |
 
 ## "Done when" (tasks/T17-pitch.md)
 
@@ -94,19 +94,18 @@ If the panel is missing one, arrange one more T16 delivery (or a redeploy of `ma
 again; anyone can take it. Then paste the "Space Agency Partner Data and Other References" block
 again.
 
-Run on 15 Nov 2026 against this branch (after merging main at 047b560) and the live site:
+Run on 15 Nov 2026 on `main` after pull request #130 merged and deployed (ecf2456). The lists were
+one merge behind, so this branch rebuilds them from main 624fc93:
 
 ```
-PASS submission lists: 69 docs/sources files and 71 docs/ai-use files, all collected
+FAIL pitch/references.md or pitch/ai-use.md is out of date: run "node pitch/tools/sources.mjs build"
 note docs/sources/issue-58.md: no entries yet
-FAIL About panel on https://darksight.space/ is missing:
-  docs/sources/T17.md
-  docs/ai-use/T17.md
+PASS About panel on https://darksight.space/ shows every file with entries
 ```
 
-The only files missing are this branch's own, which aren't deployed yet. Before T17's files had
-entries, the same check passed: "PASS About panel on https://darksight.space/ shows every file
-with entries".
+The links in `submission.md` answer HTTP 200: `blob/main/pitch/demo/darksight-demo.webm`,
+`blob/main/pitch/darksight-slides.pdf`, `blob/main/pitch/references.md`. Run the check again after
+the last pull request merges; any merge that adds a `docs/` row changes the counts.
 
 Files with no entries yet (nothing to cover; recheck at the end): `docs/sources/issue-58.md`. T17's own files reach the About panel once this
 branch has merged and deployed, which is one more reason to run the check at the very end.
