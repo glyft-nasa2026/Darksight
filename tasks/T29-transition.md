@@ -1,6 +1,6 @@
 # T29: Map and scene cross-fade
 
-Status: not started
+Status: in progress (Leon, branch `t29-transition`, draft pull request #168). Every "Done when" line passes in `web/e2e/transition.spec.ts`, `npm test` and `npm run build`. Next: Leon looks at the fade on a real screen and a phone, then the pull request is marked ready
 
 | | |
 |---|---|
