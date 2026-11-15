@@ -590,6 +590,12 @@ three pages (`vite.config.ts`, `build.rolldownOptions.input`).
 that opens the About panel. On desktop `#scenarios` sits beside `#scene` with `#panel` under it,
 and `#readout` sits under `#scene`; on a phone `#panel` comes after `#readout`.
 
+The flat map (`web/src/map/`, T31) is not a slot either: the scene mounts it in its viewport, over
+the 3D canvas, and shows or hides it by `mode`; the map doesn't hide itself. A change of `mode`
+cross-fades the two over about 0.8 s, the 3D camera easing between straight above the site
+(turned and zoomed like the map, from the map's `viewOf(el)`) and its orbit view (T29, spec F16).
+Neither view takes a click while they fade. With `prefers-reduced-motion` the view jumps.
+
 `#nudge` (issue #58) is not in `index.html`. The scene creates it inside its map viewport (the
 `position: relative` box that holds the map canvas), before `main.ts` reaches it, so the nudge
 panel is ordinary HTML floating over the map, never drawn in the canvas. The nudge places itself
