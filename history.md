@@ -21,6 +21,29 @@ P5 asked for both.
 - Now it adds a battery: capacity, panel size and power use, and a 30-day forecast.
 - Why: `docs/design.md` item 7 proposed it on 14 Nov and said it needed a spec line; P5 asked for it.
 
+## 15 Nov 2026: the twelve newer launch pads checked against their pages (T34)
+
+### docs/sources/T34.md: the twelve launch pads
+
+- Was: one row for the twelve pads added in #104, with their twelve page links: "The coordinates
+  were written by the AI from these pages without fetching them; **a person still has to check
+  each one against its page or a map**".
+- Now one row per pad names the page element its value is checked against, and a row says how
+  the check is done (a Playwright script run by an AI agent, 15 Nov 2026). Taiyuan LC-9 moves from
+  38.84917 N, 111.60806 E to 38.8632 N, 111.589639 E; Plesetsk's pad is named Site 43/4.
+- Why: T34's last open item. The script found that Taiyuan LC-9 held the page title's coordinate,
+  2.2 km from the pad, and that four more pages (Vandenberg, Starbase, Plesetsk, Tanegashima) give
+  the spaceport or the complex in the title, so each pad's own value comes from a list item, a
+  map template, Wikidata or the Japanese article.
+
+### tasks/T34-mission.md: `Status:`
+
+- Was: "Open: a person still has to check the twelve pad coordinates added in #104 against their
+  sources (`docs/sources/T34.md`)."
+- Now the check is done by script (#185), and the table in that pull request lets a person
+  confirm it.
+- Why: the same check.
+
 ## 15 Nov 2026: map layers over the whole Moon (T43)
 
 ### docs/data-contract.md: 2. `globe.bin` and `north.bin`
