@@ -11,8 +11,9 @@ import { destination } from '../../core/geometry';
 import { countdownText } from '../../core/windows';
 import {
   flipFor, getState, neverLitFor, neverLitPendingFor, samplesFor, setGhost, setLiveSite, setLiveTime,
-  skylineFor, subscribe, summaryFor, type Scenario,
+  skylineFor, subscribe, summaryFor, tableGap, type Scenario,
 } from '../../state';
+import { noRowText } from '../tableGap';
 import {
   asCorner, clampKm, compare, CORNER_NAMES, DAY_MS, freeCorner, kmText, nextCorner, NUDGE_KM, NUDGES,
   POLES, START_CORNER, stepLabel, stepText, type Corner, type Facts, type Nudge,
@@ -246,10 +247,11 @@ export function mount(el: HTMLElement): void {
       return;
     }
     if (!before || !active) {
-      // Outside the table every step is switched off; say why, in the readout's words.
-      const outside = live.tMs < eph.startMs || live.tMs > eph.endMs;
-      out.append(make('p', 'muted nudge-hint', outside
-        ? 'This time is outside the Sun and Earth table'
+      // Outside the table every step is switched off; say why, in the readout's words. The same
+      // words when the live time's decade did not download (T33).
+      const gap = tableGap(live.tMs);
+      out.append(make('p', 'muted nudge-hint', gap !== 'none'
+        ? noRowText(gap, live.tMs)
         : `Move the live site ${kmText(km)}, 1 day, or to a pole: it moves at once, and this says what changed.`));
       actions.hidden = true;
       return;
@@ -260,7 +262,9 @@ export function mount(el: HTMLElement): void {
     const fb = factsOf(before);
     const fn = factsOf(live);
     if (!fb || !fn) {
-      out.append(make('p', 'muted', 'Loading'));
+      // No hours for one side: its decade did not download (T33), or it is still on its way.
+      const gone = [before, live].find((sc) => tableGap(sc.tMs) === 'failed');
+      out.append(make('p', 'muted', gone ? noRowText('failed', gone.tMs) : 'Loading'));
     } else {
       for (const line of compare(fb, fn, !!st.dem)) out.append(make('p', `nudge-line nudge-${line.tone}`, line.text));
       const table = make('table', 'table nudge-table');

@@ -3,6 +3,7 @@
 
 import type { Flip, Sample } from '../../core/types';
 import { SUN_RADIUS } from '../../core/windows';
+import { noRowText } from '../tableGap';
 
 /** The y axis never shows less than this either side of zero, degrees. */
 export const Y_MIN_SPAN = 8;
@@ -96,8 +97,9 @@ export function emptyNote(count: number, fromMs: number, tableStartMs: number, t
   if (!(fromMs >= tableStartMs && fromMs < tableEndMs)) {
     return 'This window is outside the Sun and Earth table (1900 to 2100).';
   }
-  // Inside 1900 to 2100 with nothing to show: the decade's file did not download.
-  if (count === 0) return 'This window is outside the Sun and Earth table.';
+  // Inside 1900 to 2100 with nothing to show: the decade's file did not download (state.ts
+  // tries it again, T33).
+  if (count === 0) return noRowText('failed', fromMs);
   return 'The Sun and Earth table ends less than two hours from here: nothing to chart.';
 }
 

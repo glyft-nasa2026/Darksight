@@ -3,9 +3,10 @@
 // scenario's time. Every number comes from core/ through state.ts.
 import './sky.css';
 import type { Data, Layout } from 'plotly.js-dist-min';
-import { getState, samplesFor, selected, skylineFor, subscribe } from '../../state';
+import { getState, samplesFor, selected, skylineFor, subscribe, tableGap } from '../../state';
 import { axisTitle, chartLine, plotLayout, themeColor } from '../plotTheme';
 import { clearChartWait, plotlyIfLoaded, plotlyNow, showChartWait, whenPlotly } from '../plotly';
+import { noRowText } from '../tableGap';
 import { skyModel, sunMarkerPx, Y_BOTTOM, type SkyModel, type SunState } from './model';
 
 const SUN_WORDS: Record<SunState, string> = {
@@ -22,9 +23,12 @@ function themeNumber(name: string): number {
 
 const fmt = (v: number): string => v.toFixed(2);
 
-function caption(m: SkyModel, terrain: boolean): string {
+function caption(m: SkyModel, terrain: boolean, tMs: number): string {
   const ground = terrain ? 'Terrain skyline from LOLA heights' : 'No terrain here: smooth Moon horizon';
-  if (!m.now) return `${ground}. This time is outside the table.`;
+  if (!m.now) {
+    const gap = tableGap(tMs);
+    return `${ground}. ${gap === 'failed' ? noRowText(gap, tMs) : 'This time is outside the table.'}`;
+  }
   const sun = SUN_WORDS[m.now.sunState];
   const earth = m.now.earthUp ? 'Earth up' : 'Earth hidden';
   return `${ground}. ${sun} · ${earth}. Paths: next 30 days.`;
@@ -142,7 +146,7 @@ export function mount(el: HTMLElement): void {
 
     const skyline = skylineFor(sc);
     const m = skyModel(samplesFor(sc, '30d'), skyline, sc.tMs);
-    note.textContent = caption(m, skyline.terrain);
+    note.textContent = caption(m, skyline.terrain, sc.tMs);
 
     const lay = layout(m);
     const margin = lay.margin ?? {};

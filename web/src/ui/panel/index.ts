@@ -3,7 +3,8 @@
 // from core/panel.ts on state.ts's cached samples; this file only rounds and labels them.
 import './panel.css';
 import { panelAverage, panelPower, type PanelPower } from '../../core/panel';
-import { getState, samplesFor, selected, subscribe } from '../../state';
+import { getState, samplesFor, selected, subscribe, tableGap } from '../../state';
+import { noRowText } from '../tableGap';
 import { powerText } from './format';
 
 const WHY =
@@ -56,7 +57,7 @@ export function mount(el: HTMLElement): void {
     const samples = samplesFor(sc, '30d');
     const now = samples[0];
     if (!now || now.tMs !== sc.tMs) {
-      content.replaceChildren(make('p', 'pn-error', 'This time is outside the Sun and Earth table'));
+      content.replaceChildren(make('p', 'pn-error', noRowText(tableGap(sc.tMs), sc.tMs)));
       return;
     }
     content.replaceChildren(powerTable(panelPower(now), panelAverage(samples)));
