@@ -72,15 +72,18 @@
   box-sizing: border-box;
 }
 
-html,
-body {
+html {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--fs-md);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  font-size: var(--fs-md);
 }
 
 h1, h2, h3, p {
