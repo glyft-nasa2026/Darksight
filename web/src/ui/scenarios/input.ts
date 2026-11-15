@@ -86,3 +86,11 @@ const GROUP_NAMES: Record<string, string> = {
 export function groupName(group: string): string {
   return GROUP_NAMES[group] ?? group;
 }
+
+/**
+ * A site's line in the dropdown: its name, with "(planned)" after a mission that has not
+ * landed yet (T36), so an upcoming target isn't read as a landing site in the Landers group.
+ */
+export function siteOptionText(site: { name: string; status: string }): string {
+  return site.status === 'planned' ? `${site.name} (planned)` : site.name;
+}

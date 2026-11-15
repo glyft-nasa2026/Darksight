@@ -9,7 +9,7 @@ import {
   getState, isLanding, LIVE_ID, MAX_PINNED, pin, select, setLanding, setLiveSite, setLiveTime,
   stateToAddress, subscribe, unpin, type Scenario,
 } from '../../state';
-import { checkLat, checkLon, checkUtc, coordText, groupName, toBoxValue, toPickerValue, utcText, type Checked } from './input';
+import { checkLat, checkLon, checkUtc, coordText, groupName, siteOptionText, toBoxValue, toPickerValue, utcText, type Checked } from './input';
 
 const SAME_DEG = 1e-6; // state keeps 6 decimals, so this is "the same point"
 
@@ -245,7 +245,7 @@ export function mount(el: HTMLElement): void {
       const og = make('optgroup');
       og.label = groupName(group);
       for (const s of members) {
-        const o = make('option', '', s.name);
+        const o = make('option', '', siteOptionText(s));
         o.value = s.id;
         og.append(o);
       }

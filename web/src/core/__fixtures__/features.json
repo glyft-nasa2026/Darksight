@@ -1,0 +1,47 @@
+{
+  "source": "USGS Gazetteer of Planetary Nomenclature, MOON_nomenclature_center_pts.kmz",
+  "url": "https://asc-planetarynames-data.s3.us-west-2.amazonaws.com/MOON_nomenclature_center_pts.kmz",
+  "file_date": "2026-11-14",
+  "frame": "east longitude (written here as -180..180), planetocentric latitude, LOLA 2011 control network",
+  "radius_km": 1737.4,
+  "sites": {
+    "im-3": {
+      "feature": "Reiner Gamma",
+      "gazetteer_id": 4987,
+      "type": "Albedo Feature",
+      "lat": 7.3853,
+      "lon": -58.9583,
+      "diameter_km": 73.441048,
+      "page": "https://planetarynames.wr.usgs.gov/Feature/4987"
+    },
+    "blue-ghost-2": {
+      "feature": "Nassau F",
+      "gazetteer_id": 11543,
+      "type": "Satellite Feature",
+      "lat": -25.3349,
+      "lon": -179.0946,
+      "diameter_km": 115.36932,
+      "page": "https://planetarynames.wr.usgs.gov/Feature/11543",
+      "margin_km": 5.0,
+      "margin_reason": "A rim target: the team puts the landing ellipse on the north-east rim of Nassau F (EPSC2026-593), so it lies about half the diameter from the centre, and the gazetteer's diameter is approximate. 5 km allows for the rim's width."
+    },
+    "blue-ghost-3": {
+      "feature": "Mons Gruithuisen Gamma",
+      "gazetteer_id": 3982,
+      "type": "Mons, montes",
+      "lat": 36.5585,
+      "lon": -40.7213,
+      "diameter_km": 19.65251,
+      "page": "https://planetarynames.wr.usgs.gov/Feature/3982"
+    },
+    "chandrayaan-4": {
+      "feature": "Mons Mouton",
+      "gazetteer_id": 16070,
+      "type": "Mons, montes",
+      "lat": -84.6,
+      "lon": 31.0,
+      "diameter_km": 130.0,
+      "page": "https://planetarynames.wr.usgs.gov/Feature/16070"
+    }
+  }
+}
