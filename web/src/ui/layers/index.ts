@@ -162,6 +162,34 @@ function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', tex
   return el;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/** Line drawings on a 24-unit square, in the button's text colour: one per layer. */
+const ICONS: Record<LayerKey, string[]> = {
+  // A sun: a disc and eight rays.
+  sun: ['M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8', 'M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'],
+  // Earth: a globe with its equator and a meridian.
+  earth: ['M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18', 'M3 12h18', 'M12 3c-3 3-3 15 0 18c3-3 3-15 0-18'],
+  // Never lit: the sun, struck out.
+  psr: ['M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8', 'M12 2v3M12 19v3M2 12h3M19 12h3', 'M4 4l16 16'],
+  // Height: two peaks.
+  height: ['M2 20l7-12l4 6l3-4l6 10z'],
+  // Slope: a ramp and its angle.
+  slope: ['M3 20h18V6z', 'M9 20a6 6 0 0 0-1-3.5'],
+};
+
+function icon(key: LayerKey): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  for (const d of ICONS[key]) {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+  }
+  return svg;
+}
+
 const mounted = new WeakMap<HTMLElement, () => void>();
 
 export function mount(el: HTMLElement): void {
@@ -170,27 +198,50 @@ export function mount(el: HTMLElement): void {
   box.append(make('legend', 'ly-title', 'Map layers'));
   const status = make('p', 'ly-status muted');
   status.setAttribute('role', 'status');
-  const rows = new Map<LayerKey, { check: HTMLInputElement; range: HTMLInputElement }>();
+  // The controls float over the map (in its top right corner): one icon switch per layer in a
+  // row, and a fold button that shows the transparency sliders and the notes under them, as the
+  // nudge panel does. Folded, only the row, the status and the "where" hint show (layers.css).
+  const head = make('div', 'ly-head');
+  const fold = make('button', 'btn ly-fold');
+  fold.type = 'button';
+  head.append(fold);
+  box.append(head);
+  const setFolded = (f: boolean): void => {
+    box.toggleAttribute('data-folded', f);
+    fold.textContent = f ? '▼' : '▲';
+    fold.setAttribute('aria-expanded', String(!f));
+    fold.setAttribute('aria-label', f ? 'Show layer transparency and notes' : 'Hide layer transparency and notes');
+    fold.title = f ? 'Transparency and notes' : 'Hide';
+  };
+  fold.addEventListener('click', () => setFolded(!box.hasAttribute('data-folded')));
+  setFolded(true);
+  const rows = new Map<LayerKey, { check: HTMLButtonElement; range: HTMLInputElement }>();
 
   for (const key of LAYER_KEYS) {
     const row = make('div', 'ly-row');
     const id = `ly-${key}`;
-    const check = make('input');
-    check.type = 'checkbox';
+    const check = make('button', 'btn ly-icon');
+    check.type = 'button';
     check.id = id;
+    check.dataset.layer = key;
+    check.setAttribute('aria-label', LAYER_LABELS[key]);
+    check.title = LAYER_LABELS[key];
+    check.append(icon(key));
+    head.insertBefore(check, fold);
     const label = make('label', 'ly-label', LAYER_LABELS[key]);
-    label.htmlFor = id;
+    label.htmlFor = `${id}-opacity`;
     const range = make('input', 'ly-opacity');
+    range.id = `${id}-opacity`;
     range.type = 'range';
     range.min = '0';
     range.max = '100';
     range.setAttribute('aria-label', `${LAYER_LABELS[key]}: transparency`);
-    check.addEventListener('change', () => layerStore.setOn(key, check.checked));
+    check.addEventListener('click', () => layerStore.toggle(key));
     // 'input' while dragging; 'change' too, for anything that sets the value without dragging.
     const setOpacity = (): void => layerStore.setOpacity(key, Number(range.value) / 100);
     range.addEventListener('input', setOpacity);
     range.addEventListener('change', setOpacity);
-    row.append(check, label, range);
+    row.append(label, range);
     box.append(row);
     rows.set(key, { check, range });
   }
@@ -206,7 +257,7 @@ export function mount(el: HTMLElement): void {
 
   const render = (s: LayerSettings): void => {
     for (const [key, { check, range }] of rows) {
-      check.checked = s[key].on;
+      check.setAttribute('aria-pressed', String(s[key].on));
       range.value = String(Math.round(s[key].opacity * 100));
       range.disabled = !s[key].on;
     }
