@@ -1,6 +1,6 @@
 # T36: Upcoming mission targets in the site list
 
-Status: not started. Step 1 is done: the team agreed on 15 Nov 2026 that the list may hold 25 sites (the 20 stay, and up to 5 upcoming targets are added; `docs/decisions.md`, F12 in `SPEC.md`)
+Status: in progress (Yi Hung, with Claude Code), branch `t36-planned-sites`, draft pull request open. Step 1 is done: the team agreed on 15 Nov 2026 that the list may hold 25 sites (the 20 stay, and up to 5 upcoming targets are added; `docs/decisions.md`, F12 in `SPEC.md`). Next: step 2, finding the targets
 
 | | |
 |---|---|
