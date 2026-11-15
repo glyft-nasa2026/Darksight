@@ -1,6 +1,6 @@
 # T26: Freeze checklist
 
-Status: done (Yi Hung). Steps 1 to 6: pull request #150. Step 7: this Status update is the last pull request; the checks below ran on the commit it makes on `main`, and the `submitted` tag points at that commit
+Status: done (Yi Hung). Steps 1 to 6: pull request #150; the README rewrite for the judges: #217 (MarsRon). Step 7: pull request #213 merges last; its Deploy, preview and asset checks ran on the commit it makes on `main` (results in a comment on #213), and the `submitted` tag points at that commit
 
 | | |
 |---|---|
