@@ -2,7 +2,7 @@
 // over days 0-30 since each scenario's own time. Every number comes from state.ts accessors,
 // which call core/; model.ts only groups, ranks and formats them.
 import './compare.css';
-import type { Data, Layout } from 'plotly.js-dist-min';
+import type { Data, Layout } from 'plotly.js-basic-dist-min';
 import { plotlyIfLoaded, whenPlotly } from '../plotly';
 import type { Body, Sample } from '../../core/types';
 import { countdownText } from '../../core/windows';

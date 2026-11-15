@@ -4,17 +4,19 @@
 //      logo sits, in the middle, and glides out to the right. The data files load behind it.
 //      Under its first screen it scrolls to about, team, privacy, licence and a footer (more.ts).
 //   2. "Start exploring": the big logo glides back to the middle and the loading screen shows
-//      how far the data is. The site's code starts downloading at the click (main.ts's
-//      loadSite); its modules are mounted once the loading screen is on screen. Both block the
-//      page for a moment, so they run while only the glide or the logo's pulse moves, never
-//      while the main page is animating or waiting for a click.
+//      how far the data is. The site's code runs from the click (main.ts's loadSite; main.ts
+//      fetches it earlier without running it); its modules are mounted once the loading screen
+//      is on screen. Both block the page for a moment, so they run while only the glide or the
+//      logo's pulse moves, never while the main page is animating or waiting for a click.
 //   3. The site, once its modules are mounted and the Sun and Earth table and the site list have
 //      loaded (or failed: the page's status line says which). The height map keeps loading
 //      behind it, and the status line shows how far. LOADING_MAX_MS after the loading screen
 //      appears it stops waiting for the data, so a stalled download never locks the page: there
 //      is no Skip button. It always waits for the modules (the page behind would be empty), so
 //      if they are not mounted by then, the site opens the moment they are. If the site's code
-//      does not load, the loading screen stays and asks for a reload.
+//      does not load, main.ts may reload the page to try again (onSiteFailed), and the page
+//      then opens straight on the loading screen (startNow); otherwise the loading screen stays
+//      and asks for a reload.
 // Every animation here moves or fades only (transform, opacity), so the browser keeps playing it
 // even while the page is busy.
 // Not a slot of contract section 5: main.ts starts it and feeds it the loading progress.
@@ -90,6 +92,13 @@ export interface Intro {
 export interface IntroOptions {
   /** Loads the site's code and resolves to the function that mounts its modules. Called once. */
   loadSite: () => Promise<() => void>;
+  /** Open straight on the loading screen, as if "Start exploring" had been pressed. */
+  startNow?: boolean;
+  /**
+   * Called when the site's code did not load. True means the page is reloading itself to try
+   * again: the loading screen then says so instead of asking for a reload.
+   */
+  onSiteFailed?: () => boolean;
 }
 
 /** Runs `fn` after the browser has drawn the current page at least once more. */
@@ -157,6 +166,7 @@ export function startIntro(options: IntroOptions): Intro {
   let closed = false;
   let siteReady = false;
   let siteFailed = false;
+  let reloading = false;
   let waitedMax = false; // LOADING_MAX_MS has passed since the loading screen appeared
   let siteCode: Promise<() => void> | null = null;
 
@@ -181,7 +191,8 @@ export function startIntro(options: IntroOptions): Intro {
     const pct = Math.round(fraction * 100);
     fill.style.transform = `scaleX(${fraction})`;
     bar.setAttribute('aria-valuenow', String(pct));
-    if (siteFailed) caption.textContent = 'THE SITE DID NOT LOAD. PLEASE RELOAD THE PAGE.';
+    if (reloading) caption.textContent = 'LOADING THE LATEST VERSION OF THE SITE…';
+    else if (siteFailed) caption.textContent = 'THE SITE DID NOT LOAD. PLEASE RELOAD THE PAGE.';
     else if (dataDone()) caption.textContent = 'PREPARING THE SITE…';
     else caption.textContent = `INITIALISING LUNAR DATA… ${pct}%`;
   }
@@ -241,6 +252,7 @@ export function startIntro(options: IntroOptions): Intro {
           (err: unknown) => {
             console.error('The site did not load', err);
             siteFailed = true;
+            reloading = options.onSiteFailed?.() ?? false;
             drawProgress();
           },
         );
@@ -282,8 +294,12 @@ export function startIntro(options: IntroOptions): Intro {
   document.body.classList.add('intro-open');
   start.focus();
 
-  // The big logo starts as the loading screen's logo, in the middle, and glides to the right.
-  if (!reducedMotion()) {
+  if (options.startNow) {
+    // Straight on the loading screen, with no glide.
+    started = true;
+    showLoading();
+  } else if (!reducedMotion()) {
+    // The big logo starts as the loading screen's logo, in the middle, and glides to the right.
     const from = smallLogoBox();
     const to = bigLogo.getBoundingClientRect();
     bigLogo.animate(

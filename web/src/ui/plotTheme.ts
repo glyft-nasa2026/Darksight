@@ -2,7 +2,7 @@
 // T00 made both functions; T19 owns this file. Every value is read from theme.css, so there is
 // no second copy of a colour.
 
-import type { Layout, Transition } from 'plotly.js-dist-min';
+import type { Layout, Transition } from 'plotly.js-basic-dist-min';
 
 /** How long a chart takes to move to new data, in milliseconds. */
 export const CHART_TRANSITION_MS = 400;

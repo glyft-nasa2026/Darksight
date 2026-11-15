@@ -127,9 +127,12 @@ hard-codes them. File budget: 15 MB.
 
 ### `globe.bin` + `globe.json`, `north.bin` + `north.json` (made by `data-prep/make_globe.py`, issue #66)
 
-Heights of the Moon north of the south-pole height map, for pictures only: the 3D globe, and
+Heights of the Moon north of the south-pole height map, for pictures: the 3D globe, and
 the flat map (whole-Moon view, the fading ring around a polar view, and the north polar view).
-No number shown to the user comes from them, and nothing in `core/` loads them:
+One exception, agreed 15 Nov 2026 (`docs/decisions.md`): map layers cover the whole Moon (SPEC
+section 6), so the height and slope layers, and the readout's slope line, take heights from these
+files where `dem.bin` does not reach, through a reader in `core/` that T43 adds to this section.
+Until T43 merges, no number shown to the user comes from them, and nothing in `core/` loads them:
 `web/src/scene/globe.ts` fetches them by itself, beside the other files, and the globe is a
 plain sphere until they arrive or when they are missing (the mock data set has none). Both come
 from the same LOLA gridded data record as `dem.bin`.
@@ -489,6 +492,7 @@ export type AppState = {
   eph: Ephemeris | null; dem: Dem | null; sites: CuratedSite[];
   landing: { site: Site; tMs: number } | null;   // T34: a copy of a scenario's site and time
   padId: string; lander: Lander;                 // T34: core/pads.ts id, core/mission.ts Lander
+  battery: Battery;    // T40: core/battery.ts; in the address as bat=capacityWh,panelW,useW when changed
 };
 
 getState(): AppState
@@ -496,6 +500,7 @@ subscribe(fn: (s: AppState) => void): () => void
 setLiveSite(site: Site) · setLiveTime(tMs: number) · pin() · unpin(id) · select(id)
 setRange(r: Range) · shiftWindow(dir: -1 | 1) · setGhost(s: Scenario | null) · setMode(m)
 setLanding(sc: Scenario | null) · setPad(id) · setLander(l)            // T34
+setBattery(b: Battery)                                                 // T40
 selected(): Scenario                     // the live or pinned scenario named by selectedId
 
 // computed once and cached here, so modules don't repeat the work
@@ -596,6 +601,8 @@ flat skyline and zeros. Modules show "Loading" and must not crash.
 |---|---|---|
 | `#scene` | `web/src/scene/` | T12 |
 | `#scenarios` | `web/src/ui/scenarios/` | T08 |
+| `#playback` | `web/src/ui/playback/` | T40 (shares the place of `#scenarios`, see below) |
+| `#sidetabs` | `web/src/ui/sidetabs/` | T40 |
 | `#readout` | `web/src/ui/readout/` | T08 |
 | `#compare` | `web/src/ui/compare/` | T09 |
 | `#timeline` | `web/src/ui/timeline/` | T10 |
@@ -614,6 +621,8 @@ The main page (`web/src/ui/intro/`) is not a slot. Under its first screen it scr
 Meet the team, Privacy, Licence and a footer (issue #117). Their words and the team list are in
 `intro/landing.ts`; the team photos are `web/public/team/*.jpg`. Links there to a section are
 buttons that scroll, never `#id` links: the page address hash holds the state (section 4).
+
+`#scenarios` and `#playback` (T40) sit in one place, `#sidecard`, with `#sidetabs` over them: two tabs, Scenarios and Timeline, that show one card and hide the other. The playback keeps playing while Scenarios is shown. It moves the live time through `setLiveTime`, and pauses when anything else moves the live scenario.
 
 `#mission` (T34) is not on the site's page: it is the card of the page `web/mission.html`
 (`web/src/missionPage/`), which loads the same data files and mounts `ui/mission`. "Land here" on a
@@ -645,8 +654,8 @@ creates `<section class="scene-layers">` under its map caption, outside the view
 floats over the map, and calls `mount(el)` on it. The controls show in 2D mode only and say when
 the map shows the whole Moon or the north pole rather than the south pole. The layers are drawn
 by the 2D map (`web/src/map/`): in its draw step, after the terrain and before the grid and pins,
-on the south-polar map only (`kind === 'south'`; the LOLA maps used here cover the south pole
-only), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
+on the south-polar map only for now (`kind === 'south'`; T43 extends every layer to the north
+polar and whole-Moon maps, SPEC section 6), it calls `drawLayers(ctx, toScreen)`, where `toScreen(x, y)` turns polar
 stereographic metres (section 2) into canvas pixels, and it redraws whenever `onLayersChange()`
 fires (data arriving, a switch, an opacity change, each frame of a fade). Both come from
 `web/src/ui/layers/index.ts`, which also holds the one store of layer settings (`layerStore`).

@@ -2,7 +2,7 @@
 // shape, the Sun's and Earth's paths over the next 30 days, and where they are at the selected
 // scenario's time. Every number comes from core/ through state.ts.
 import './sky.css';
-import type { Data, Layout } from 'plotly.js-dist-min';
+import type { Data, Layout } from 'plotly.js-basic-dist-min';
 import { getState, samplesFor, selected, skylineFor, subscribe, tableGap } from '../../state';
 import { axisTitle, chartLine, plotLayout, themeColor } from '../plotTheme';
 import { clearChartWait, plotlyIfLoaded, plotlyNow, showChartWait, whenPlotly } from '../plotly';
