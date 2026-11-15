@@ -1,4 +1,4 @@
-"""T14: map layers from the LOLA team's south-polar illumination maps, on a 480 m grid of our own.
+"""T14 and T43: map layers from the LOLA team's polar illumination maps, on 480 m grids of our own.
 
 Sources: LRO LOLA polar illumination products, release 2016 (E. Mazarico, NASA GSFC), described in
 Mazarico et al. (2011), Illumination conditions of the lunar polar regions using LOLA topography,
@@ -37,6 +37,17 @@ the share of the cell that is permanently shadowed.
 
 Only LOLA rows 1942..4476 are downloaded (HTTP range request, about 32.6 MB of each 82.4 MB file),
 into data-prep/raw/ (git-ignored). Nothing is written outside web/public/data/layers/.
+
+North pole (T43). The LOLA team publishes the same three maps for the north (AVGVISIB_65N_240M_201608,
+..._EARTH, LPSR_65N_240M_201608), same layout and scaling, CENTER_LATITUDE 90 and CENTER_LONGITUDE 0
+(longitude 0 down). Our north grid is north.bin's: the mirror image of the south one about the
+equator (c = 90 - lat, x = r sin lon, y = r cos lon, longitude 0 up), with the same numbers
+(size, pixel_m, x_min_m, y_max_m). So y = -Y and our 240 m row r sits at LOLA row 4476.5 - r: rows
+1943..4477 are downloaded, and turned upside down they line up with our rows as the south's do
+(our row r at block row r + 0.5), so the same resampling and checks apply. The columns are the
+south's. check_north_orientation() tests that against north.bin's heights (make_globe.py), which
+make_globe.py itself oriented against the whole-Moon grid, and stops if another orientation fits
+better. Written as layers/north_sun.bin, north_earth.bin, north_psr.bin.
 """
 
 from __future__ import annotations
@@ -73,6 +84,18 @@ LAYERS = {
     "psr": ("LPSR_65S_240M_201608", 0.000025, 0.5,
             "share of the cell that is permanently shadowed"),
 }
+
+POLES = ("south", "north")
+# First LOLA row downloaded, per pole (see "North pole" above); the columns start at FIRST for both.
+FIRST_ROW = {"south": 1942, "north": 1943}
+MIN_LAT = {"south": -80, "north": 80}
+PREFIX = {"south": "", "north": "north_"}
+
+
+def product(layer: str, pole: str) -> str:
+    """The LOLA product id of a layer at a pole: the south ids, with 65S turned to 65N for the north."""
+    return LAYERS[layer][0] if pole == "south" else LAYERS[layer][0].replace("_65S_", "_65N_")
+
 
 N_SRC = 6420
 OFF_SRC = 3209.5
@@ -123,8 +146,9 @@ def fetch_label(product: str) -> dict[str, str]:
     return read_label(path)
 
 
-def check_label(layer: str, lbl: dict[str, str]) -> None:
-    product, scale, offset, _ = LAYERS[layer]
+def check_label(layer: str, lbl: dict[str, str], pole: str = "south") -> None:
+    _, scale, offset, _ = LAYERS[layer]
+    prod = product(layer, pole)
     got = {
         "PRODUCT_ID": lbl["PRODUCT_ID"].strip('"'), "RECORD_TYPE": lbl["RECORD_TYPE"],
         "RECORD_BYTES": int(num(lbl, "RECORD_BYTES")), "FILE_RECORDS": int(num(lbl, "FILE_RECORDS")),
@@ -141,29 +165,30 @@ def check_label(layer: str, lbl: dict[str, str]) -> None:
         "POSITIVE_LONGITUDE_DIRECTION": lbl["POSITIVE_LONGITUDE_DIRECTION"].strip('"'),
     }
     want = {
-        "PRODUCT_ID": product, "RECORD_TYPE": "FIXED_LENGTH", "RECORD_BYTES": RECORD_BYTES,
+        "PRODUCT_ID": prod, "RECORD_TYPE": "FIXED_LENGTH", "RECORD_BYTES": RECORD_BYTES,
         "FILE_RECORDS": N_SRC, "LINES": N_SRC, "LINE_SAMPLES": N_SRC, "SAMPLE_TYPE": "LSB_INTEGER",
         "SAMPLE_BITS": 16, "SCALING_FACTOR": scale, "OFFSET": offset,
         "MAP_PROJECTION_TYPE": "POLAR STEREOGRAPHIC", "A_AXIS_RADIUS": 1737.4, "C_AXIS_RADIUS": 1737.4,
-        "CENTER_LATITUDE": -90.0, "MAP_PROJECTION_ROTATION": 0.0, "MAP_SCALE": 240.0,
+        "CENTER_LATITUDE": -90.0 if pole == "south" else 90.0, "MAP_PROJECTION_ROTATION": 0.0, "MAP_SCALE": 240.0,
         "LINE_PROJECTION_OFFSET": OFF_SRC, "SAMPLE_PROJECTION_OFFSET": OFF_SRC,
         "POSITIVE_LONGITUDE_DIRECTION": "EAST",
     }
     bad = [f"{k}: label {got[k]!r}, expected {want[k]!r}" for k in want if got[k] != want[k]]
-    report(not bad, f"{product} label: " + ("as expected" if not bad else "; ".join(bad)))
+    report(not bad, f"{prod} label: " + ("as expected" if not bad else "; ".join(bad)))
     lon0 = num(lbl, "CENTER_LONGITUDE")
-    report(lon0 in (0.0, 180.0), f"{product} label CENTER_LONGITUDE = {lon0:g} (0 or 180; the data "
+    report(lon0 in (0.0, 180.0), f"{prod} label CENTER_LONGITUDE = {lon0:g} (0 or 180; the data "
            "decide the orientation, see check_orientation)")
 
 
-def fetch_rows(layer: str) -> np.ndarray:
-    """LOLA rows FIRST .. FIRST + COUNT - 1, whole rows, as int16 (COUNT x 6420)."""
-    product = LAYERS[layer][0]
-    path = RAW / f"{product.lower()}.rows{FIRST}-{FIRST + COUNT - 1}.bin"
+def fetch_rows(layer: str, pole: str = "south") -> np.ndarray:
+    """LOLA rows first .. first + COUNT - 1 (FIRST_ROW), whole rows, as int16 (COUNT x 6420). For the
+    north the block is returned upside down, so its row k + 0.5 is our row k as in the south."""
+    prod, first = product(layer, pole), FIRST_ROW[pole]
+    path = RAW / f"{prod.lower()}.rows{first}-{first + COUNT - 1}.bin"
     want = COUNT * RECORD_BYTES
     if not path.exists() or path.stat().st_size != want:
-        a, b = FIRST * RECORD_BYTES, (FIRST + COUNT) * RECORD_BYTES - 1
-        url = BASE_URL + product.lower() + ".img"
+        a, b = first * RECORD_BYTES, (first + COUNT) * RECORD_BYTES - 1
+        url = BASE_URL + prod.lower() + ".img"
         print(f"downloading bytes {a}-{b} ({want / 1e6:.1f} MB) of {url}")
         with requests.get(url, headers={"Range": f"bytes={a}-{b}"}, stream=True, timeout=120) as r:
             if r.status_code != 206:
@@ -178,7 +203,8 @@ def fetch_rows(layer: str) -> np.ndarray:
         tmp.replace(path)
     raw = np.fromfile(path, dtype="<i2")
     report(raw.size * 2 == want, f"{path.name}: {raw.size * 2} bytes = {COUNT} rows x {RECORD_BYTES}")
-    return raw.reshape(COUNT, N_SRC)
+    block = raw.reshape(COUNT, N_SRC)
+    return block if pole == "south" else block[::-1]
 
 
 # --- Geometry -------------------------------------------------------------------------------------
@@ -206,13 +232,16 @@ def sample(grid: np.ndarray, x_min: float, y_max: float, pixel: float, lat: floa
 
 # --- Checks on the source -------------------------------------------------------------------------
 
-def check_raw(dn: dict[str, np.ndarray]) -> None:
+def check_raw(dn: dict[str, np.ndarray], pole: str = "south") -> None:
+    first = FIRST_ROW[pole]
     for layer in ("sun", "earth"):
         lo, hi = int(dn[layer].min()), int(dn[layer].max())
-        report(lo >= 0 and hi <= 25000, f"{layer} DN {lo}..{hi} within 0..25000 (rows {FIRST}..{FIRST + COUNT - 1})")
+        report(lo >= 0 and hi <= 25000, f"{pole} {layer} DN {lo}..{hi} within 0..25000 (rows {first}..{first + COUNT - 1})")
     vals, counts = np.unique(dn["psr"], return_counts=True)
-    report(set(vals.tolist()) <= {-20000, 20000},
-           f"permanent-shadow DN values {dict(zip(vals.tolist(), counts.tolist()))} only -20000/+20000")
+    found = dict(zip(vals.tolist(), counts.tolist()))
+    # DN 0 (0.5 by the label's formula) is not in the south map; the north has one such cell, kept as 0.5.
+    report(set(vals.tolist()) <= {-20000, 0, 20000} and found.get(0, 0) <= 10,
+           f"{pole} permanent-shadow DN values {found}: -20000/+20000, and at most 10 cells of 0 (0.5)")
 
 
 def check_orientation(val: dict[str, np.ndarray]) -> None:
@@ -254,12 +283,12 @@ def check_orientation(val: dict[str, np.ndarray]) -> None:
            "orientation: only the LDEM layout puts shadow on the four crater floors and light on S0, C1 and Malapert")
 
 
-def check_consistency(val: dict[str, np.ndarray]) -> None:
+def check_consistency(val: dict[str, np.ndarray], pole: str = "south") -> None:
     psr = val["psr"] == 1
     lit_in_psr = float((val["sun"][psr] > 0).mean()) if psr.any() else 0.0
     earth_in_psr = float(val["earth"][psr].mean()) if psr.any() else 0.0
     print(f"     permanently shadowed cells: {int(psr.sum())}; Earth visibility there, mean {earth_in_psr:.3f}")
-    report(lit_in_psr <= 0.005, f"consistency: {lit_in_psr * 100:.3f} % of permanently shadowed cells have Sun > 0 (<= 0.5 %)")
+    report(lit_in_psr <= 0.005, f"{pole} consistency: {lit_in_psr * 100:.3f} % of permanently shadowed cells have Sun > 0 (<= 0.5 %)")
 
 
 # --- Resample ------------------------------------------------------------------------------------
@@ -317,26 +346,32 @@ def check_registration(sun_block: np.ndarray, dem_m: np.ndarray) -> None:
 
 # --- Write and read back -------------------------------------------------------------------------
 
-def write(grids: dict[str, np.ndarray]) -> None:
+def write(grids: dict[str, dict[str, np.ndarray]]) -> None:
+    """layers.json (contract section 2) and one file per pole and layer."""
     OUT.mkdir(parents=True, exist_ok=True)
+    grid = {"size": SIZE, "pixel_m": PIXEL_M, "x_min_m": X_MIN_M, "y_max_m": Y_MAX_M}
     meta = {
-        "size": SIZE, "pixel_m": PIXEL_M, "x_min_m": X_MIN_M, "y_max_m": Y_MAX_M,
         "value_scale": VALUE_SCALE, "max_byte": MAX_BYTE,
-        "layers": {k: {"file": f"layers/{k}.bin", "product": LAYERS[k][0], "meaning": LAYERS[k][3]}
-                   for k in LAYERS},
+        "polar": {pole: {**grid, "min_lat": MIN_LAT[pole],
+                         "files": {k: f"layers/{PREFIX[pole]}{k}.bin" for k in LAYERS},
+                         "products": {k: product(k, pole) for k in LAYERS}}
+                  for pole in POLES},
+        "meanings": {k: LAYERS[k][3] for k in LAYERS},
         "source": "LRO LOLA polar illumination products, release 2016 (E. Mazarico, NASA GSFC), "
                   "PDS Geosciences Node extras: " + BASE_URL,
         "product_page": PRODUCT_PAGE,
         "citation": CITATION,
     }
-    for k, g in grids.items():
-        (OUT / f"{k}.bin").write_bytes(g.tobytes(order="C"))
+    for pole in POLES:
+        for k, g in grids[pole].items():
+            (OUT / f"{PREFIX[pole]}{k}.bin").write_bytes(g.tobytes(order="C"))
     (OUT / "layers.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
 
-def read_back() -> tuple[dict, dict[str, np.ndarray]]:
+def read_back() -> tuple[dict, dict[str, dict[str, np.ndarray]]]:
     meta = json.loads((OUT / "layers.json").read_text(encoding="utf-8"))
-    grids = {k: np.fromfile(DATA / v["file"], dtype=np.uint8) for k, v in meta["layers"].items()}
+    grids = {pole: {k: np.fromfile(DATA / f, dtype=np.uint8) for k, f in meta["polar"][pole]["files"].items()}
+             for pole in POLES}
     return meta, grids
 
 
@@ -359,26 +394,28 @@ def check_source_reference(val: dict[str, np.ndarray]) -> None:
            f"LOLA cells round it = {peak:.4f} (expected 0.892)")
 
 
-def check_resampling(val: dict[str, np.ndarray]) -> None:
+def check_resampling(val: dict[str, np.ndarray], pole: str = "south") -> None:
     """Each written byte, decoded, equals its cell's value computed directly from the source
-    (expected_480), to within half a quantisation step. Checked at the reference points and at
-    500 cells spread over the grid, for all three layers."""
+    (expected_480), to within half a quantisation step. Checked at the reference points (south)
+    and at 500 cells spread over the grid, for all three layers."""
     _, grids = read_back()
     rng = np.random.default_rng(14)
-    cells = [(round((Y_MAX_M - y) / PIXEL_M), round((x - X_MIN_M) / PIXEL_M))
-             for _n, lat, lon in FLOORS + SUNLIT for x, y in [xy(lat, lon)]]
+    cells = [] if pole != "south" else [(round((Y_MAX_M - y) / PIXEL_M), round((x - X_MIN_M) / PIXEL_M))
+                                         for _n, lat, lon in FLOORS + SUNLIT for x, y in [xy(lat, lon)]]
     cells += [tuple(c) for c in rng.integers(1, SIZE - 1, size=(500, 2))]
     worst = 0.0
     for k in LAYERS:
-        g = grids[k].reshape(SIZE, SIZE).astype(float) * VALUE_SCALE
+        g = grids[pole][k].reshape(SIZE, SIZE).astype(float) * VALUE_SCALE
         for r, c in cells:
             worst = max(worst, abs(g[r, c] - expected_480(val[k], r, c)))
-    report(worst <= VALUE_SCALE / 2 + 1e-9, f"resampling: {len(cells)} cells x 3 layers match the source's "
+    report(worst <= VALUE_SCALE / 2 + 1e-9, f"{pole} resampling: {len(cells)} cells x 3 layers match the source's "
            f"weighted 3 x 3 LOLA mean; largest difference {worst:.5f} (<= {VALUE_SCALE / 2})")
+    if pole != "south":
+        return
     # Shackleton rim S0 specifically: its 480 m cell against the source, both printed.
     x, y = xy(-89.6866, -162.81)
     r, c = round((Y_MAX_M - y) / PIXEL_M), round((x - X_MIN_M) / PIXEL_M)
-    got = float(grids["sun"].reshape(SIZE, SIZE)[r, c]) * VALUE_SCALE
+    got = float(grids["south"]["sun"].reshape(SIZE, SIZE)[r, c]) * VALUE_SCALE
     want = expected_480(val["sun"], r, c)
     report(abs(got - want) <= VALUE_SCALE / 2 + 1e-9,
            f"Shackleton rim S0, 480 m cell ({r}, {c}): Sun {got:.3f} written, {want:.4f} from the source "
@@ -386,16 +423,21 @@ def check_resampling(val: dict[str, np.ndarray]) -> None:
 
 
 def check_outputs(dem_m: np.ndarray) -> None:
-    meta, grids = read_back()
-    n = meta["size"]
+    meta, by_pole = read_back()
     print()
-    report((n, meta["pixel_m"], meta["x_min_m"], meta["y_max_m"]) == (SIZE, PIXEL_M, X_MIN_M, Y_MAX_M),
-           f"layers.json grid: size {n}, {meta['pixel_m']} m, x_min {meta['x_min_m']}, y_max {meta['y_max_m']}")
-    for k, g in grids.items():
-        size = (OUT / f"{k}.bin").stat().st_size
-        report(size == n * n and int(g.max()) <= MAX_BYTE,
-               f"{k}.bin: {size} bytes ({size / 1e6:.2f} MB) = {n} x {n}; bytes {int(g.min())}..{int(g.max())} <= {MAX_BYTE}")
-        grids[k] = g.reshape(n, n).astype(float) * meta["value_scale"]
+    for pole in POLES:
+        g = meta["polar"][pole]
+        n = g["size"]
+        report((n, g["pixel_m"], g["x_min_m"], g["y_max_m"], g["min_lat"]) == (SIZE, PIXEL_M, X_MIN_M, Y_MAX_M, MIN_LAT[pole]),
+               f"layers.json {pole} grid: size {n}, {g['pixel_m']} m, x_min {g['x_min_m']}, y_max {g['y_max_m']}, min_lat {g['min_lat']}")
+        report(g["products"]["sun"] == product("sun", pole), f"layers.json {pole} products: {', '.join(g['products'].values())}")
+        for k, v in by_pole[pole].items():
+            size = (DATA / g["files"][k]).stat().st_size
+            report(size == n * n and int(v.max()) <= MAX_BYTE,
+                   f"{g['files'][k]}: {size} bytes ({size / 1e6:.2f} MB) = {n} x {n}; bytes {int(v.min())}..{int(v.max())} <= {MAX_BYTE}")
+            by_pole[pole][k] = v.reshape(n, n).astype(float) * meta["value_scale"]
+    n = SIZE
+    grids = by_pole["south"]
 
     at = lambda k, lat, lon: sample(grids[k], X_MIN_M, Y_MAX_M, PIXEL_M, lat, lon)
     name, _id, f_lat, f_lon, _d = GAZETTEER[0]
@@ -410,12 +452,62 @@ def check_outputs(dem_m: np.ndarray) -> None:
     report(int(inside.sum()) > 0 and all(np.isfinite(grids[k][inside]).all() for k in grids),
            f"coverage: all {int(inside.sum())} cells inside 80 S have a value in every layer "
            "(the source covers 65 S to the pole, so there is no missing data)")
+    north = by_pole["north"]
+    print(f"     inside 80 N: Sun mean {north['sun'][inside].mean():.3f}, Earth mean "
+          f"{north['earth'][inside].mean():.3f}, never-lit area {north['psr'][inside].mean() * 100:.2f} %")
+    both = int(((north["psr"] >= 1 - 1e-9) & (north["sun"] > 0)).sum())
+    report(both == 0, f"north: {both} wholly never-lit cells with any Sun (0 expected)")
+    a_s, a_n = (float(by_pole[p]["psr"][inside].sum()) * (PIXEL_M / 1000) ** 2 for p in POLES)
+    report(a_n > 0 and a_s > 0, f"never-lit area poleward of 80 degrees: south {a_s:.0f} km2, north {a_n:.0f} km2 (both some)")
 
     print("\ncross-check (printed, not pass/fail):")
     print(f"  Earth at Shackleton rim S0: {at('earth', -89.6866, -162.81):.3f} at 480 m "
           "(our own engine: 48.0 % Earth in view, 2026-2044, docs/sources/T07.md)")
     for sid, lat, lon, ref in CROSS:
         print(f"  {sid:22s} Sun {at('sun', lat, lon):.3f} at 480 m (60 m map, #82: {ref:.3f}; a coarser cell averages a narrow crest down)")
+
+
+# --- North orientation ---------------------------------------------------------------------------
+
+def north_heights() -> np.ndarray:
+    """north.bin (make_globe.py), metres, our north grid: 1200 m cells, longitude 0 up."""
+    meta = json.loads((DATA / "north.json").read_text(encoding="utf-8"))
+    report((meta["size"], meta["pixel_m"], meta["x_min_m"], meta["y_max_m"], meta["min_lat"]) == (509, 1200, -304800, 304800, 80),
+           f"north.json grid as expected ({meta['size']}, {meta['pixel_m']} m, {meta['x_min_m']}, {meta['y_max_m']}, {meta['min_lat']})")
+    v = np.fromfile(DATA / "north.bin", dtype="<i2").reshape(509, 509).astype(float)
+    v[v == meta["nodata"]] = np.nan
+    return v * meta["height_scale"]
+
+
+def check_north_orientation(sun_block: np.ndarray, heights: np.ndarray) -> None:
+    """Fine detail of the north Sun layer, on our 240 m grid and then averaged onto north.bin's
+    1200 m cells, against north.bin's heights: sunlit ground is high ground. The block as used
+    (upside down, see fetch_rows) must match best, and clearly better than the other three ways
+    round. A 1200 m cell k holds our 240 m cells 5k - 5 .. 5k - 1 both ways (x_min -304800 against
+    -304080), so north.bin's cells 1..506 meet our cells 0..2529."""
+    def at_1200(block: np.ndarray) -> np.ndarray:
+        g = to_240(block)[:2530, :2530]
+        return g.reshape(506, 5, 506, 5).mean(axis=(1, 3))
+    h = heights[1:507, 1:507]
+    # Within about 250 km of the pole, away from the grid's corners.
+    yy, xx = np.mgrid[0:506, 0:506]
+    inside = np.hypot(xx - 252.5, yy - 252.5) < 200
+    candidates = {"as used (LOLA rows upside down)": sun_block, "rows not turned": sun_block[::-1],
+                  "columns mirrored": sun_block[:, ::-1], "both": sun_block[::-1, ::-1]}
+    table = {}
+    hd = highpass(np.nan_to_num(h, nan=float(np.nanmean(h))), 5)
+    for name, block in candidates.items():
+        hs = highpass(at_1200(block), 5)
+        m = inside[2:-2, 2:-2]
+        a, b = hs[m], hd[m]
+        table[name] = float(np.corrcoef(a, b)[0, 1])
+    print("\nnorth orientation: correlation of fine detail, Sun layer against north.bin's heights")
+    for name, c in table.items():
+        print(f"  {name:32s} {c:+.3f}")
+    best = max(table, key=table.get)
+    second = sorted(table.values())[-2]
+    report(best == "as used (LOLA rows upside down)" and table[best] > 0.2 and table[best] - second > 0.1,
+           f"north orientation: the layout used matches best ({table[best]:+.3f}, next {second:+.3f})")
 
 
 # --- Main ----------------------------------------------------------------------------------------
@@ -428,29 +520,47 @@ def dem_heights() -> np.ndarray:
     return v.astype(float) * meta["height_scale"]
 
 
+def process(pole: str, dem_m: np.ndarray | None, heights: np.ndarray | None) -> dict[str, np.ndarray]:
+    """Download, check and resample one pole's three maps. Returns the source values for the
+    read-back check and leaves the 480 m bytes in PROCESSED[pole]."""
+    print(f"\n=== {pole} pole: LOLA rows {FIRST_ROW[pole]}..{FIRST_ROW[pole] + COUNT - 1}, columns {FIRST}..{FIRST + COUNT - 1}")
+    for layer in LAYERS:
+        check_label(layer, fetch_label(product(layer, pole)), pole)
+    dn = {k: fetch_rows(k, pole) for k in LAYERS}
+    check_raw(dn, pole)
+    val = {k: dn[k].astype(np.float64) * LAYERS[k][1] + LAYERS[k][2] for k in LAYERS}
+    # DN is +-20000 (check_raw), so the label's formula gives 0 and 1 up to rounding; a rare DN 0 stays 0.5.
+    val["psr"] = np.rint(val["psr"] * 2) / 2
+    del dn
+    if pole == "south":
+        check_orientation(val)
+    sub = {k: v[:, FIRST:FIRST + COUNT] for k, v in val.items()}
+    check_consistency(sub, pole)
+    if pole == "south":
+        check_registration(val["sun"], dem_m)
+        check_source_reference(val)
+    else:
+        check_north_orientation(val["sun"], heights)
+    PROCESSED[pole] = {k: quantise(to_480(to_240(val[k]))) for k in LAYERS}
+    return val
+
+
+PROCESSED: dict[str, dict[str, np.ndarray]] = {}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check-only", action="store_true", help="skip download and resampling, check the files")
     args = ap.parse_args()
     dem_m = dem_heights()
     if not args.check_only:
-        print(f"LOLA rows and columns needed: {FIRST}..{FIRST + COUNT - 1} ({COUNT})")
-        for layer in LAYERS:
-            check_label(layer, fetch_label(LAYERS[layer][0]))
-        dn = {k: fetch_rows(k) for k in LAYERS}
-        check_raw(dn)
-        val = {k: dn[k].astype(np.float64) * LAYERS[k][1] + LAYERS[k][2] for k in LAYERS}
-        # DN is only +-20000 (check_raw), so the label's formula gives 0 and 1 up to rounding.
-        val["psr"] = np.rint(val["psr"])
-        del dn
-        check_orientation(val)
-        sub = {k: v[:, FIRST:FIRST + COUNT] for k, v in val.items()}
-        check_consistency(sub)
-        check_registration(val["sun"], dem_m)
-        check_source_reference(val)
-        grids = {k: quantise(to_480(to_240(val[k]))) for k in LAYERS}
-        write(grids)
-        check_resampling(val)
+        heights = north_heights()
+        vals = {}
+        for pole in POLES:
+            vals[pole] = process(pole, dem_m, heights)
+        write(PROCESSED)
+        for pole in POLES:
+            check_resampling(vals[pole], pole)
     check_outputs(dem_m)
     print("\nall checks passed")
 

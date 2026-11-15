@@ -39,8 +39,8 @@
   font-size: var(--fs-sm);
 }
 
-/* Folded: the icon row, the status and the "where" hint only. */
-.ly-box[data-folded] > :not(.ly-title, .ly-head, .ly-status, .ly-where) {
+/* Folded: the icon row, the status and the legend only. */
+.ly-box[data-folded] > :not(.ly-title, .ly-head, .ly-status, .ly-legend) {
   display: none;
 }
 
@@ -112,21 +112,39 @@
 }
 
 .ly-status,
-.ly-note,
-.ly-where {
+.ly-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+/* T43: each layer that is on, its value and source at the selected site. It shows folded too:
+   it is how the page says which source applies at the point shown (CLAUDE.md). */
+.ly-legend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
   margin: 0;
   font-size: var(--fs-sm);
 }
 
 /* Folded, a message wraps to the width of the icon row instead of widening the panel. */
 .ly-box[data-folded] .ly-status,
-.ly-box[data-folded] .ly-where {
+.ly-box[data-folded] .ly-legend {
   width: 0;
   min-width: 100%;
 }
 
-.ly-where[hidden] {
+.ly-legend[hidden] {
   display: none;
+}
+
+.ly-at-name {
+  font-weight: 600;
+}
+
+.ly-at {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 800px) {

@@ -19,8 +19,21 @@
 // This is a slope over the grid's spacing (240 m on the real map): a boulder or a 10 m crater does
 // not show in it. Heights are above the R sphere, so "level" is the sphere's local horizontal; the
 // sphere's own curvature over 480 m is under 0.02 degrees and needs no correction.
+//
+// T43: the same slope on the whole-Moon grid (globe.bin, 0.125 degrees a cell), where the polar
+// height maps do not reach. Central differences on the latitude-longitude grid:
+//
+//   dz/dy = (z[row - 1][col] - z[row + 1][col]) / (2 R dphi)                  north
+//   dz/dx = (z[row][col + s] - z[row][col - s]) / (2 s R cos(phi) dlambda)     east
+//
+// A row is R dphi = 3.8 km of ground everywhere; a column only R cos(phi) dlambda, which shrinks
+// toward the poles. Stepping s = max(1, floor(1 / cos phi)) columns keeps the east-west step
+// between half and all of the north-south one, so the slope is measured over the row spacing at
+// most: that is the baseline the readout names. The first and last rows (at the poles) have no
+// slope; the polar height maps cover them anyway.
 
 import { projectToGrid, type Dem } from './dem';
+import type { GlobeHeights } from './globe';
 import { MOON_RADIUS_KM } from './types';
 
 const R_M = MOON_RADIUS_KM * 1000;
@@ -86,6 +99,57 @@ export function slopeAt(dem: Dem, lat: number, lon: number): number | null {
   for (const [r, c, w] of corners) {
     if (w <= 1e-12) continue;            // a point on a cell's row or column needs only its own cells
     const g = cellGradient(dem, r, c);
+    if (!g) return null;
+    gx += g[0] * w;
+    gy += g[1] * w;
+  }
+  return Math.atan(Math.hypot(gx, gy)) * DEG;
+}
+
+/** T43: the distance a globe.bin slope is measured over, metres: the row spacing, the longer of its two steps. */
+export function globeSlopeBaselineM(globe: GlobeHeights): number {
+  return globe.rowSpacingM;
+}
+
+/** Columns a globe.bin slope steps east and west at a row: at least 1, and never more ground than a row. */
+function globeStep(globe: GlobeHeights, row: number): { step: number; cosLat: number } {
+  const lat = (90 - ((row + 0.5) * 180) / globe.meta.height) * (Math.PI / 180);
+  const cosLat = Math.cos(lat);
+  return { step: Math.min(globe.meta.width >> 2, Math.max(1, Math.floor(1 / cosLat))), cosLat };
+}
+
+/**
+ * The height gradient at one globe.bin cell, [east, north], metres of height per metre of ground.
+ * Null on the first and last row.
+ */
+export function globeCellGradient(globe: GlobeHeights, row: number, col: number): [number, number] | null {
+  const { width, height } = globe.meta;
+  if (!Number.isInteger(row) || row < 1 || row > height - 2) return null;
+  const { step, cosLat } = globeStep(globe, row);
+  const dLon = (2 * Math.PI) / width;
+  const east = (globe.cell(row, col + step) - globe.cell(row, col - step)) / (2 * step * R_M * cosLat * dLon);
+  const north = (globe.cell(row - 1, col) - globe.cell(row + 1, col)) / (2 * globe.rowSpacingM);
+  return [east, north];
+}
+
+/**
+ * Slope on globe.bin at a latitude and longitude, degrees from level: the gradients of the four
+ * cell centres round the point, blended bilinearly. Null within half a row of a pole.
+ */
+export function globeSlopeAt(globe: GlobeHeights, lat: number, lon: number): number | null {
+  const { width, height } = globe.meta;
+  const fr = ((90 - lat) * height) / 180 - 0.5;
+  const fc = ((((lon + 180) % 360) + 360) % 360) * width / 360 - 0.5;
+  const r0 = Math.floor(fr), c0 = Math.floor(fc);
+  const v = fr - r0, u = fc - c0;
+  const corners: [number, number, number][] = [
+    [r0, c0, (1 - u) * (1 - v)], [r0, c0 + 1, u * (1 - v)],
+    [r0 + 1, c0, (1 - u) * v], [r0 + 1, c0 + 1, u * v],
+  ];
+  let gx = 0, gy = 0;
+  for (const [r, c, w] of corners) {
+    if (w <= 1e-12) continue;
+    const g = globeCellGradient(globe, r, c);
     if (!g) return null;
     gx += g[0] * w;
     gy += g[1] * w;

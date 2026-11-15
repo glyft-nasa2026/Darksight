@@ -45,7 +45,7 @@ describe('Why the Moon is different (T39)', () => {
     expect(EXPLAIN.map((p) => p.focus).filter(Boolean)).toEqual(['#ly-psr', '.nudge-fold']);
     // The layer boxes are `ly-<key>` (ui/layers/index.ts); "Never lit" is the key psr.
     expect(read('../layers/index.ts')).toContain('`ly-${key}`');
-    expect(read('../layers/model.ts')).toMatch(/LAYER_KEYS[^\n]*'psr'/);
+    expect(read('../../core/layers.ts')).toMatch(/LAYER_KEYS[^\n]*'psr'/);   // T43 moved the keys to core
     expect(read('../nudge/index.ts')).toContain("'btn nudge-fold'");
   });
 });

@@ -648,8 +648,8 @@ export function mount(el: HTMLElement): void {
       }
       ctx.restore();
     }
-    // T14 map layers, over the terrain and under the grid and pins; south-polar map only.
-    if (kind === 'south' && dem) drawLayers(ctx, (x, y) => viewToScreen(view, x, y));
+    // T14 map layers, over the terrain and under the grid and pins: on all three views (T43).
+    drawLayers(ctx, { kind, view, reachDeg: POLAR_REACH, unitPx: theme.pinPx });
     gridLabels = [];
     if (kind !== 'global') drawPolarGrid(); else drawGlobalGrid();
     if (kind === 'global') {

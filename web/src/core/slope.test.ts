@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { parseDem, type Dem, type DemMeta } from './dem';
 import { gridLatLon } from './layers';
 import { polarForward, polarInverse } from './projection';
-import { cellSlope, slopeAt, slopeBaselineM, SLOPE_RAMP_MAX_DEG } from './slope';
+import { parseGlobe } from './globe';
+import { cellSlope, globeCellGradient, globeSlopeAt, globeSlopeBaselineM, slopeAt, slopeBaselineM, SLOPE_RAMP_MAX_DEG } from './slope';
 import { MOON_RADIUS_KM, type CuratedSite } from './types';
 
 const R_M = MOON_RADIUS_KM * 1000;
@@ -141,5 +142,46 @@ describe.skipIf(!!skip)('slopeAt on the real height map', () => {
     console.log(`Shackleton slope: floor ${sFloor.toFixed(1)}°, wall ${sMid.toFixed(1)}°, rim ${sRim.toFixed(1)}°`);
     expect(sMid).toBeGreaterThan(sFloor);
     expect(sMid).toBeGreaterThan(sRim);
+  });
+});
+
+// --- T43: slope on the whole-Moon grid (globe.bin) ----------------------------------------------
+
+describe('globeSlopeAt (T43)', () => {
+  const W = 360, H = 180;
+  /** A made-up globe.bin, heights z(lat, lon) in metres (stored 1 m a step). */
+  const globe = (z: (lat: number, lon: number) => number) => {
+    const view = new DataView(new ArrayBuffer(W * H * 2));
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      view.setInt16((j * W + i) * 2, Math.round(z(90 - (j + 0.5), -180 + (i + 0.5))), true);
+    }
+    return parseGlobe({ width: W, height: H, height_scale: 1, source: 'test' }, view.buffer);
+  };
+  const atanDeg = (v: number): number => Math.atan(v) / DEG;
+
+  it('reads a slope rising to the north', () => {
+    const g = globe((lat) => 0.01 * R_M * lat * DEG);
+    for (const [lat, lon] of [[0.5, 0.5], [40, 100], [-60.2, -33.3]]) {
+      expect(globeSlopeAt(g, lat, lon)).toBeCloseTo(atanDeg(0.01), 2);   // heights stored to the metre
+    }
+  });
+
+  it('reads a slope rising to the east, on ground that shrinks with cos(latitude)', () => {
+    // z = b R cos(lat0) lon rises b metres per metre east along latitude lat0.
+    for (const lat0 of [0.5, 45.5, 70.5]) {
+      const b = 0.005;   // keeps 180 degrees of it inside int16
+      const g = globe((_lat, lon) => b * R_M * Math.cos(lat0 * DEG) * lon * DEG);
+      expect(globeSlopeAt(g, lat0, 10.5)).toBeCloseTo(atanDeg(b), 2);
+      expect(globeCellGradient(g, 90 - lat0 - 0.5, 190)![1]).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('is level on level ground, null at the poles, and measured over the row spacing', () => {
+    const g = globe(() => 500);
+    expect(globeSlopeAt(g, 12.3, 45.6)).toBe(0);
+    expect(globeSlopeAt(g, 89.9, 0)).toBeNull();
+    expect(globeCellGradient(g, 0, 10)).toBeNull();
+    expect(globeCellGradient(g, H - 1, 10)).toBeNull();
+    expect(globeSlopeBaselineM(g)).toBeCloseTo((Math.PI * R_M) / H, 6);
   });
 });

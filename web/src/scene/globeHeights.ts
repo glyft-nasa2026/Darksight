@@ -1,61 +1,20 @@
-// The whole-Moon height grid (contract section 2: globe.bin + globe.json): reading it, and the
-// surface normals that let the Sun's light show the relief. No three.js here, so the flat map
-// (web/src/map/) can use it as well as the 3D globe. Illustration only: no number shown to the
-// user comes from here.
+// The whole-Moon height grid (contract section 2: globe.bin + globe.json) and the north cap
+// (north.bin + north.json): fetching them, once for every view, and the surface normals that let
+// the Sun's light show the relief. The reader itself is core/globe.ts (T43), re-exported here. No
+// three.js here, so the flat map (web/src/map/), the map layers and the readout can use it as well
+// as the 3D globe. The normals are illustration; the numbers (height and slope layers, the
+// readout's slope line) come from core/.
 
+import type { Dem, DemMeta } from '../core/dem';
+import { parseGlobe, parseNorth, type GlobeHeights, type GlobeMeta } from '../core/globe';
 import { MOON_RADIUS_KM } from '../core/types';
 import { afterHeightMap } from '../loadOrder';
 
-export type GlobeMeta = {
-  width: number;         // cells around the equator; column 0 starts at longitude -180
-  height: number;        // cells from pole to pole; row 0 starts at 90 N
-  height_scale: number;  // metres = value * height_scale
-  source: string;
-};
-
-export type GlobeHeights = {
-  meta: GlobeMeta;
-  /** Lowest and highest cell, metres above the R sphere. */
-  range: [number, number];
-  /** Height of the cell at a row and column, metres. Columns wrap; rows stop at the poles. */
-  cell(row: number, col: number): number;
-  /** Height of the cell holding a point, metres. */
-  heightAt(lat: number, lon: number): number;
-};
+export { parseGlobe, parseNorth, type GlobeHeights, type GlobeMeta } from '../core/globe';
 
 const RAD = Math.PI / 180;
 /** Slopes are drawn this many times steeper, or relief a few km a cell would barely shade. */
 export const GLOBE_RELIEF = 6;
-
-/** Builds the grid from its two files. No network: tests call this with made-up grids. */
-export function parseGlobe(meta: GlobeMeta, buffer: ArrayBuffer): GlobeHeights {
-  const { width, height, height_scale: scale } = meta;
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2) {
-    throw new Error('globe.json: "width" and "height" must be whole numbers, 2 or more');
-  }
-  const count = width * height;
-  if (buffer.byteLength < count * 2) {
-    throw new Error(`globe.bin: ${buffer.byteLength} bytes, expected ${count * 2}`);
-  }
-  // Little-endian int16 in the file, read through a DataView so any machine gets it right.
-  const view = new DataView(buffer);
-  const data = new Int16Array(count);
-  let min = Infinity, max = -Infinity;
-  for (let i = 0; i < count; i++) {
-    const v = data[i] = view.getInt16(i * 2, true);
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  const cell = (row: number, col: number): number => {
-    const r = Math.min(height - 1, Math.max(0, row));
-    const c = ((col % width) + width) % width;
-    return data[r * width + c] * scale;
-  };
-  return {
-    meta, range: [min * scale, max * scale], cell,
-    heightAt: (lat, lon) => cell(Math.floor((90 - lat) * height / 180), Math.floor((lon + 180) * width / 360)),
-  };
-}
 
 /** Fetches both files from data/ next to the page. Rejects if either is missing or malformed. */
 export async function loadGlobe(): Promise<GlobeHeights> {
@@ -78,6 +37,28 @@ let shared: Promise<GlobeHeights> | null = null;
  */
 export function sharedGlobe(): Promise<GlobeHeights> {
   return shared ??= afterHeightMap().then(loadGlobe);
+}
+
+/** Fetches the north cap from data/ next to the page. Rejects if it is missing or malformed. */
+export async function loadNorth(): Promise<Dem> {
+  const base = import.meta.env.BASE_URL + 'data/';
+  const metaRes = await fetch(base + 'north.json');
+  if (!metaRes.ok) throw new Error(`north.json: HTTP ${metaRes.status}`);
+  const meta = (await metaRes.json().catch(() => {
+    throw new Error('north.json: missing, or not JSON');
+  })) as DemMeta;
+  const binRes = await fetch(base + 'north.bin');
+  if (!binRes.ok) throw new Error(`north.bin: HTTP ${binRes.status}`);
+  return parseNorth(meta, await binRes.arrayBuffer());
+}
+
+let sharedCap: Promise<Dem> | null = null;
+/**
+ * loadNorth, fetched once for the 3D globe, the flat map's north polar view (issue #112), the
+ * map layers and the readout, and only after the height map has finished downloading (issue #96).
+ */
+export function sharedNorth(): Promise<Dem> {
+  return sharedCap ??= afterHeightMap().then(loadNorth);
 }
 
 /**
