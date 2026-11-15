@@ -8,7 +8,7 @@ on the deployed site; nothing is estimated. A cell reading "–" is not measured
 | Measured on | 14 Nov 2026, 15:59 to 16:20 UTC |
 | Commit measured | `961b65c` on `main` (T16, pull request #93). Every load served `assets/index-OfvBzPX0.js` and `assets/site-DbV41jqK.js`, the bundles in the `deploy` branch's build of `961b65c` (`71e3b3e`). The site has no `version.txt`: that address returns the page itself |
 | Laptop | Lenovo 83JC, AMD Ryzen 7 7435HS, Windows 11 Home; Brave 1.99.57 (Chromium 157.0.8103.79) |
-| Phone | – (not measured yet) |
+| Phone | Realme 6 (RMX2001), Android 11, Brave 1.99.57 (Chromium 157.0.8103.79), LTE mobile data with Wi-Fi off, no throttle. Measured 15 Nov 2026, 03:34 to 03:37 UTC, on the deploy live then (`237d5f6`, or `47ed7ee` just before it; both after issue #96's fix, pull request #109). Driven from the laptop over USB (Android Platform Tools 37.0.3, `adb forward` to Brave's DevTools socket) in a tab the script opened and closed; darksight.space's stored data cleared and the HTTP cache off before each load. **One load per measurement, not three** |
 | Method | A Playwright script (Python, Playwright 1.65.2) drove the installed Brave in a visible 1440 x 900 window. Each load ran in a new, empty browser profile, with the HTTP cache switched off over the DevTools protocol, so Cache Storage held no decade files. "Fast 4G" is DevTools' own preset (9 Mbps down and 1.5 Mbps up, each x 0.9, 165 ms latency), set with `Network.emulateNetworkConditions`. Times are from the start of navigation, which is the moment Enter is pressed. The script clicked "Start exploring" as soon as it appeared, at 0.51 to 0.57 s on Fast 4G and 0.17 to 0.18 s with no throttle. Freezes are the longest `longtask` entries reported by the page. The script stays outside the repo, because this task changes no code (see section 7) |
 
 ## 1. What goes over the network
@@ -39,8 +39,8 @@ first, then all three.
 
 | Moment | Fast 4G | No throttle | Phone, mobile data |
 |---|---|---|---|
-| Readout shows Sun and Earth numbers (smooth Moon) | **6.46** (5.72, 6.58, 6.46) | **1.37** (1.44, 1.37, 1.34) | – |
-| "Loading" line at the top gone (height map in) | **29.20** (25.75, 29.50, 29.20) | **2.20** (2.27, 2.20, 2.17) | – |
+| Readout shows Sun and Earth numbers (smooth Moon) | **6.46** (5.72, 6.58, 6.46) | **1.37** (1.44, 1.37, 1.34) | **5.60** (one load) |
+| "Loading" line at the top gone (height map in) | **29.20** (25.75, 29.50, 29.20) | **2.20** (2.27, 2.20, 2.17) | **8.75** (one load, after #109) |
 | Scene shows terrain (2D map, the default view: caption "South-pole terrain") | **29.20** (25.75, 29.50, 29.20) | **2.20** (2.27, 2.20, 2.17) | – |
 
 On Fast 4G, what the waiting is made of:
@@ -66,7 +66,7 @@ from 14 Nov to 26 Nov during the drag, a scenario card was added, and every floo
 | Pick a new site south of 85 S (a map click; it landed at -88.91, 138.73) | **165 ms** (165, 73, 99) | – |
 | Drag the time on the timeline (3 s back and forth) | **144 ms** (132, 144; 59 tasks over 50 ms per drag) | – |
 | Pin | **under 50 ms** (no long task in any of three sessions) | – |
-| Five new spots on the Shackleton floor (issue #32, row 1) | **486 ms** (per spot: 486, 440, 436, 484, 470 / 225, 223, 247, 245, 239 / 258, 254, 253, 223, 246) | – |
+| Five new spots on the Shackleton floor (issue #32, row 1) | **486 ms** (per spot: 486, 440, 436, 484, 470 / 225, 223, 247, 245, 239 / 258, 254, 253, 223, 246) | **1022 ms** (per spot: 785, 886, 828, 810, 1022; one session) |
 
 The floor spots were entered in the Latitude and Longitude boxes, one box per spot, so each
 change is exactly one new site. The new site goes through the same `setLiveSite` call as a map
@@ -84,6 +84,11 @@ tasks between pressing Enter and the page being quiet:
 The "what it follows" column comes from one extra load on each connection that recorded every
 long task with its start time.
 
+On the phone (one load, mobile data, after #109) the long tasks of 300 ms or more while loading
+were 2.52 s (at 2.9 s, as the site script arrives), 0.80 s and 1.30 s (as `dem.bin` arrives),
+and **2.47 s then 1.36 s as `globe.bin` arrives at 15.1 s, after the "Loading" line has gone at
+8.75 s**. That freeze is issue #118.
+
 ## 4. "Loading" when the time enters a decade not on the device
 
 Each run started from an empty profile, so no decade was stored. Shown: seconds that some panel
@@ -91,8 +96,8 @@ says "Loading" (issue #32, row 2).
 
 | Action | Fast 4G | No throttle | Phone, mobile data |
 |---|---|---|---|
-| Page the timeline from December 2029 into January 2030 | **0 s: never shows "Loading"** | **0 s: never shows "Loading"** | – |
-| Set the time to 1969 (typed in the Time box) | **1.42 s** | **0.61 s** | – |
+| Page the timeline from December 2029 into January 2030 | **0 s: never shows "Loading"** | **0 s: never shows "Loading"** | **0 s: never shows "Loading"** (every decade from 2020 to 2090 was already in, fetched in the background after loading) |
+| Set the time to 1969 (typed in the Time box) | **1.42 s** | **0.61 s** | **0.63 s** (shown from 0.63 to 1.25 s after the change) |
 
 Paging setup: live at `shackleton-rim` at 2029-09-01 00:00 UTC, nothing pinned, range 30 d,
 with only `2020.bin` loaded at the start. "Later" was clicked one step at a time.
@@ -111,6 +116,7 @@ measurement gave 1.45 s and 0.62 s.
 | Sun and Earth numbers on screen | 3 s | 6.46 s (median of 3) | **Fail** |
 | Height map in | 20 s | 29.20 s (median of 3) | **Fail** |
 | Height map in, again after issue #96's fix 1 (pull request #109, commit `d70ffbd`, measured 15 Nov 2026) | 20 s | 16.44 s (median of 3: 16.63, 16.42, 16.44) | **Pass** |
+| Longest freeze after loading, phone (Realme 6) | 0.5 s | 1.022 s (Shackleton floor, one session) | **Fail**: every one of the five spots is over 0.5 s (785 to 1022 ms). Issue #32, row 1 |
 | Longest freeze after loading | 0.5 s | 0.486 s (Shackleton floor, laptop) | **Pass**, by 14 ms, on the laptop only. Not yet measured on a phone, which will be slower. The 1.06 s freeze when `globe.bin` arrives after loading is outside the four actions; see section 6, item 3 |
 
 ## 6. Fails and who can fix them
@@ -168,6 +174,11 @@ then stops for a second. On Fast 4G it falls inside the loading time, at about 1
 a phone will be slower. If the phone measurement fails, the file is `web/src/state.ts`
 (`neverLitFor`, `lastLitMs`), and the numbers go in issue #32. The possible fixes listed there
 still apply.
+Measured on the phone on 15 Nov 2026: **fails**, 785 to 1022 ms a spot (section 3). A profile of
+one spot on the laptop with the CPU slowed 4 times (1237 ms in all) put 753 ms in `neverLitFor`'s
+hour-by-hour scan (`lastLitMs` in `web/src/state.ts`, most of it in `sunAltAz`), 227 ms in the
+new spot's skyline (`skylineAt`) and about 160 ms in Plotly. The results and fix options are in
+issue #32.
 
 ## 7. How to measure again
 
