@@ -2,7 +2,8 @@
 // the south-polar map, each with on/off and transparency, fading in and out.
 //
 // Data: web/public/data/layers/ (data-prep/make_layers.py, from the LOLA team's illumination
-// maps), read with core/layers.ts; the height layer comes from the height map already in state.
+// maps), read with core/layers.ts; the height layer comes from the height map already in state, and
+// so does the slope layer (T41), through core/slope.ts.
 //
 // Wiring (contract section 5): the scene mounts the controls in its `.scene-layers` section; the
 // 2D map's draw step calls drawLayers(ctx, toScreen) after its terrain on the south-polar map,
@@ -10,11 +11,12 @@
 // redraws whenever onLayersChange() fires (data arriving, opacity, every frame of a fade).
 import './layers.css';
 import { gridLatLon, parseLayer, readLayersMeta, type LayersMeta } from '../../core/layers';
+import { slopeAt, slopeBaselineM } from '../../core/slope';
 import { getState, selected, subscribe } from '../../state';
 import { themeColor } from '../plotTheme';
 import {
   colorize, createLayerStore, fadeTowards, LAYER_COLORS, LAYER_KEYS, LAYER_LABELS, LAYER_MODE,
-  normalise, parseColor, targetAlpha, type LayerKey, type LayerSettings,
+  normalise, parseColor, slopeRamp, targetAlpha, type LayerKey, type LayerSettings,
 } from './model';
 
 /** The one store the controls and the map share. */
@@ -59,6 +61,9 @@ function toCanvas(meta: LayersMeta, pixels: Uint8ClampedArray<ArrayBuffer>): HTM
   return canvas;
 }
 
+/** Height and slope are built from the height map in state, not from a file of their own. */
+const fromDem = (key: LayerKey): key is 'height' | 'slope' => key === 'height' || key === 'slope';
+
 /** Fetches (once) and colours one layer into a canvas, one pixel per grid cell. */
 function ensureLayer(key: LayerKey): Promise<void> {
   if (images.has(key)) return Promise.resolve();
@@ -68,17 +73,21 @@ function ensureLayer(key: LayerKey): Promise<void> {
     gridMeta = meta;
     const [lo, hi] = LAYER_COLORS[key].map(rgb);
     let values: ArrayLike<number>;
-    if (key === 'height') {
+    if (fromDem(key)) {
       const dem = getState().dem;
       if (!dem) throw new Error('the height map is still loading');
-      const heights = new Float32Array(meta.size * meta.size);
+      const cells = new Float32Array(meta.size * meta.size);
       for (let row = 0; row < meta.size; row++) {
         for (let col = 0; col < meta.size; col++) {
           const { lat, lon } = gridLatLon(meta, row, col);
-          heights[row * meta.size + col] = dem.covers(lat, lon) ? dem.heightAt(lat, lon) : Number.NaN;
+          if (key === 'slope') {
+            cells[row * meta.size + col] = slopeAt(dem, lat, lon) ?? Number.NaN;
+          } else {
+            cells[row * meta.size + col] = dem.covers(lat, lon) ? dem.heightAt(lat, lon) : Number.NaN;
+          }
         }
       }
-      values = normalise(heights);
+      values = key === 'slope' ? slopeRamp(cells) : normalise(cells);
     } else {
       const res = await fetch(base() + meta.layers[key].file);
       if (!res.ok) throw new Error(`${meta.layers[key].file}: HTTP ${res.status}`);
@@ -191,7 +200,8 @@ export function mount(el: HTMLElement): void {
   note.textContent = 'Averages over 18.6 years from the LOLA team (Mazarico et al. 2011): any part of ' +
     'the Sun’s or Earth’s disc counts as visible, at the surface, on 480 m cells. The readout uses ' +
     'its own calculation, so its numbers can differ.';
-  box.append(status, where, note);
+  const slopeNote = make('p', 'ly-note muted');
+  box.append(status, where, note, slopeNote);
   el.replaceChildren(box);
 
   const render = (s: LayerSettings): void => {
@@ -207,8 +217,8 @@ export function mount(el: HTMLElement): void {
     const s = layerStore.get();
     for (const key of LAYER_KEYS) {
       if (!s[key].on || images.has(key) || loading.has(key)) continue;
-      // The height layer is built from the height map, which may still be downloading.
-      if (key === 'height' && !getState().dem) { status.textContent = 'Waiting for the height map'; continue; }
+      // The height and slope layers are built from the height map, which may still be downloading.
+      if (fromDem(key) && !getState().dem) { status.textContent = 'Waiting for the height map'; continue; }
       status.textContent = 'Loading';
       ensureLayer(key)
         .then(() => { if (!loading.size) status.textContent = ''; kick(); })
@@ -225,6 +235,8 @@ export function mount(el: HTMLElement): void {
     el.hidden = s.mode !== '2d';
     const site = selected().site;
     where.hidden = !!s.dem && s.dem.covers(site.lat, site.lon);
+    slopeNote.textContent = `Height and slope come from the LOLA height map. Slope is measured over its ` +
+      `${s.dem ? `${slopeBaselineM(s.dem)} m ` : ''}cells, so a boulder or a small crater does not show.`;
   };
 
   const offStore = layerStore.subscribe((s) => { render(s); load(); kick(); });

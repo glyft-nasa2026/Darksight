@@ -102,6 +102,15 @@ describe('parseDem', () => {
     expect(h(300.25, 200.75)).toBeCloseTo(200 * 0.75 * 0.25 + 400 * 0.25 * 0.25 + 600 * 0.75 * 0.75 + 800 * 0.25 * 0.75, 3);
   });
 
+  it('hasData() is false on a no-data cell and outside the grid, true elsewhere (T41)', () => {
+    const dem = parseDem(META, grid((v) => { v[7 * META.size + 9] = META.nodata; }));
+    expect(dem.hasData(7, 9)).toBe(false);
+    expect(dem.hasData(7, 10)).toBe(true);
+    expect(dem.hasData(-1, 0)).toBe(false);
+    expect(dem.hasData(0, META.size)).toBe(false);
+    expect(dem.hasData(1.5, 2)).toBe(false);
+  });
+
   it('counts a no-data cell as height 0', () => {
     const dem = parseDem(META, grid((v) => {
       v[200 * META.size + 300] = META.nodata;
